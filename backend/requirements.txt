@@ -1,0 +1,31 @@
+# ═══════════════════════════════════════════════════
+# Aqui no meu bairro — Vitória Régia
+# Dependências Python (Produção)
+# ═══════════════════════════════════════════════════
+
+# Web framework
+Flask==3.1.0
+flask-restful==0.3.10
+flask-cors==5.0.1
+flask-limiter==3.12
+
+# ORM & Database
+Flask-SQLAlchemy==3.1.1
+Flask-Migrate==4.0.7
+psycopg2-binary==2.9.10
+SQLAlchemy==2.0.36
+
+# Autenticação & Segurança
+PyJWT==2.10.1
+argon2-cffi==23.1.0            # Argon2id para hash de senhas
+cryptography==44.0.0           # E2EE para denúncias
+
+# Validação & Serialização
+marshmallow==3.23.2
+marshmallow-sqlalchemy==1.1.0
+email-validator==2.2.0
+
+# Utilitários
+python-dotenv==1.0.1
+gunicorn==23.0.0               # Servidor WSGI de produção
+Pillow==11.1.0                 # Processamento de imagens
