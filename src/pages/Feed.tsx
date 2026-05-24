@@ -165,19 +165,30 @@ export default function Feed() {
         return;
       }
 
+      toast('Obtendo sua localização...', 'info');
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          console.log('User Location:', lat, lng);
+          setUserLocation({ lat, lng });
           setNearMe(true);
           toast('Mostrando relatos próximos a você (2km).');
         },
         (err) => {
-          console.error(err);
-          toast('Não foi possível obter sua localização. Verifique as permissões.', 'error');
-        }
+          console.error('Geolocation Error:', err);
+          let msg = 'Não foi possível obter sua localização.';
+          if (err.code === 1) msg = 'Permissão de localização negada pelo usuário.';
+          else if (err.code === 2) msg = 'Localização indisponível no momento.';
+          else if (err.code === 3) msg = 'Tempo limite esgotado ao obter localização.';
+          toast(msg, 'error');
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       setNearMe(false);
+      setUserLocation(null);
     }
   }, [nearMe, toast]);
 
