@@ -179,8 +179,8 @@ export default function Layout({ children }: LayoutProps) {
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
             <button onClick={() => navigate('/')} className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
-                <MapPin className="w-5 h-5 text-white" strokeWidth={2.5} />
+              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
+                <img src="/logo.png" alt="" className="w-full h-full object-cover" />
               </div>
               <div className="flex flex-col items-start">
                 <span className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
@@ -241,8 +241,8 @@ export default function Layout({ children }: LayoutProps) {
               {/* Brand */}
               <div>
                 <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center">
-                    <MapPin className="w-4 h-4 text-white" strokeWidth={2.5} />
+                  <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
+                    <img src="/logo.png" alt="" className="w-full h-full object-cover" />
                   </div>
                   <div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p>
