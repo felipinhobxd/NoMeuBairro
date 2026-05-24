@@ -9,6 +9,7 @@ import Feed from './pages/Feed';
 import GuiaComercial from './pages/GuiaComercial';
 import Mural from './pages/Mural';
 import Denuncias from './pages/Denuncias';
+import Mapa from './pages/Mapa';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
@@ -26,6 +27,7 @@ export default function App() {
                   <Route path="/guia" element={<GuiaComercial />} />
                   <Route path="/mural" element={<Mural />} />
                   <Route path="/denuncias" element={<Denuncias />} />
+                  <Route path="/mapa" element={<Mapa />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/perfil" element={<Profile />} />
                   <Route path="/perfil/:userId" element={<PublicProfile />} />
