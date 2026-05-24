@@ -125,12 +125,22 @@ export default function AdminPanel() {
                     <p className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1.5">
                       Conteúdo Denunciado:
                     </p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300 italic">
-                      {report.post?.title || report.comment?.content}
-                    </p>
-                    {report.post?.description && (
-                      <p className="text-xs text-slate-500 mt-2 line-clamp-2">{report.post.description}</p>
-                    )}
+
+                    <div className="flex gap-3">
+                      {report.post?.image_url && (
+                        <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-600 bg-white">
+                          <img src={report.post.image_url} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-700 dark:text-slate-300 italic font-medium leading-tight">
+                          {report.post?.title || "Comentário"}
+                        </p>
+                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                          {report.post?.description || report.comment?.content}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between mt-4">

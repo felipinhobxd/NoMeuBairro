@@ -366,7 +366,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .select(`
         *,
         reporter:reporter_id(name),
-        post:post_id(title, description),
+        post:post_id(title, description, image_url),
         comment:comment_id(content)
       `)
       .order('created_at', { ascending: false });
