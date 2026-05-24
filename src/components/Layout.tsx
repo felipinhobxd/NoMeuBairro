@@ -7,12 +7,14 @@ import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Store,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
+  BarChart3,
 } from 'lucide-react';
 import { timeAgo } from './UI';
 
 const navItems = [
   { path: '/', label: 'Feed', icon: LayoutGrid },
   { path: '/mapa', label: 'Mapa', icon: MapIconIcon },
+  { path: '/estatisticas', label: 'Dados', icon: BarChart3 },
   { path: '/guia', label: 'Guia', icon: Store },
   { path: '/mural', label: 'Mural', icon: CalendarDays },
   { path: '/denuncias', label: 'Denúncias', icon: ShieldAlert },
