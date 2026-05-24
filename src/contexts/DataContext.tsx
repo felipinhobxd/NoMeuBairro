@@ -404,11 +404,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
-    isMyPost, isMyBusiness, isMyEvent,
+    isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus
   }), [posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
-    isMyPost, isMyBusiness, isMyEvent]);
+    isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus]);
 
   return <DataContext.Provider value={contextValue}>{children}</DataContext.Provider>;
 }

@@ -83,6 +83,7 @@ export default function Feed() {
   const [showCreate, setShowCreate] = useState(false);
   const [showReport, setShowReport] = useState<{ postId?: string; commentId?: string } | null>(null);
   const [reportReason, setReportReason] = useState('');
+  const [reportDetail, setReportDetail] = useState('');
   const [activeCategory, setActiveCategory] = useState<PostCategory | null>(null);
   const [activeStatus, setActiveStatus] = useState<PostStatus | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -281,9 +282,14 @@ export default function Feed() {
 
   const handleSendReport = async () => {
     if (!reportReason.trim()) return;
-    await reportContent({ ...showReport, reason: reportReason });
+    const finalReason = reportDetail.trim()
+      ? `${reportReason}: ${reportDetail}`
+      : reportReason;
+
+    await reportContent({ ...showReport, reason: finalReason });
     setShowReport(null);
     setReportReason('');
+    setReportDetail('');
     toast('Denúncia enviada para análise do administrador.');
   };
 
@@ -615,8 +621,9 @@ export default function Feed() {
         <div className="space-y-4">
           <p className="text-sm text-slate-500">Ajude-nos a manter o bairro seguro. Por que você está denunciando este conteúdo?</p>
           <Select
-            label="Motivo"
+            label="Categoria da Denúncia"
             options={[
+              { value: '', label: 'Selecione uma categoria...' },
               { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' },
               { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' },
               { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' },
@@ -625,6 +632,13 @@ export default function Feed() {
             ]}
             value={reportReason}
             onChange={e => setReportReason(e.target.value)}
+          />
+          <Textarea
+            label="Detalhes da denúncia (opcional)"
+            placeholder="Descreva melhor o problema para ajudar o administrador..."
+            value={reportDetail}
+            onChange={e => setReportDetail(e.target.value)}
+            rows={3}
           />
           <div className="flex gap-3 pt-2">
             <Button variant="secondary" className="flex-1" onClick={() => setShowReport(null)}>Cancelar</Button>
