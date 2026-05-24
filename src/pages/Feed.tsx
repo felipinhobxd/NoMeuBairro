@@ -77,10 +77,12 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
 export default function Feed() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost } = useData();
+  const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, reportContent } = useData();
   const { toast } = useToast();
 
   const [showCreate, setShowCreate] = useState(false);
+  const [showReport, setShowReport] = useState<{ postId?: string; commentId?: string } | null>(null);
+  const [reportReason, setReportReason] = useState('');
   const [activeCategory, setActiveCategory] = useState<PostCategory | null>(null);
   const [activeStatus, setActiveStatus] = useState<PostStatus | 'all'>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -276,6 +278,14 @@ export default function Feed() {
     const labels: Record<string, string> = { pending: 'Pendente', in_progress: 'Em andamento', resolved: 'Resolvido' };
     toast(`Status atualizado para "${labels[status]}".`);
   }, [updatePostStatus, toast]);
+
+  const handleSendReport = async () => {
+    if (!reportReason.trim()) return;
+    await reportContent({ ...showReport, reason: reportReason });
+    setShowReport(null);
+    setReportReason('');
+    toast('Denúncia enviada para análise do administrador.');
+  };
 
   return (
     <div className="space-y-5">
@@ -494,6 +504,13 @@ export default function Feed() {
                       <MessageSquare className="w-4 h-4" />{post.commentsCount > 0 && <span>{post.commentsCount}</span>}
                       <span className="hidden sm:inline">Comentár{post.commentsCount === 1 ? 'io' : 'ios'}</span>
                     </button>
+                    <button onClick={() => setShowReport({ postId: post.id })}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors"
+                      title="Denunciar postagem"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Denunciar</span>
+                    </button>
                     {/* Status buttons — owner only */}
                     {isMyPost(post) && (
                       <div className="flex items-center gap-1.5 ml-auto">
@@ -592,6 +609,28 @@ export default function Feed() {
             <Button type="submit" className="flex-1" disabled={!ft.trim() || !fd.trim() || !fl.trim()}>Publicar relato</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!showReport} onClose={() => setShowReport(null)} title="Denunciar Conteúdo">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">Ajude-nos a manter o bairro seguro. Por que você está denunciando este conteúdo?</p>
+          <Select
+            label="Motivo"
+            options={[
+              { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' },
+              { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' },
+              { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' },
+              { value: 'Conteúdo inadequado ou ilegal', label: 'Conteúdo inadequado ou ilegal' },
+              { value: 'Outros', label: 'Outros' },
+            ]}
+            value={reportReason}
+            onChange={e => setReportReason(e.target.value)}
+          />
+          <div className="flex gap-3 pt-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setShowReport(null)}>Cancelar</Button>
+            <Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={handleSendReport} disabled={!reportReason}>Enviar Denúncia</Button>
+          </div>
+        </div>
       </Modal>
 
       <ImageViewer

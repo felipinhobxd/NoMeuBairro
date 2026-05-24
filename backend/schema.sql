@@ -217,9 +217,35 @@ CREATE POLICY "Notifications are private" ON notifications FOR SELECT USING (aut
 CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "System can create notifications" ON notifications FOR INSERT WITH CHECK (true);
 
+-- ─── TABELA: denúncias de conteúdo (MODERAÇÃO) ────────────────────────
+CREATE TABLE IF NOT EXISTS content_reports (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    reporter_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    post_id         UUID REFERENCES posts(id) ON DELETE CASCADE,
+    comment_id      UUID REFERENCES comments(id) ON DELETE CASCADE,
+    reason          TEXT NOT NULL,
+    status          TEXT DEFAULT 'pending', -- 'pending' | 'resolved' | 'ignored'
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE content_reports ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can see all reports" ON content_reports;
+CREATE POLICY "Admins can see all reports" ON content_reports FOR SELECT USING (
+    auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
+);
+
+DROP POLICY IF EXISTS "Users can create content reports" ON content_reports;
+CREATE POLICY "Users can create content reports" ON content_reports FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admins can update reports" ON content_reports;
+CREATE POLICY "Admins can update reports" ON content_reports FOR UPDATE USING (
+    auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
+);
+
 -- ═══════════════════════════════════════════════════════════════════════
--- ÍNDICES (Criação Segura)
--- ═══════════════════════════════════════════════════════════════════════
+-- ÍNDICES (Criação Segura) ─────────────────────────────────────────────
+
 CREATE INDEX IF NOT EXISTS idx_posts_author      ON posts(author_id);
 CREATE INDEX IF NOT EXISTS idx_posts_category    ON posts(category);
 CREATE INDEX IF NOT EXISTS idx_posts_status      ON posts(status);

@@ -7,7 +7,7 @@ import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Store,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
-  BarChart3,
+  BarChart3, ShieldCheck,
 } from 'lucide-react';
 import { timeAgo } from './UI';
 
@@ -168,6 +168,7 @@ export default function Layout({ children }: LayoutProps) {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isAdmin = user?.id === 'fbc66053-d56c-46f7-a92e-ea40062a216c';
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
@@ -203,6 +204,15 @@ export default function Layout({ children }: LayoutProps) {
                   </button>
                 );
               })}
+              {isAdmin && (
+                <button onClick={() => navigate('/admin')}
+                  className={cn('flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    location.pathname === '/admin' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')}
+                >
+                  <ShieldCheck className="w-4 h-4" /><span>Painel Admin</span>
+                </button>
+              )}
             </nav>
             <div className="flex items-center gap-1.5">
               <button onClick={toggle} className="p-2.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200"

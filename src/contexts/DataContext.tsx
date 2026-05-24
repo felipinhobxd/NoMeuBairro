@@ -23,6 +23,9 @@ interface DataContextType {
   updatePostStatus: (postId: string, status: PostStatus) => Promise<void>;
   deleteBusiness: (businessId: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
+  reportContent: (data: { postId?: string; commentId?: string; reason: string }) => Promise<void>;
+  getAllReports: () => Promise<any[]>;
+  updateReportStatus: (reportId: string, status: 'resolved' | 'ignored') => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;
   deleteAllNotifications: () => Promise<void>;
   isMyPost: (post: { id: string; authorId: string }) => boolean;
@@ -345,6 +348,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteEvent = useCallback(async (eventId: string) => {
     await supabase.from('events').delete().eq('id', eventId);
+  }, []);
+
+  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => {
+    await supabase.from('content_reports').insert({
+      reporter_id: user?.id || null,
+      post_id: data.postId,
+      comment_id: data.commentId,
+      reason: data.reason
+    });
+  }, [user]);
+
+  const getAllReports = useCallback(async () => {
+    if (user?.id !== 'fbc66053-d56c-46f7-a92e-ea40062a216c') return [];
+    const { data } = await supabase
+      .from('content_reports')
+      .select(`
+        *,
+        reporter:reporter_id(name),
+        post:post_id(title, description),
+        comment:comment_id(content)
+      `)
+      .order('created_at', { ascending: false });
+    return data || [];
+  }, [user]);
+
+  const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => {
+    await supabase.from('content_reports').update({ status }).eq('id', reportId);
   }, []);
 
   const isMyPost = useCallback((post: { id: string; authorId: string }) => {
