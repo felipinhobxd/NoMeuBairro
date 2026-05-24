@@ -84,3 +84,17 @@ export interface CommunityEvent {
 }
 
 export type EventType = 'feira' | 'saude' | 'reuniao' | 'cultura' | 'esporte' | 'campanha' | 'outros';
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  actorId: string;
+  actorName?: string;
+  actorAvatarUrl?: string;
+  type: 'support' | 'comment';
+  postId: string;
+  postTitle?: string;
+  content?: string;
+  isRead: boolean;
+  createdAt: string;
+}

@@ -1,12 +1,14 @@
 import { type ReactNode, useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Store,
-  CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart,
+  CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X,
 } from 'lucide-react';
+import { timeAgo } from './UI';
 
 const navItems = [
   { path: '/', label: 'Feed', icon: LayoutGrid },
@@ -30,6 +32,129 @@ function ScrollToTop() {
       aria-label="Voltar ao topo">
       <ArrowUp className="w-5 h-5" />
     </button>
+  );
+}
+
+function NotificationBell() {
+  const { isAuthenticated } = useAuth();
+  const { notifications, unreadCount, markNotificationsAsRead, deleteAllNotifications } = useData();
+  const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
+
+  if (!isAuthenticated) return null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => { setIsOpen(!isOpen); if (!isOpen) markNotificationsAsRead(); }}
+        className={cn(
+          "p-2.5 rounded-xl transition-all duration-200 relative",
+          isOpen ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+        )}
+        aria-label="Notificações"
+      >
+        <Bell className="w-[18px] h-[18px]" />
+        {unreadCount > 0 && (
+          <span className="absolute top-2 right-2 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 mt-2 w-80 max-h-[400px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 z-50 overflow-hidden flex flex-col animate-scale-in origin-top-right">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Notificações</h3>
+                {notifications.length > 0 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if(confirm('Deseja apagar todas as notificações?')) deleteAllNotifications(); }}
+                    className="text-[10px] font-bold text-red-500 hover:text-red-600 dark:hover:text-red-400 uppercase tracking-wider transition-colors"
+                  >
+                    Apagar tudo
+                  </button>
+                )}
+              </div>
+              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto flex-1 no-scrollbar">
+              {notifications.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Bell className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Nenhuma notificação por enquanto.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                  {notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        setIsOpen(false);
+                        navigate('/');
+                        setTimeout(() => {
+                          const element = document.getElementById(`post-${n.postId}`);
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            element.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2');
+                            setTimeout(() => element.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-2'), 3000);
+                          }
+                        }, 100);
+                      }}
+                      className={cn(
+                        "w-full p-4 flex gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group",
+                        !n.isRead && "bg-emerald-50/30 dark:bg-emerald-500/5"
+                      )}
+                    >
+                      <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                        {n.actorAvatarUrl ? (
+                          <img src={n.actorAvatarUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xs font-bold text-slate-400">{n.actorName?.charAt(0)}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
+                          <span className="font-bold text-slate-900 dark:text-white">{n.actorName}</span>
+                          {n.type === 'support' ? ' apoiou seu relato: ' : ' comentou no seu relato: '}
+                          <span className="font-medium text-emerald-600 dark:text-emerald-400">"{n.postTitle}"</span>
+                        </p>
+                        {n.content && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic line-clamp-2">
+                            "{n.content}"
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {n.type === 'support' ? (
+                            <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+                          ) : (
+                            <MessageSquare className="w-3 h-3 text-emerald-500" />
+                          )}
+                          <span className="text-[10px] text-slate-400">{timeAgo(n.createdAt)}</span>
+                        </div>
+                      </div>
+                      {!n.isRead && (
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-center">
+              <button onClick={() => { navigate('/perfil'); setIsOpen(false); }} className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+                Ver todas as atividades
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -81,6 +206,7 @@ export default function Layout({ children }: LayoutProps) {
                 aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>
                 {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
               </button>
+              <NotificationBell />
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5">
                   <button onClick={() => navigate('/perfil')}

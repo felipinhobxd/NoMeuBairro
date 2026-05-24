@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, type ReactNode, useEffect } from 'react';
-import type { Post, PostCategory, PostStatus, Business, BusinessCategory, CommunityEvent, EventType, Comment } from '../types';
+import type { Post, PostCategory, PostStatus, Business, BusinessCategory, CommunityEvent, EventType, Comment, AppNotification } from '../types';
 import { useAuth } from './AuthContext';
 import { supabase } from '../utils/supabase';
 
@@ -8,6 +8,8 @@ interface DataContextType {
   businesses: Business[];
   events: CommunityEvent[];
   comments: Comment[];
+  notifications: AppNotification[];
+  unreadCount: number;
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
@@ -21,6 +23,8 @@ interface DataContextType {
   updatePostStatus: (postId: string, status: PostStatus) => Promise<void>;
   deleteBusiness: (businessId: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
+  markNotificationsAsRead: () => Promise<void>;
+  deleteAllNotifications: () => Promise<void>;
   isMyPost: (post: { id: string; authorId: string }) => boolean;
   isMyBusiness: (business: { id: string; createdBy: string }) => boolean;
   isMyEvent: (event: { id: string; createdBy: string }) => boolean;
@@ -37,6 +41,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<Set<string>>(new Set());
 
@@ -57,12 +62,60 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const fetchData = useCallback(async () => {
     try {
+      // Busca básica que SEMPRE deve funcionar
       const [postsRes, bizRes, eventsRes, commentsRes] = await Promise.all([
         supabase.from('posts').select('*, users(name, avatar_url)').order('created_at', { ascending: false }),
         supabase.from('businesses').select('*, users!businesses_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
         supabase.from('events').select('*, users!events_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
         supabase.from('comments').select('*, users(name, avatar_url)').order('created_at', { ascending: false })
       ]);
+
+      // Busca de notificações (separada para não travar o resto se a tabela não existir)
+      if (user) {
+        console.log('Buscando notificações para o usuário:', user.id);
+        const { data: notifData, error: notifError } = await supabase
+          .from('notifications')
+          .select(`
+            *,
+            users:actor_id(name, avatar_url),
+            posts:post_id(title),
+            comments:comment_id(content)
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (notifError) {
+          console.error('Erro detalhado nas notificações:', notifError);
+          // Tenta busca simples sem join se o de cima falhar
+          const { data: simpleData } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (simpleData) {
+            setNotifications(simpleData.map(n => ({
+              id: n.id, userId: n.user_id, actorId: n.actor_id,
+              actorName: 'Alguém',
+              type: n.type as 'support' | 'comment', postId: n.post_id,
+              isRead: n.is_read, createdAt: n.created_at
+            })));
+          }
+        } else if (notifData) {
+          console.log('Notificações encontradas:', notifData.length);
+          setNotifications(notifData.map(n => ({
+            id: n.id, userId: n.user_id, actorId: n.actor_id,
+            actorName: n.users?.name || 'Alguém',
+            actorAvatarUrl: n.users?.avatar_url,
+            type: n.type as 'support' | 'comment', postId: n.post_id,
+            postTitle: n.posts?.title,
+            content: n.comments?.content,
+            isRead: n.is_read, createdAt: n.created_at
+          })));
+        }
+      }
 
       if (postsRes.data) {
         setPosts(postsRes.data.map(p => ({
@@ -115,13 +168,31 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchData();
+    console.log('Iniciando subscrição em tempo real...');
     const channel = supabase.channel('db-final-sync')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => fetchData())
-      .subscribe();
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload) => {
+        console.log('Mudança em posts:', payload);
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, (payload) => {
+        console.log('Mudança em comments:', payload);
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, (payload) => {
+        console.log('Mudança em supports:', payload);
+        fetchData();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        console.log('NOVA NOTIFICAÇÃO RECEBIDA:', payload);
+        fetchData();
+      })
+      .subscribe((status) => {
+        console.log('Status da subscrição:', status);
+      });
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
@@ -256,6 +327,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await supabase.from('posts').update({ status }).eq('id', postId);
   }, []);
 
+  const markNotificationsAsRead = useCallback(async () => {
+    if (!user) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+    fetchData();
+  }, [user, fetchData]);
+
+  const deleteAllNotifications = useCallback(async () => {
+    if (!user) return;
+    await supabase.from('notifications').delete().eq('user_id', user.id);
+    fetchData();
+  }, [user, fetchData]);
+
   const deleteBusiness = useCallback(async (businessId: string) => {
     await supabase.from('businesses').delete().eq('id', businessId);
   }, []);
@@ -285,14 +368,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return map;
   }, [comments]);
 
+  const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
+
   const contextValue = useMemo(() => ({
-    posts, businesses, events, comments, commentsByPost, loading,
+    posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
-    deletePost, updatePostStatus, deleteBusiness, deleteEvent,
+    deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
     isMyPost, isMyBusiness, isMyEvent,
-  }), [posts, businesses, events, comments, commentsByPost, loading,
+  }), [posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
-    deletePost, updatePostStatus, deleteBusiness, deleteEvent,
+    deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
     isMyPost, isMyBusiness, isMyEvent]);
 
   return <DataContext.Provider value={contextValue}>{children}</DataContext.Provider>;

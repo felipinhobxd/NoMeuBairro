@@ -31,13 +31,12 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- ─── TABELA: usuários ─────────────────────────────────────────────────
+-- ─── TABELA: usuários (Sincronizada com auth.users) ───────────────────
 CREATE TABLE IF NOT EXISTS users (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id              UUID PRIMARY KEY, -- ID vindo do auth.users
     name            VARCHAR(100) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     avatar_url      TEXT,
-    password_hash   VARCHAR(255) NOT NULL,
     reputation      INTEGER DEFAULT 0,
     is_active       BOOLEAN DEFAULT TRUE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
@@ -132,6 +131,18 @@ CREATE TABLE IF NOT EXISTS anonymous_reports (
     created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ─── TABELA: notificações ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS notifications (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    actor_id        UUID REFERENCES users(id) ON DELETE SET NULL,
+    type            TEXT NOT NULL, -- 'support' | 'comment'
+    post_id         UUID REFERENCES posts(id) ON DELETE CASCADE,
+    comment_id      UUID REFERENCES comments(id) ON DELETE CASCADE,
+    is_read         BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- POLÍTICAS DE SEGURANÇA (RLS) - FORÇANDO ATIVAÇÃO
 -- ═══════════════════════════════════════════════════════════════════════
@@ -192,6 +203,12 @@ CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (au
 
 CREATE POLICY "Supports are public" ON post_supports FOR SELECT USING (true);
 CREATE POLICY "Users can support posts" ON post_supports FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own support" ON post_supports FOR DELETE USING (auth.uid() = user_id);
+
+-- Políticas: notificações
+CREATE POLICY "Notifications are private" ON notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "System can create notifications" ON notifications FOR INSERT WITH CHECK (true);
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- ÍNDICES (Criação Segura)
@@ -265,3 +282,67 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS trg_support_delete ON post_supports;
 CREATE TRIGGER trg_support_delete AFTER DELETE ON post_supports FOR EACH ROW EXECUTE FUNCTION decrement_supports();
+
+-- ─── NOTIFICAÇÕES AUTOMÁTICAS ──────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION handle_new_notification()
+RETURNS TRIGGER AS $$
+DECLARE
+    post_owner_id UUID;
+    v_actor_id UUID;
+BEGIN
+    -- Identifica o autor da ação
+    IF (TG_TABLE_NAME = 'comments') THEN
+        v_actor_id := NEW.author_id;
+    ELSE
+        v_actor_id := NEW.user_id;
+    END IF;
+
+    -- Busca o dono do post
+    SELECT author_id INTO post_owner_id FROM posts WHERE id = NEW.post_id;
+
+    -- Só cria se o dono do post não for quem fez a ação
+    IF post_owner_id IS NOT NULL AND post_owner_id != v_actor_id THEN
+        INSERT INTO notifications (user_id, actor_id, type, post_id, comment_id)
+        VALUES (post_owner_id, v_actor_id,
+                CASE WHEN TG_TABLE_NAME = 'comments' THEN 'comment' ELSE 'support' END,
+                NEW.post_id,
+                CASE WHEN TG_TABLE_NAME = 'comments' THEN NEW.id ELSE NULL END);
+    END IF;
+
+    RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+    RETURN NEW; -- Garante que a ação principal não trave
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_notify_comment ON comments;
+CREATE TRIGGER trg_notify_comment
+AFTER INSERT ON comments
+FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
+
+DROP TRIGGER IF EXISTS trg_notify_support ON post_supports;
+CREATE TRIGGER trg_notify_support
+AFTER INSERT ON post_supports
+FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
+
+-- ─── SINCRONIZAÇÃO COM SUPABASE AUTH ──────────────────────────────────
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.users (id, name, email, avatar_url)
+    VALUES (
+        NEW.id,
+        COALESCE(NEW.raw_user_meta_data->>'name', 'Morador'),
+        NEW.email,
+        NEW.raw_user_meta_data->>'avatar_url'
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
