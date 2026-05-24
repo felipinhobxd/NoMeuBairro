@@ -212,9 +212,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; latitude?: number; longitude?: number }) => {
-    const authorId = user?.id || null;
+    // Para ser 100% anônimo, forçamos author_id como null, mesmo se houver usuário logado.
     const { data: postData, error: postErr } = await supabase.from('posts').insert({
-      author_id: authorId,
+      author_id: null,
       category: 'seguranca',
       title: data.tipo,
       description: data.description,

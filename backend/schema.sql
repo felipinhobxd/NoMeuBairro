@@ -183,7 +183,10 @@ CREATE POLICY "Profiles are public" ON users FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
 
 CREATE POLICY "Posts are public" ON posts FOR SELECT USING (true);
-CREATE POLICY "Users can create posts" ON posts FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "Users can create posts" ON posts FOR INSERT WITH CHECK (
+    (is_anonymous = true AND author_id IS NULL) OR
+    (is_anonymous = false AND auth.uid() = author_id)
+);
 CREATE POLICY "Authors can update own posts" ON posts FOR UPDATE USING (auth.uid() = author_id);
 CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid() = author_id);
 
