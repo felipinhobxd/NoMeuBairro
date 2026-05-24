@@ -87,6 +87,8 @@ export default function Feed() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [onlyMine, setOnlyMine] = useState(false);
+  const [nearMe, setNearMe] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [supported, setSupported] = useState<Set<string>>(() => {
     try { return new Set<string>(JSON.parse(localStorage.getItem('anb-supported') || '[]')); }
     catch { return new Set<string>(); }
@@ -122,6 +124,18 @@ export default function Feed() {
     return c;
   }, [posts]);
 
+  // ─── Haversine Distance Formula ────────────────────────
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   // ─── Memoized filtering ─────────────────────────────
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -130,10 +144,42 @@ export default function Feed() {
       if (activeStatus !== 'all' && p.status !== activeStatus) return false;
       if (onlyMine && user && p.authorId !== user.id) return false;
       if (onlyMine && !user) return false;
+
+      // Filter by proximity (e.g., 2km)
+      if (nearMe && userLocation && p.latitude && p.longitude) {
+        const dist = calculateDistance(userLocation.lat, userLocation.lng, Number(p.latitude), Number(p.longitude));
+        if (dist > 2) return false; // Show only within 2km
+      } else if (nearMe && !userLocation) {
+        return false; // While loading location, show nothing if nearMe is active
+      }
+
       if (q) return p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.location.toLowerCase().includes(q) || p.authorName.toLowerCase().includes(q);
       return true;
     });
-  }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, user]);
+  }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user]);
+
+  const toggleNearMe = useCallback(() => {
+    if (!nearMe) {
+      if (!navigator.geolocation) {
+        toast('Geolocalização não é suportada pelo seu navegador.', 'error');
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          setNearMe(true);
+          toast('Mostrando relatos próximos a você (2km).');
+        },
+        (err) => {
+          console.error(err);
+          toast('Não foi possível obter sua localização. Verifique as permissões.', 'error');
+        }
+      );
+    } else {
+      setNearMe(false);
+    }
+  }, [nearMe, toast]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -270,6 +316,17 @@ export default function Feed() {
               <span className="hidden sm:inline">Meus</span>
             </button>
           )}
+
+          {/* Perto de mim toggle */}
+          <button onClick={toggleNearMe}
+            className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
+              nearMe ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-500/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')}
+            aria-pressed={nearMe} title="Mostrar relatos perto de mim">
+            <MapPin className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Perto de mim</span>
+          </button>
+
           <button onClick={() => setShowFilters(!showFilters)}
             className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
               showFilters ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400')}>
