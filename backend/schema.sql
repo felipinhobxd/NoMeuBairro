@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- AQUI NO MEU BAIRRO — Vitória Régia
+-- NO MEU BAIRRO — Vitória Régia
 -- Schema SQL (PostgreSQL 15+) — SUPABASE READY
 -- ═══════════════════════════════════════════════════════════════════════
 

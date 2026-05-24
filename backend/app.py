@@ -1,5 +1,5 @@
 """
-Aqui no meu bairro — Vitória Régia
+No Meu Bairro — Vitória Régia
 Aplicação Flask principal com API RESTful.
 
 Uso:
@@ -131,7 +131,7 @@ def create_app(config_name: str | None = None) -> Flask:
     @app.route("/", methods=["GET"])
     def root():
         return jsonify({
-            "name": "Aqui no meu bairro — API",
+            "name": "No Meu Bairro — API",
             "bairro": "Vitória Régia",
             "cidade": "Curitiba",
             "version": "1.0.0",

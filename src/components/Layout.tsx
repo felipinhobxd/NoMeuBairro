@@ -183,7 +183,7 @@ export default function Layout({ children }: LayoutProps) {
                 <MapPin className="w-5 h-5 text-white" strokeWidth={2.5} />
               </div>
               <div className="flex flex-col items-start">
-                <span className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">Aqui no meu bairro</span>
+                <span className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
                 <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Vitória Régia</span>
               </div>
             </button>
@@ -245,7 +245,7 @@ export default function Layout({ children }: LayoutProps) {
                     <MapPin className="w-4 h-4 text-white" strokeWidth={2.5} />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">Aqui no meu bairro</p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p>
                     <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Vitória Régia</p>
                   </div>
                 </div>
@@ -287,7 +287,7 @@ export default function Layout({ children }: LayoutProps) {
             </div>
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
               <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                © {new Date().getFullYear()} Aqui no meu bairro — Vitória Régia, Curitiba. Todos os direitos reservados.
+                © {new Date().getFullYear()} No Meu Bairro — Vitória Régia, Curitiba. Todos os direitos reservados.
               </p>
               <p className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
                 Feito com <Heart className="w-3 h-3 text-red-400 inline fill-current" /> pelo 2°DS
