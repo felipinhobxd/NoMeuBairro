@@ -178,13 +178,31 @@ export default function Feed() {
         },
         (err) => {
           console.error('Geolocation Error:', err);
+
+          // Se falhar com alta precisão (GPS), tentamos uma busca mais simples/rápida
+          if (err.code === 3) {
+            toast('GPS demorou muito. Tentando localização aproximada...', 'info');
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setNearMe(true);
+                toast('Mostrando relatos próximos (Localização aproximada).');
+              },
+              (err2) => {
+                console.error('Final Geolocation Error:', err2);
+                toast('Não foi possível obter sua localização.', 'error');
+              },
+              { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+            );
+            return;
+          }
+
           let msg = 'Não foi possível obter sua localização.';
           if (err.code === 1) msg = 'Permissão de localização negada pelo usuário.';
           else if (err.code === 2) msg = 'Localização indisponível no momento.';
-          else if (err.code === 3) msg = 'Tempo limite esgotado ao obter localização.';
           toast(msg, 'error');
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
       );
     } else {
       setNearMe(false);

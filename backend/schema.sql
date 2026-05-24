@@ -177,6 +177,10 @@ DROP POLICY IF EXISTS "Users can create comments" ON comments;
 DROP POLICY IF EXISTS "Authors can delete own comments" ON comments;
 DROP POLICY IF EXISTS "Supports are public" ON post_supports;
 DROP POLICY IF EXISTS "Users can support posts" ON post_supports;
+DROP POLICY IF EXISTS "Users can delete own support" ON post_supports;
+DROP POLICY IF EXISTS "Notifications are private" ON notifications;
+DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
+DROP POLICY IF EXISTS "System can create notifications" ON notifications;
 
 -- Criar políticas atualizadas
 CREATE POLICY "Profiles are public" ON users FOR SELECT USING (true);
