@@ -115,11 +115,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }, [user]);
 
-  const changePassword = useCallback(async (_currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> => {
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) return { ok: false, error: error.message };
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> => {
+    if (!user?.email) return { ok: false, error: 'Usuário não identificado.' };
+
+    // 1. Validar a senha atual tentando fazer um "re-login" silencioso
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword
+    });
+
+    if (loginError) {
+      return { ok: false, error: 'A senha atual está incorreta.' };
+    }
+
+    // 2. Se a senha atual estiver certa, procede com a atualização
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (updateError) return { ok: false, error: updateError.message };
     return { ok: true };
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateProfile, changePassword }}>
