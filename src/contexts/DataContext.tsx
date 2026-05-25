@@ -168,35 +168,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; latitude?: number; longitude?: number }) => {
-    // Para ser 100% anônimo, forçamos author_id como null, mesmo se houver usuário logado.
+    // 100% Anônimo: author_id nulo e is_anonymous verdadeiro.
     const { data: postData, error: postErr } = await supabase.from('posts').insert({
       author_id: null,
       category: 'seguranca',
-      title: data.tipo,
+      title: `Denúncia: ${data.tipo}`,
       description: data.description,
-      location: 'Local Protegido',
+      location: 'Local Privado',
       latitude: data.latitude,
       longitude: data.longitude,
       is_anonymous: true
     }).select().single();
 
-    if (postErr || !postData) {
-      console.error('Erro ao criar post anônimo:', postErr);
+    if (postErr) {
+      console.error('Erro ao postar denúncia anônima:', postErr);
       return;
     }
 
-    addMyAnonId(postData.id);
-
-    // Envia os dados criptografados (mock para o banco)
-    await supabase.from('anonymous_reports').insert({
-      report_type: 'outros',
-      encrypted_content: new TextEncoder().encode(data.description),
-      content_hash: 'sha256-locally-generated',
-      post_id: postData.id
-    });
-
-    fetchData(); // Atualiza a lista de posts na tela
-  }, [user, addMyAnonId, fetchData]);
+    if (postData) {
+      addMyAnonId(postData.id);
+      fetchData(); // Recarrega o feed
+    }
+  }, [addMyAnonId, fetchData]);
 
   const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return;
