@@ -95,6 +95,15 @@ export interface CommunityEvent {
   createdByName?: string;
   createdByAvatarUrl?: string;
   createdAt: string;
+  attendanceCount?: number;
+}
+
+export interface EventAttendee {
+  id: string;
+  eventId: string;
+  userId: string;
+  userName: string;
+  userAvatarUrl?: string;
 }
 
 export type EventType = 'feira' | 'saude' | 'reuniao' | 'cultura' | 'esporte' | 'campanha' | 'outros';

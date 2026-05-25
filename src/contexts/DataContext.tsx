@@ -23,6 +23,8 @@ interface DataContextType {
   updatePostStatus: (postId: string, status: PostStatus) => Promise<void>;
   deleteBusiness: (businessId: string) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
+  toggleAttendance: (eventId: string) => Promise<void>;
+  getEventAttendees: (eventId: string) => Promise<EventAttendee[]>;
   addBusinessRating: (data: { businessId: string; stars: number; comment?: string }) => Promise<void>;
   getBusinessRatings: (businessId: string) => Promise<BusinessRating[]>;
   reportContent: (data: { postId?: string; commentId?: string; reason: string }) => Promise<void>;
@@ -72,7 +74,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const [postsRes, bizRes, eventsRes, commentsRes, ratingsRes] = await Promise.all([
         supabase.from('posts').select('*, users(name, avatar_url), post_supports(count)').order('created_at', { ascending: false }),
         supabase.from('businesses').select('*, users!businesses_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
-        supabase.from('events').select('*, users!events_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
+        supabase.from('events').select('*, users!events_created_by_fkey(name, avatar_url), event_attendance(count)').order('created_at', { ascending: false }),
         supabase.from('comments').select('*, users(name, avatar_url)').order('created_at', { ascending: false }),
         supabase.from('business_ratings').select('business_id, stars')
       ]);
@@ -171,7 +173,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           type: e.type, createdBy: e.created_by,
           createdByName: e.users?.name || 'Morador',
           createdByAvatarUrl: e.users?.avatar_url,
-          createdAt: e.created_at
+          createdAt: e.created_at,
+          attendanceCount: e.event_attendance?.[0]?.count ?? 0
         })));
       }
 
@@ -382,6 +385,38 @@ export function DataProvider({ children }: { children: ReactNode }) {
     await supabase.from('events').delete().eq('id', eventId);
   }, []);
 
+  const toggleAttendance = useCallback(async (eventId: string) => {
+    if (!user) return;
+
+    const { data: existing } = await supabase
+      .from('event_attendance')
+      .select('id')
+      .eq('event_id', eventId)
+      .eq('user_id', user.id);
+
+    if (existing && existing.length > 0) {
+      await supabase.from('event_attendance').delete().eq('event_id', eventId).eq('user_id', user.id);
+    } else {
+      await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
+    }
+    fetchData();
+  }, [user, fetchData]);
+
+  const getEventAttendees = useCallback(async (eventId: string): Promise<EventAttendee[]> => {
+    const { data } = await supabase
+      .from('event_attendance')
+      .select('*, users(name, avatar_url)')
+      .eq('event_id', eventId);
+
+    return (data || []).map(a => ({
+      id: a.id,
+      eventId: a.event_id,
+      userId: a.user_id,
+      userName: a.users?.name || 'Morador',
+      userAvatarUrl: a.users?.avatar_url
+    }));
+  }, []);
+
   const addBusinessRating = useCallback(async (data: { businessId: string; stars: number; comment?: string }) => {
     if (!user) return;
 
@@ -478,12 +513,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
     isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus,
-    addBusinessRating, getBusinessRatings
+    addBusinessRating, getBusinessRatings, toggleAttendance, getEventAttendees
   }), [posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
     isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus,
-    addBusinessRating, getBusinessRatings]);
+    addBusinessRating, getBusinessRatings, toggleAttendance, getEventAttendees]);
 
   return <DataContext.Provider value={contextValue}>{children}</DataContext.Provider>;
 }

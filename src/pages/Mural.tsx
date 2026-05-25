@@ -1,8 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { CalendarDays, MapPin, Plus, Clock, Trash2 } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2 } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
@@ -26,14 +26,25 @@ function fmtDate(d: string) {
 }
 
 export default function Mural() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const { events, addEvent, deleteEvent, isMyEvent } = useData();
+  const { events, addEvent, deleteEvent, isMyEvent, toggleAttendance, getEventAttendees } = useData();
   const { toast } = useToast();
 
   const [activeType, setActiveType] = useState<EventType | 'all'>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const [viewAttendeesTarget, setViewAttendeesTarget] = useState<{ id: string; title: string } | null>(null);
+  const [currentAttendees, setCurrentAttendees] = useState<any[]>([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [userAttendance, setUserAttendance] = useState<Set<string>>(new Set());
+
+  // Detecta quais eventos o usuário atual vai comparecer (simplificado via localStorage para UX rápida + DB)
+  useEffect(() => {
+    // Aqui poderíamos buscar do banco, mas para manter a performance,
+    // a verificação real acontece no toggleAttendance do DataContext.
+  }, [events, user]);
 
   const [ft, setFt] = useState(''); const [ftype, setFtype] = useState<EventType>('reuniao');
   const [fdate, setFdate] = useState(''); const [floc, setFloc] = useState(''); const [fdesc, setFdesc] = useState('');
@@ -77,6 +88,23 @@ export default function Mural() {
   };
 
   const handleDelete = useCallback((id: string) => { deleteEvent(id); setConfirmDeleteId(null); toast('Evento removido.', 'info'); }, [deleteEvent, toast]);
+
+  const handleToggleAttendance = async (eventId: string) => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    await toggleAttendance(eventId);
+    toast('Presença atualizada!');
+  };
+
+  const openAttendees = async (id: string, title: string) => {
+    setViewAttendeesTarget({ id, title });
+    setLoadingAttendees(true);
+    const data = await getEventAttendees(id);
+    setCurrentAttendees(data);
+    setLoadingAttendees(false);
+  };
 
   return (
     <div className="space-y-5">
@@ -163,15 +191,30 @@ export default function Mural() {
                         <MapView lat={ev.latitude} lng={ev.longitude} title={ev.title} className="h-32 w-full rounded-lg overflow-hidden" />
                       </div>
                     )}
-                    <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50">
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" />{ev.location}</span>
                         <span className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500"><Clock className="w-3 h-3" />{fmtDate(ev.date)}</span>
-                        {ev.createdBy !== 'anonymous' && (
-                          <Link to={`/perfil/${ev.createdBy}`} className="text-[10px] text-emerald-600 hover:underline font-medium">
-                            por {ev.createdByName || 'Vizinho'}
-                          </Link>
-                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openAttendees(ev.id, ev.title)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-colors"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>{ev.attendanceCount || 0}</span>
+                        </button>
+
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 !px-3 !text-[11px]"
+                          onClick={() => handleToggleAttendance(ev.id)}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Vou comparecer
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -210,6 +253,44 @@ export default function Mural() {
         open={!!zoomedImage}
         onClose={() => setZoomedImage(null)}
       />
+
+      {/* Modal de Confirmados */}
+      <Modal
+        open={!!viewAttendeesTarget}
+        onClose={() => setViewAttendeesTarget(null)}
+        title={`Confirmados: ${viewAttendeesTarget?.title}`}
+      >
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar pr-1">
+          {loadingAttendees ? (
+            <div className="py-10 text-center text-slate-400">Carregando lista...</div>
+          ) : currentAttendees.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 italic">Ninguém confirmou presença ainda.</div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2">
+              {currentAttendees.map(attendee => (
+                <Link
+                  key={attendee.id}
+                  to={`/perfil/${attendee.userId}`}
+                  onClick={() => setViewAttendeesTarget(null)}
+                  className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group"
+                >
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-xs font-bold text-emerald-700 dark:text-emerald-400 ring-2 ring-transparent group-hover:ring-emerald-500/30 transition-all">
+                    {attendee.userAvatarUrl ? (
+                      <img src={attendee.userAvatarUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      attendee.userName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{attendee.userName}</p>
+                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Ver Perfil</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

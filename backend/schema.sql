@@ -292,6 +292,26 @@ CREATE POLICY "Users can update own rating" ON business_ratings FOR UPDATE USING
 DROP POLICY IF EXISTS "Users can delete own rating" ON business_ratings;
 CREATE POLICY "Users can delete own rating" ON business_ratings FOR DELETE USING (auth.uid() = user_id);
 
+-- ─── TABELA: presença em eventos ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS event_attendance (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id        UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(event_id, user_id)
+);
+
+ALTER TABLE event_attendance ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Attendance is public" ON event_attendance;
+CREATE POLICY "Attendance is public" ON event_attendance FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users can attend events" ON event_attendance;
+CREATE POLICY "Users can attend events" ON event_attendance FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can leave events" ON event_attendance;
+CREATE POLICY "Users can leave events" ON event_attendance FOR DELETE USING (auth.uid() = user_id);
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- ÍNDICES (Criação Segura) ─────────────────────────────────────────────
 
