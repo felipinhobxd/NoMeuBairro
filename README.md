@@ -73,7 +73,7 @@ Plataforma comunitária interativa para moradores do bairro Vitória Régia regi
 
 ---
 
-## 👨‍💻 Autor e Administrador
+## 👨‍💻 Autores
 **Felipe, Gustavo, Jonathan, Sophia e Maria**
 
 ---
