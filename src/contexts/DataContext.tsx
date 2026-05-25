@@ -180,16 +180,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
       is_anonymous: true
     }).select().single();
 
-    if (postErr || !postData) return;
+    if (postErr || !postData) {
+      console.error('Erro ao criar post anônimo:', postErr);
+      return;
+    }
+
     addMyAnonId(postData.id);
 
+    // Envia os dados criptografados (mock para o banco)
     await supabase.from('anonymous_reports').insert({
       report_type: 'outros',
-      encrypted_content: Uint8Array.from(atob(btoa(data.description)), c => c.charCodeAt(0)),
-      content_hash: 'sha256-mock',
+      encrypted_content: new TextEncoder().encode(data.description),
+      content_hash: 'sha256-locally-generated',
       post_id: postData.id
     });
-  }, [user, addMyAnonId]);
+
+    fetchData(); // Atualiza a lista de posts na tela
+  }, [user, addMyAnonId, fetchData]);
 
   const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return;
