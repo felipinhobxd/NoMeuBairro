@@ -265,12 +265,12 @@ export default function Profile() {
             onChange={setEditAvatar}
             label="Foto de perfil"
           />
-          <div className="flex gap-3 pt-4 sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
-            <Button type="button" variant="secondary" className="flex-1 h-12" onClick={() => setShowEditProfile(false)}>
+          <div className="flex gap-3 pt-6 mt-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0">
+            <Button type="button" variant="secondary" className="flex-1 h-11" onClick={() => setShowEditProfile(false)}>
               Cancelar
             </Button>
             <Button
-              className="flex-1 h-12"
+              className="flex-1 h-11"
               disabled={!editName.trim() || savingProfile}
               onClick={handleSaveProfile}
             >

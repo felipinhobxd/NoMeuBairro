@@ -264,17 +264,17 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4 animate-fade-in" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div ref={panelRef} tabIndex={-1}
-        className="relative w-full sm:max-w-lg max-h-[92vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-slide-up">
-        <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between rounded-t-3xl sm:rounded-t-2xl">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{title}</h2>
-          <button onClick={onClose} className="p-2 -mr-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors" aria-label="Fechar">
+        className="relative w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 sm:rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-slide-up">
+        <div className="flex-none bg-white dark:bg-slate-900 px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title}</h2>
+          <button onClick={onClose} className="p-2 -mr-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors" aria-label="Fechar">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="flex-1 overflow-y-auto p-6 pb-24 sm:pb-6 no-scrollbar">{children}</div>
       </div>
     </div>
   );
