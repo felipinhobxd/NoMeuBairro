@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2, Star, MessageSquare } from 'lucide-react';
-import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer } from '../components/UI';
+import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer, timeAgo } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
 import { cn } from '../utils/cn';
@@ -117,13 +117,7 @@ export default function GuiaComercial() {
     toast('Avaliação enviada com sucesso!');
   };
 
-  const openRatings = async (id: string, name: string) => {
-    setViewRatingsTarget({ id, name });
-    setLoadingRatings(true);
-    const data = await getBusinessRatings(id);
-    setCurrentRatings(data);
-    setLoadingRatings(false);
-  };
+  const fmtPhone = (p: string) => p.replace(/\D/g, '');
 
   return (
     <div className="space-y-5">
@@ -218,6 +212,12 @@ export default function GuiaComercial() {
                     <MapView lat={b.latitude} lng={b.longitude} title={b.name} className="h-32 w-full rounded-lg overflow-hidden" />
                   </div>
                 )}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {b.phone && <a href={`tel:${fmtPhone(b.phone)}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><Phone className="w-3 h-3" />{b.phone}</a>}
+                  {b.whatsapp && <a href={`https://wa.me/55${fmtPhone(b.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 transition-colors"><MessageCircle className="w-3 h-3" />WhatsApp</a>}
+                  {b.address && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400"><MapPin className="w-3 h-3" />{b.address}</span>}
+                </div>
+
                 <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50">
                   <button
                     onClick={() => isAuthenticated ? setRatingTarget(b.id) : navigate('/login')}
@@ -232,7 +232,7 @@ export default function GuiaComercial() {
                     <MessageSquare className="w-3.5 h-3.5" /> Ver Avaliações
                   </button>
                   <div className="flex-1" />
-                  {b.createdBy !== 'anonymous' && (
+                  {b.createdBy && b.createdBy !== 'anonymous' && (
                     <Link to={`/perfil/${b.createdBy}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors">
                       Dono
                     </Link>
