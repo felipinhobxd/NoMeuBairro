@@ -576,7 +576,7 @@ export default function Feed() {
                               onReply={(c) => handleReplyClick(post.id, c)}
                               replyingTo={curReply}
                               onDelete={handleDeleteComment}
-                              canDelete={user?.id === rc.authorId}
+                              canDelete={false} // A lógica de permissão agora é interna ao CommentItem
                               onReport={(id) => setShowReport({ commentId: id })}
                               currentUser={user}
                             />;
