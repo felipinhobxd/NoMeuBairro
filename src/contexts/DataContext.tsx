@@ -78,18 +78,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (postsRes.data) {
-        setPosts(postsRes.data.map(p => ({
-          id: p.id,
-          authorId: p.author_id || 'anonymous',
-          authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
-          authorAvatarUrl: p.is_anonymous ? undefined : (p.users?.avatar_url),
-          category: p.category, status: p.status, title: p.title,
-          description: p.description, imageUrl: p.image_url, location: p.location,
-          latitude: p.latitude, longitude: p.longitude,
-          supports: p.post_supports?.[0]?.count ?? 0, // Pega a contagem real da tabela de apoios
-          commentsCount: 0, // Será calculado via commentsByPost no componente
-          createdAt: p.created_at, updatedAt: p.updated_at
-        })));
+        setPosts(postsRes.data.map(p => {
+          const postComments = (commentsRes.data || []).filter(c => c.post_id === p.id);
+          return {
+            id: p.id,
+            authorId: p.author_id || 'anonymous',
+            authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
+            authorAvatarUrl: p.is_anonymous ? undefined : (p.users?.avatar_url),
+            category: p.category, status: p.status, title: p.title,
+            description: p.description, imageUrl: p.image_url, location: p.location,
+            latitude: p.latitude, longitude: p.longitude,
+            supports: p.post_supports?.[0]?.count ?? 0,
+            commentsCount: postComments.length, // Contagem real calculada
+            createdAt: p.created_at, updatedAt: p.updated_at
+          };
+        }));
       }
 
       const ratingsByBiz: Record<string, { total: number; sum: number }> = {};
@@ -319,13 +322,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
     if (!user) return;
-    await supabase.from('comments').insert({
+    const { error } = await supabase.from('comments').insert({
       post_id: postId,
       author_id: user.id,
       parent_id: parentId,
       content: content
     });
-  }, [user]);
+    if (!error) fetchData();
+  }, [user, fetchData]);
 
   const deleteComment = useCallback(async (commentId: string) => {
     await supabase.from('comments').delete().eq('id', commentId);
