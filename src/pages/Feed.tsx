@@ -27,8 +27,8 @@ const statusOpts: { id: PostStatus | 'all'; label: string }[] = [
 ];
 const catOpts = Object.entries(postCategories).map(([v, d]) => ({ value: v, label: `${d.emoji} ${d.label}` }));
 
-function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelete, onReport }: {
-  comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; canDelete: boolean; onReport: (id: string) => void;
+function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelete, onReport, currentUser }: {
+  comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; canDelete: boolean; onReport: (id: string) => void; currentUser: any;
 }) {
   return (
     <div className={cn('group', comment.parentId && 'ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-3')}>
@@ -78,8 +78,9 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
               onReply={onReply}
               replyingTo={replyingTo}
               onDelete={onDelete}
-              canDelete={canDelete || (user?.id === r.authorId)} // Adicionado: Admin ou o próprio autor da resposta pode excluir
+              canDelete={canDelete || (currentUser?.id === r.authorId)}
               onReport={onReport}
+              currentUser={currentUser}
             />
           ))}
         </div>
@@ -573,6 +574,7 @@ export default function Feed() {
                               onDelete={handleDeleteComment}
                               canDelete={user?.id === rc.authorId}
                               onReport={(id) => setShowReport({ commentId: id })}
+                              currentUser={user}
                             />;
                           })}
                         </div>
