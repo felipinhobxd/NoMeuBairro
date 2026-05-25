@@ -511,8 +511,8 @@ export default function Feed() {
                       className={cn('flex items-center gap-1.5 text-xs font-semibold transition-colors',
                         isExpanded ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400')}
                       aria-expanded={isExpanded}>
-                      <MessageSquare className="w-4 h-4" />{post.commentsCount > 0 && <span>{post.commentsCount}</span>}
-                      <span className="hidden sm:inline">Comentár{post.commentsCount === 1 ? 'io' : 'ios'}</span>
+                      <MessageSquare className="w-4 h-4" />{postComments.length > 0 && <span>{postComments.length}</span>}
+                      <span className="hidden sm:inline">Comentár{postComments.length === 1 ? 'io' : 'ios'}</span>
                     </button>
                     <button onClick={() => setShowReport({ postId: post.id })}
                       className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors"

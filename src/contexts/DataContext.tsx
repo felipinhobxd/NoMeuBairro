@@ -358,13 +358,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteAllNotifications = useCallback(async () => {
     if (!user) return;
-    const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
-    if (error) {
-      console.error('Erro ao apagar notificações:', error);
-    } else {
-      setNotifications([]); // Limpa localmente na hora
+    try {
+      const { error } = await supabase.from('notifications').delete().eq('user_id', user.id);
+      if (error) throw error;
+      setNotifications([]);
+    } catch (e) {
+      console.error('Erro ao apagar notificações:', e);
+    } finally {
+      fetchData();
     }
-  }, [user]);
+  }, [user, fetchData]);
 
   const deleteBusiness = useCallback(async (businessId: string) => {
     await supabase.from('businesses').delete().eq('id', businessId);
