@@ -400,7 +400,48 @@ CREATE TRIGGER trg_notify_support
 AFTER INSERT ON post_supports
 FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
 
--- ─── SINCRONIZAÇÃO COM SUPABASE AUTH ──────────────────────────────────
+-- ─── NOTIFICAÇÕES AUTOMÁTICAS ──────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION handle_new_notification()
+RETURNS TRIGGER AS $$
+DECLARE
+    post_owner_id UUID;
+    v_actor_id UUID;
+BEGIN
+    -- Identifica o autor da ação
+    IF (TG_TABLE_NAME = 'comments') THEN
+        v_actor_id := NEW.author_id;
+    ELSE
+        v_actor_id := NEW.user_id;
+    END IF;
+
+    -- Busca o dono do post
+    SELECT author_id INTO post_owner_id FROM posts WHERE id = NEW.post_id;
+
+    -- Só cria se o dono do post não for quem fez a ação
+    IF post_owner_id IS NOT NULL AND post_owner_id != v_actor_id THEN
+        INSERT INTO notifications (user_id, actor_id, type, post_id, comment_id)
+        VALUES (post_owner_id, v_actor_id,
+                CASE WHEN TG_TABLE_NAME = 'comments' THEN 'comment' ELSE 'support' END,
+                NEW.post_id,
+                CASE WHEN TG_TABLE_NAME = 'comments' THEN NEW.id ELSE NULL END);
+    END IF;
+
+    RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+    RETURN NEW; -- Garante que a ação principal não trave
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_notify_comment ON comments;
+CREATE TRIGGER trg_notify_comment
+AFTER INSERT ON comments
+FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
+
+DROP TRIGGER IF EXISTS trg_notify_support ON post_supports;
+CREATE TRIGGER trg_notify_support
+AFTER INSERT ON post_supports
+FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$

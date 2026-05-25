@@ -100,7 +100,52 @@ export function DataProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // ... rest of fetchData logic ...
+      // Busca de notificações (separada para não travar o resto se a tabela não existir)
+      if (user) {
+        console.log('Buscando notificações para o usuário:', user.id);
+        const { data: notifData, error: notifError } = await supabase
+          .from('notifications')
+          .select(`
+            *,
+            users:actor_id(name, avatar_url),
+            posts:post_id(title),
+            comments:comment_id(content)
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (notifError) {
+          console.error('Erro detalhado nas notificações:', notifError);
+          // Tenta busca simples sem join se o de cima falhar
+          const { data: simpleData } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(20);
+
+          if (simpleData) {
+            setNotifications(simpleData.map(n => ({
+              id: n.id, userId: n.user_id, actorId: n.actor_id,
+              actorName: 'Alguém',
+              type: n.type as 'support' | 'comment', postId: n.post_id,
+              isRead: n.is_read, createdAt: n.created_at
+            })));
+          }
+        } else if (notifData) {
+          console.log('Notificações encontradas:', notifData.length);
+          setNotifications(notifData.map(n => ({
+            id: n.id, userId: n.user_id, actorId: n.actor_id,
+            actorName: n.users?.name || 'Alguém',
+            actorAvatarUrl: n.users?.avatar_url,
+            type: n.type as 'support' | 'comment', postId: n.post_id,
+            postTitle: n.posts?.title,
+            content: n.comments?.content,
+            isRead: n.is_read, createdAt: n.created_at
+          })));
+        }
+      }
       if (bizRes.data) {
         setBusinesses(bizRes.data.map(b => ({
           id: b.id, name: b.name, description: b.description, category: b.category,
