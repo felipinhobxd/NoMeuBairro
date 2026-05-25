@@ -242,7 +242,7 @@ export default function Profile() {
 
       {/* ─── Edit Profile Modal ─── */}
       <Modal open={showEditProfile} onClose={() => setShowEditProfile(false)} title="Editar perfil">
-        <div className="space-y-5">
+        <div className="space-y-5 pb-8 sm:pb-0">
           {/* Avatar preview */}
           <div className="flex flex-col items-center gap-3">
             <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-1 ring-slate-200 dark:ring-slate-700">
@@ -265,12 +265,12 @@ export default function Profile() {
             onChange={setEditAvatar}
             label="Foto de perfil"
           />
-          <div className="flex gap-3 pt-2">
-            <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowEditProfile(false)}>
+          <div className="flex gap-3 pt-4 sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
+            <Button type="button" variant="secondary" className="flex-1 h-12" onClick={() => setShowEditProfile(false)}>
               Cancelar
             </Button>
             <Button
-              className="flex-1"
+              className="flex-1 h-12"
               disabled={!editName.trim() || savingProfile}
               onClick={handleSaveProfile}
             >
