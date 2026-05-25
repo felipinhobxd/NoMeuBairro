@@ -190,42 +190,46 @@ export default function Feed() {
 
       toast('Obtendo sua localização...', 'info');
 
+      // Detecta se é Desktop (computadores geralmente não têm GPS e dão timeout com alta precisão)
+      const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      const geoOptions = {
+        enableHighAccuracy: !isDesktop, // No desktop usamos precisão normal (IP/Wi-Fi) para evitar timeout
+        timeout: 10000,
+        maximumAge: 60000
+      };
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
-          console.log('User Location:', lat, lng);
           setUserLocation({ lat, lng });
           setNearMe(true);
-          toast('Mostrando relatos próximos a você (2km).');
+          toast(isDesktop ? 'Mostrando relatos próximos (Localização por rede).' : 'Mostrando relatos próximos a você (GPS).');
         },
         (err) => {
           console.error('Geolocation Error:', err);
 
-          // Se falhar com alta precisão (GPS), tentamos uma busca mais simples/rápida
-          if (err.code === 3) {
-            toast('GPS demorou muito. Tentando localização aproximada...', 'info');
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-                setNearMe(true);
-                toast('Mostrando relatos próximos (Localização aproximada).');
-              },
-              (err2) => {
-                console.error('Final Geolocation Error:', err2);
-                toast('Não foi possível obter sua localização.', 'error');
-              },
-              { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
-            );
-            return;
-          }
+          // Se falhar a primeira tentativa (mesmo no mobile), tentamos o fallback definitivo
+          toast('Tentando método de localização alternativa...', 'info');
 
-          let msg = 'Não foi possível obter sua localização.';
-          if (err.code === 1) msg = 'Permissão de localização negada pelo usuário.';
-          else if (err.code === 2) msg = 'Localização indisponível no momento.';
-          toast(msg, 'error');
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+              setNearMe(true);
+              toast('Mostrando relatos próximos (Método alternativo).');
+            },
+            (err2) => {
+              console.error('Final Geolocation Error:', err2);
+              let msg = 'Não foi possível obter sua localização.';
+              if (err2.code === 1) msg = 'Permissão de localização negada.';
+              else if (err2.code === 3) msg = 'O navegador demorou muito para responder.';
+              toast(msg, 'error');
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+          );
         },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+        geoOptions
       );
     } else {
       setNearMe(false);
