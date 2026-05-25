@@ -76,6 +76,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
         supabase.from('business_ratings').select('business_id, stars')
       ]);
 
+      if (postsRes.data) {
+        setPosts(postsRes.data.map(p => ({
+          id: p.id,
+          authorId: p.author_id || 'anonymous',
+          authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
+          authorAvatarUrl: p.is_anonymous ? undefined : (p.users?.avatar_url),
+          category: p.category, status: p.status, title: p.title,
+          description: p.description, imageUrl: p.image_url, location: p.location,
+          latitude: p.latitude, longitude: p.longitude,
+          supports: p.supports_count ?? 0,
+          commentsCount: p.comments_count ?? 0,
+          createdAt: p.created_at, updatedAt: p.updated_at
+        })));
+      }
+
       const ratingsByBiz: Record<string, { total: number; sum: number }> = {};
       if (ratingsRes.data) {
         ratingsRes.data.forEach(r => {
