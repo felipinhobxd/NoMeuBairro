@@ -90,7 +90,6 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, onReport
           ))}
         </div>
       )}
-      )}
     </div>
   );
 }
