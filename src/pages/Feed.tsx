@@ -190,12 +190,10 @@ export default function Feed() {
 
       toast('Obtendo sua localização...', 'info');
 
-      // Detecta se é Desktop (computadores geralmente não têm GPS e dão timeout com alta precisão)
-      const isDesktop = !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
+      // Desativamos HighAccuracy completamente na primeira tentativa para evitar timeout em PCs
       const geoOptions = {
-        enableHighAccuracy: !isDesktop, // No desktop usamos precisão normal (IP/Wi-Fi) para evitar timeout
-        timeout: 10000,
+        enableHighAccuracy: false,
+        timeout: 20000, // Aumentado para 20 segundos
         maximumAge: 60000
       };
 
@@ -205,19 +203,17 @@ export default function Feed() {
           const lng = pos.coords.longitude;
           setUserLocation({ lat, lng });
           setNearMe(true);
-          toast(isDesktop ? 'Mostrando relatos próximos (Localização por rede).' : 'Mostrando relatos próximos a você (GPS).');
+          toast('Localização obtida com sucesso!');
         },
         (err) => {
           console.error('Geolocation Error:', err);
 
-          // Se falhar a primeira tentativa (mesmo no mobile), tentamos o fallback definitivo
-          toast('Tentando método de localização alternativa...', 'info');
-
+          // Tenta um fallback com cache infinito e tempo maior
           navigator.geolocation.getCurrentPosition(
             (pos) => {
               setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
               setNearMe(true);
-              toast('Mostrando relatos próximos (Método alternativo).');
+              toast('Localização obtida (Método alternativo).');
             },
             (err2) => {
               console.error('Final Geolocation Error:', err2);
@@ -226,7 +222,7 @@ export default function Feed() {
               else if (err2.code === 3) msg = 'O navegador demorou muito para responder.';
               toast(msg, 'error');
             },
-            { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }
+            { enableHighAccuracy: false, timeout: 30000, maximumAge: Infinity }
           );
         },
         geoOptions
