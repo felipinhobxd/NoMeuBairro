@@ -286,13 +286,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deletePost = useCallback(async (postId: string) => {
-    await supabase.from('posts').delete().eq('id', postId);
+    const { error } = await supabase.from('posts').delete().eq('id', postId);
+
+    if (error) {
+      console.error('Erro ao excluir post:', error);
+      throw error;
+    }
+
     const ids = getMyAnonIds();
     if (ids.has(postId)) {
       ids.delete(postId);
       localStorage.setItem(SK_MY_ANON, JSON.stringify([...ids]));
     }
-  }, [getMyAnonIds]);
+    fetchData(); // Recarrega para sumir da tela
+  }, [getMyAnonIds, fetchData]);
 
   const updatePostStatus = useCallback(async (postId: string, status: PostStatus) => {
     await supabase.from('posts').update({ status }).eq('id', postId);

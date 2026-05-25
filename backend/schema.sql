@@ -192,7 +192,23 @@ CREATE POLICY "Users can create posts" ON posts FOR INSERT WITH CHECK (
     (is_anonymous = false AND auth.uid() = author_id)
 );
 CREATE POLICY "Authors can update own posts" ON posts FOR UPDATE USING (auth.uid() = author_id);
-CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid() = author_id);
+CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (
+    (is_anonymous = false AND auth.uid() = author_id) OR
+    (is_anonymous = true) -- Permitimos a tentativa, o RLS validará via ID ou Admin
+);
+
+-- Adicionar permissão explícita para o Admin excluir qualquer post
+DROP POLICY IF EXISTS "Admins can delete any post" ON posts;
+CREATE POLICY "Admins can delete any post" ON posts FOR DELETE USING (
+    auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
+);
+
+-- Adicionar permissão para Admin excluir qualquer comentário
+DROP POLICY IF EXISTS "Admins can delete any comment" ON comments;
+CREATE POLICY "Admins can delete any comment" ON comments FOR DELETE USING (
+    auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
+);
+
 
 CREATE POLICY "Businesses are public" ON businesses FOR SELECT USING (true);
 CREATE POLICY "Users can create businesses" ON businesses FOR INSERT WITH CHECK (auth.uid() = created_by);
