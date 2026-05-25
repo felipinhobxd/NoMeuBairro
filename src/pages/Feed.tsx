@@ -535,6 +535,12 @@ export default function Feed() {
                     {/* Status buttons — owner only */}
                     {isMyPost(post) && (
                       <div className="flex items-center gap-1.5 ml-auto">
+                        {post.status !== 'pending' && (
+                          <button onClick={() => handleStatusChange(post.id, 'pending')}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-50 dark:bg-slate-500/10 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-500/20 ring-1 ring-slate-200 dark:ring-slate-500/20 transition-all">
+                            Pendente
+                          </button>
+                        )}
                         {post.status !== 'in_progress' && (
                           <button onClick={() => handleStatusChange(post.id, 'in_progress')}
                             className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 ring-1 ring-blue-200 dark:ring-blue-500/20 transition-all">
