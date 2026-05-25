@@ -52,7 +52,7 @@ export default function Denuncias() {
       setFLat(undefined);
       setFLng(undefined);
     },
-    [tipo, descricao, fLat, fLng, addAnonymousPost],
+    [tipo, descricao, localizacao, fLat, fLng, addAnonymousPost],
   );
 
   if (submitted) {
