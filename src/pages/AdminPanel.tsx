@@ -57,7 +57,14 @@ export default function AdminPanel() {
     }
   };
 
-  const filteredReports = reports.filter(r => filter === 'all' || r.status === 'pending');
+  const filteredReports = reports.filter(r => {
+    if (filter === 'pending') {
+      return r.status === 'pending';
+    } else {
+      // No histórico, mostramos tudo que JÁ FOI moderado (resolvido ou ignorado)
+      return r.status === 'resolved' || r.status === 'ignored';
+    }
+  });
 
   if (!isAdmin) return null;
 
