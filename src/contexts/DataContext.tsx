@@ -81,7 +81,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       if (postsRes.data) {
         setPosts(postsRes.data.map(p => {
-          const postComments = (commentsRes.data || []).filter(c => c.post_id === p.id);
+          // p.comments_count já existe no banco, mas garantimos que esteja sincronizado
           return {
             id: p.id,
             authorId: p.author_id || 'anonymous',
@@ -91,7 +91,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             description: p.description, imageUrl: p.image_url, location: p.location,
             latitude: p.latitude, longitude: p.longitude,
             supports: p.post_supports?.[0]?.count ?? 0,
-            commentsCount: postComments.length, // Contagem real calculada
+            commentsCount: p.comments_count ?? 0, // Usando o contador direto da tabela posts
             createdAt: p.created_at, updatedAt: p.updated_at
           };
         }));
