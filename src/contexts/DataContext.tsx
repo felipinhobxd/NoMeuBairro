@@ -68,8 +68,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const fetchData = useCallback(async () => {
     try {
       // Busca básica que SEMPRE deve funcionar
+      // Adicionamos 'post_supports(count)' para pegar o número REAL de apoios
       const [postsRes, bizRes, eventsRes, commentsRes, ratingsRes] = await Promise.all([
-        supabase.from('posts').select('*, users(name, avatar_url)').order('created_at', { ascending: false }),
+        supabase.from('posts').select('*, users(name, avatar_url), post_supports(count)').order('created_at', { ascending: false }),
         supabase.from('businesses').select('*, users!businesses_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
         supabase.from('events').select('*, users!events_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
         supabase.from('comments').select('*, users(name, avatar_url)').order('created_at', { ascending: false }),
@@ -85,8 +86,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
           category: p.category, status: p.status, title: p.title,
           description: p.description, imageUrl: p.image_url, location: p.location,
           latitude: p.latitude, longitude: p.longitude,
-          supports: p.supports_count ?? 0,
-          commentsCount: p.comments_count ?? 0,
+          supports: p.post_supports?.[0]?.count ?? 0, // Pega a contagem real da tabela de apoios
+          commentsCount: 0, // Será calculado via commentsByPost no componente
           createdAt: p.created_at, updatedAt: p.updated_at
         })));
       }

@@ -229,9 +229,17 @@ CREATE POLICY "Users can support posts" ON post_supports FOR INSERT WITH CHECK (
 CREATE POLICY "Users can delete own support" ON post_supports FOR DELETE USING (auth.uid() = user_id);
 
 -- Políticas: notificações
+DROP POLICY IF EXISTS "Notifications are private" ON notifications;
 CREATE POLICY "Notifications are private" ON notifications FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
 CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "System can create notifications" ON notifications;
 CREATE POLICY "System can create notifications" ON notifications FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users can delete own notifications" ON notifications;
+CREATE POLICY "Users can delete own notifications" ON notifications FOR DELETE USING (auth.uid() = user_id);
 
 -- ─── TABELA: denúncias de conteúdo (MODERAÇÃO) ────────────────────────
 CREATE TABLE IF NOT EXISTS content_reports (
