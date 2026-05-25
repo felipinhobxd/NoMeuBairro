@@ -64,7 +64,21 @@ export interface Business {
   createdByName?: string;
   createdByAvatarUrl?: string;
   createdAt: string;
+  avgRating?: number;
+  totalRatings?: number;
 }
+
+export interface BusinessRating {
+  id: string;
+  businessId: string;
+  userId: string;
+  userName?: string;
+  userAvatarUrl?: string;
+  stars: number;
+  comment?: string;
+  createdAt: string;
+}
+
 
 export type BusinessCategory = 'alimentacao' | 'saude' | 'servicos' | 'educacao' | 'comercio' | 'beleza' | 'outros';
 

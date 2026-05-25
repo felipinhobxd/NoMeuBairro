@@ -243,6 +243,31 @@ CREATE POLICY "Admins can update reports" ON content_reports FOR UPDATE USING (
     auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
 );
 
+-- ─── TABELA: avaliações de negócios ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS business_ratings (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id     UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stars           INTEGER NOT NULL CHECK (stars >= 1 AND stars <= 5),
+    comment         TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(business_id, user_id)
+);
+
+ALTER TABLE business_ratings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Ratings are public" ON business_ratings;
+CREATE POLICY "Ratings are public" ON business_ratings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Users can rate businesses" ON business_ratings;
+CREATE POLICY "Users can rate businesses" ON business_ratings FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own rating" ON business_ratings;
+CREATE POLICY "Users can update own rating" ON business_ratings FOR UPDATE USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own rating" ON business_ratings;
+CREATE POLICY "Users can delete own rating" ON business_ratings FOR DELETE USING (auth.uid() = user_id);
+
 -- ═══════════════════════════════════════════════════════════════════════
 -- ÍNDICES (Criação Segura) ─────────────────────────────────────────────
 

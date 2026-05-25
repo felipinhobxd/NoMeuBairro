@@ -2,12 +2,27 @@ import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2 } from 'lucide-react';
+import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2, Star, MessageSquare } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
 import { cn } from '../utils/cn';
-import type { BusinessCategory } from '../types';
+import type { BusinessCategory, BusinessRating } from '../types';
+
+function RatingStars({ rating, total, size = "w-3 h-3" }: { rating?: number; total?: number; size?: string }) {
+  if (!rating) return <span className="text-[10px] text-slate-400 font-medium italic">Sem avaliações</span>;
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex items-center">
+        {[1, 2, 3, 4, 5].map((s) => (
+          <Star key={s} className={cn(size, s <= Math.round(rating) ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-700")} />
+        ))}
+      </div>
+      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{rating.toFixed(1)} ({total})</span>
+    </div>
+  );
+}
+
 
 const bizCat: Record<BusinessCategory, { label: string; emoji: string }> = {
   alimentacao: { label: 'Alimentação', emoji: '🍽️' }, saude: { label: 'Saúde', emoji: '❤️' },
@@ -24,13 +39,23 @@ const filterCats: { id: BusinessCategory | 'all'; label: string; emoji: string }
 export default function GuiaComercial() {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const { businesses, addBusiness, deleteBusiness, isMyBusiness } = useData();
+  const { businesses, addBusiness, deleteBusiness, isMyBusiness, addBusinessRating, getBusinessRatings } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
   const [activeCat, setActiveCat] = useState<BusinessCategory | 'all'>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const [ratingTarget, setRatingTarget] = useState<string | null>(null);
+  const [stars, setStars] = useState(5);
+  const [comment, setComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
+  const [viewRatingsTarget, setViewRatingsTarget] = useState<{ id: string; name: string } | null>(null);
+  const [currentRatings, setCurrentRatings] = useState<BusinessRating[]>([]);
+  const [loadingRatings, setLoadingRatings] = useState(false);
+
 
   const [fn, setFn] = useState(''); const [fc, setFc] = useState<BusinessCategory>('servicos');
   const [fd, setFd] = useState(''); const [fph, setFph] = useState('');
@@ -81,7 +106,24 @@ export default function GuiaComercial() {
 
   const handleDelete = useCallback((id: string) => { deleteBusiness(id); setConfirmDeleteId(null); toast('Negócio removido.', 'info'); }, [deleteBusiness, toast]);
 
-  const fmtPhone = (p: string) => p.replace(/\D/g, '');
+  const handleRating = async () => {
+    if (!ratingTarget || !isAuthenticated) return;
+    setIsSubmittingRating(true);
+    await addBusinessRating({ businessId: ratingTarget, stars, comment });
+    setRatingTarget(null);
+    setStars(5);
+    setComment('');
+    setIsSubmittingRating(false);
+    toast('Avaliação enviada com sucesso!');
+  };
+
+  const openRatings = async (id: string, name: string) => {
+    setViewRatingsTarget({ id, name });
+    setLoadingRatings(true);
+    const data = await getBusinessRatings(id);
+    setCurrentRatings(data);
+    setLoadingRatings(false);
+  };
 
   return (
     <div className="space-y-5">
@@ -130,7 +172,11 @@ export default function GuiaComercial() {
                   <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 text-xl">{cat.emoji}</div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.name}</h3>
-                    <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{cat.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{cat.label}</span>
+                      <span className="text-slate-300 dark:text-slate-700">•</span>
+                      <RatingStars rating={b.avgRating} total={b.totalRatings} />
+                    </div>
                   </div>
                   {canDelete && (
                     confirmDeleteId === b.id ? (
@@ -172,13 +218,23 @@ export default function GuiaComercial() {
                     <MapView lat={b.latitude} lng={b.longitude} title={b.name} className="h-32 w-full rounded-lg overflow-hidden" />
                   </div>
                 )}
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {b.phone && <a href={`tel:${fmtPhone(b.phone)}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><Phone className="w-3 h-3" />{b.phone}</a>}
-                  {b.whatsapp && <a href={`https://wa.me/55${fmtPhone(b.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 transition-colors"><MessageCircle className="w-3 h-3" />WhatsApp</a>}
-                  {b.address && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400"><MapPin className="w-3 h-3" />{b.address}</span>}
+                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50">
+                  <button
+                    onClick={() => isAuthenticated ? setRatingTarget(b.id) : navigate('/login')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-50 dark:bg-yellow-400/5 text-[11px] font-bold text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 transition-colors"
+                  >
+                    <Star className="w-3.5 h-3.5 fill-current" /> Avaliar
+                  </button>
+                  <button
+                    onClick={() => openRatings(b.id, b.name)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-colors"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" /> Ver Avaliações
+                  </button>
+                  <div className="flex-1" />
                   {b.createdBy !== 'anonymous' && (
-                    <Link to={`/perfil/${b.createdBy}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/5 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors">
-                      Ver Perfil do Dono
+                    <Link to={`/perfil/${b.createdBy}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors">
+                      Dono
                     </Link>
                   )}
                 </div>
@@ -217,6 +273,77 @@ export default function GuiaComercial() {
         open={!!zoomedImage}
         onClose={() => setZoomedImage(null)}
       />
+
+      {/* Modal de Avaliação */}
+      <Modal open={!!ratingTarget} onClose={() => setRatingTarget(null)} title="Avaliar Negócio">
+        <div className="space-y-5">
+          <div className="flex flex-col items-center gap-2 py-2">
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStars(s)}
+                  className="p-1 hover:scale-110 transition-transform"
+                >
+                  <Star className={cn("w-10 h-10 transition-colors", s <= stars ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-700")} />
+                </button>
+              ))}
+            </div>
+            <span className="text-sm font-bold text-slate-900 dark:text-white">
+              {stars === 1 ? 'Péssimo' : stars === 2 ? 'Ruim' : stars === 3 ? 'Regular' : stars === 4 ? 'Bom' : 'Excelente!'}
+            </span>
+          </div>
+
+          <Textarea
+            label="Sua opinião (opcional)"
+            placeholder="Conte aos vizinhos o que achou deste serviço..."
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            rows={3}
+          />
+
+          <div className="flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setRatingTarget(null)}>Cancelar</Button>
+            <Button className="flex-1" onClick={handleRating} disabled={isSubmittingRating}>
+              {isSubmittingRating ? 'Enviando...' : 'Publicar'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de Lista de Avaliações */}
+      <Modal
+        open={!!viewRatingsTarget}
+        onClose={() => setViewRatingsTarget(null)}
+        title={`Avaliações: ${viewRatingsTarget?.name}`}
+      >
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto no-scrollbar pr-1">
+          {loadingRatings ? (
+            <div className="py-10 text-center text-slate-400">Carregando avaliações...</div>
+          ) : currentRatings.length === 0 ? (
+            <div className="py-10 text-center text-slate-400 italic">Ninguém avaliou este negócio ainda. Seja o primeiro!</div>
+          ) : (
+            currentRatings.map(r => (
+              <div key={r.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-6 h-6 rounded-full overflow-hidden bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
+                    {r.userAvatarUrl ? <img src={r.userAvatarUrl} className="w-full h-full object-cover" /> : r.userName?.charAt(0)}
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-900 dark:text-white">{r.userName}</span>
+                  <span className="text-[10px] text-slate-400 ml-auto">{timeAgo(r.createdAt)}</span>
+                </div>
+                <div className="flex gap-0.5 mb-1.5">
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <Star key={s} className={cn("w-3 h-3", s <= r.stars ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-700")} />
+                  ))}
+                </div>
+                {r.comment && <p className="text-xs text-slate-600 dark:text-slate-300 italic">"{r.comment}"</p>}
+              </div>
+            ))
+          )}
+        </div>
+      </Modal>
+
     </div>
   );
 }
