@@ -13,7 +13,7 @@ interface DataContextType {
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
-  addAnonymousPost: (data: { tipo: string; description: string; latitude?: number; longitude?: number }) => Promise<void>;
+  addAnonymousPost: (data: { tipo: string; description: string; location: string; latitude?: number; longitude?: number }) => Promise<void>;
   addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
   addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<void>;
   supportPost: (postId: string) => Promise<void>;
@@ -234,14 +234,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, [user]);
 
-  const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; latitude?: number; longitude?: number }) => {
+  const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; latitude?: number; longitude?: number }) => {
     // 100% Anônimo: author_id nulo e is_anonymous verdadeiro.
     const { data: postData, error: postErr } = await supabase.from('posts').insert({
       author_id: null,
       category: 'seguranca',
       title: `Denúncia: ${data.tipo}`,
       description: data.description,
-      location: 'Local Privado',
+      location: data.location || 'Local Privado',
       latitude: data.latitude,
       longitude: data.longitude,
       is_anonymous: true

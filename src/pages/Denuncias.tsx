@@ -40,6 +40,7 @@ export default function Denuncias() {
       addAnonymousPost({
         tipo,
         description: descricao,
+        location: localizacao,
         latitude: fLat,
         longitude: fLng
       });
