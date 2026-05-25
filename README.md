@@ -1,10 +1,16 @@
 # No Meu Bairro — Vitória Régia
 
-Plataforma comunitária para o bairro Vitória Régia, em Curitiba, com foco em relatos, guia comercial, mural de publicações e denúncias anônimas.
+<p align="center">
+  <img alt="Status do Projeto" src="https://img.shields.io/badge/STATUS-EM%20ANDAMENTO-59C000?style=for-the-badge&labelColor=555555">
+</p>
+
+<p align="center">
+  Plataforma comunitária para o bairro Vitória Régia, em Curitiba, com foco em relatos, guia comercial, mural de publicações e denúncias anônimas.
+</p>
 
 ## ✨ Visão geral
 
-O projeto reúne funcionalidades para fortalecer a comunicação entre moradores e apoiar a organização da comunidade. A aplicação possui páginas para feed, guia comercial, mural, denúncias, login e perfis de usuários, além de recursos de segurança como botão de pânico e consentimento de cookies.
+O projeto foi criado para fortalecer a comunicação entre moradores e apoiar a organização da comunidade. A aplicação reúne páginas para feed, guia comercial, mural, denúncias, login e perfis de usuários, além de recursos de segurança como botão de pânico e consentimento de cookies.
 
 ## 🚀 Acesse a aplicação
 
@@ -12,6 +18,14 @@ O projeto reúne funcionalidades para fortalecer a comunicação entre moradores
 - **Repositório:** https://github.com/felipinhobxd/NoMeuBairro
 
 ## 🛠️ Tecnologias utilizadas
+
+<p align="center">
+  <img alt="Markdown" src="https://img.shields.io/badge/Markdown-000000?style=for-the-badge&logo=markdown&logoColor=white">
+  <img alt="Git" src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white">
+  <img alt="GitHub" src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white">
+  <img alt="Java" src="https://img.shields.io/badge/Java-F89820?style=for-the-badge&logo=openjdk&logoColor=white">
+  <img alt="SQL" src="https://img.shields.io/badge/SQL-0B4F6C?style=for-the-badge&logo=postgresql&logoColor=white">
+</p>
 
 ### Frontend
 - React
@@ -100,8 +114,10 @@ npm run dev
 ```bash
 cd backend
 python -m venv .venv
+
 # Windows:
-.venv\Scripts\activate
+.venv\\Scripts\\activate
+
 # Linux/macOS:
 source .venv/bin/activate
 
