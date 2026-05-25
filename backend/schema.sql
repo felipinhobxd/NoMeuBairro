@@ -203,10 +203,10 @@ CREATE POLICY "Admins can delete any post" ON posts FOR DELETE USING (
     auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
 );
 
--- Adicionar permissão para Admin excluir qualquer comentário
-DROP POLICY IF EXISTS "Admins can delete any comment" ON comments;
-CREATE POLICY "Admins can delete any comment" ON comments FOR DELETE USING (
-    auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c'
+-- Adicionar permissão para donos de posts excluírem comentários em seus tópicos
+DROP POLICY IF EXISTS "Post owners can delete any comment on their posts" ON comments;
+CREATE POLICY "Post owners can delete any comment on their posts" ON comments FOR DELETE USING (
+    post_id IN (SELECT id FROM posts WHERE author_id = auth.uid())
 );
 
 

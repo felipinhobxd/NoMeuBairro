@@ -27,12 +27,12 @@ const statusOpts: { id: PostStatus | 'all'; label: string }[] = [
 ];
 const catOpts = Object.entries(postCategories).map(([v, d]) => ({ value: v, label: `${d.emoji} ${d.label}` }));
 
-function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelete, onReport, currentUser }: {
-  comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; canDelete: boolean; onReport: (id: string) => void; currentUser: any;
+function CommentItem({ comment, replies, onReply, replyingTo, onDelete, onReport, currentUser, isPostOwner }: {
+  comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; onReport: (id: string) => void; currentUser: any; isPostOwner: boolean;
 }) {
   const isAuthor = currentUser?.id === comment.authorId;
   const isAdmin = currentUser?.id === 'fbc66053-d56c-46f7-a92e-ea40062a216c';
-  const showDelete = isAuthor || isAdmin;
+  const showDelete = isAuthor || isAdmin || isPostOwner;
 
   return (
     <div className={cn('group', comment.parentId && 'ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-3')}>
@@ -83,11 +83,13 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
               replyingTo={replyingTo}
               onDelete={onDelete}
               canDelete={false} // Não é mais usado, a lógica agora é interna
-              onReport={onReport}
+              onReport={onReport} // Passando a função de denúncia para as respostas
               currentUser={currentUser}
+              isPostOwner={isPostOwner}
             />
           ))}
         </div>
+      )}
       )}
     </div>
   );
@@ -576,9 +578,9 @@ export default function Feed() {
                               onReply={(c) => handleReplyClick(post.id, c)}
                               replyingTo={curReply}
                               onDelete={handleDeleteComment}
-                              canDelete={false} // A lógica de permissão agora é interna ao CommentItem
                               onReport={(id) => setShowReport({ commentId: id })}
                               currentUser={user}
+                              isPostOwner={user?.id === post.authorId}
                             />;
                           })}
                         </div>
