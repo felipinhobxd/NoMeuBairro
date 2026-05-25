@@ -109,12 +109,30 @@ export default function GuiaComercial() {
   const handleRating = async () => {
     if (!ratingTarget || !isAuthenticated) return;
     setIsSubmittingRating(true);
-    await addBusinessRating({ businessId: ratingTarget, stars, comment });
-    setRatingTarget(null);
-    setStars(5);
-    setComment('');
-    setIsSubmittingRating(false);
-    toast('Avaliação enviada com sucesso!');
+    try {
+      await addBusinessRating({ businessId: ratingTarget, stars, comment });
+      setRatingTarget(null);
+      setStars(5);
+      setComment('');
+      toast('Sua avaliação foi salva! Se você já tinha avaliado, ela foi atualizada.');
+    } catch (error) {
+      toast('Erro ao enviar avaliação.', 'error');
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
+  const openRatings = async (id: string, name: string) => {
+    setViewRatingsTarget({ id, name });
+    setLoadingRatings(true);
+    try {
+      const data = await getBusinessRatings(id);
+      setCurrentRatings(data);
+    } catch (error) {
+      toast('Erro ao carregar avaliações.', 'error');
+    } finally {
+      setLoadingRatings(false);
+    }
   };
 
   const fmtPhone = (p: string) => p.replace(/\D/g, '');
