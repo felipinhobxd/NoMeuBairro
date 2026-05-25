@@ -30,6 +30,10 @@ const catOpts = Object.entries(postCategories).map(([v, d]) => ({ value: v, labe
 function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelete, onReport, currentUser }: {
   comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; canDelete: boolean; onReport: (id: string) => void; currentUser: any;
 }) {
+  const isAuthor = currentUser?.id === comment.authorId;
+  const isAdmin = currentUser?.id === 'fbc66053-d56c-46f7-a92e-ea40062a216c';
+  const showDelete = isAuthor || isAdmin;
+
   return (
     <div className={cn('group', comment.parentId && 'ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-3')}>
       <div className="flex items-start gap-2.5">
@@ -60,7 +64,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
               className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors">
               Denunciar
             </button>
-            {canDelete && (
+            {showDelete && (
               <button onClick={() => onDelete(comment.id)} className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors">
                 Excluir
               </button>
@@ -78,7 +82,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
               onReply={onReply}
               replyingTo={replyingTo}
               onDelete={onDelete}
-              canDelete={canDelete || (currentUser?.id === r.authorId)}
+              canDelete={false} // Não é mais usado, a lógica agora é interna
               onReport={onReport}
               currentUser={currentUser}
             />
