@@ -311,18 +311,22 @@ export default function Layout({ children }: LayoutProps) {
       </main>
 
       {/* Mobile Nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
-        <div className="flex items-center justify-around h-[68px] px-2 max-w-lg mx-auto">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
+        <div className="flex items-center justify-around h-[72px] px-2 max-w-lg mx-auto">
           {navItems.map((item) => {
             const Icon = item.icon; const active = isActive(item.path);
             return (
               <button key={item.path} onClick={() => navigate(item.path)}
-                className={cn('flex flex-col items-center justify-center gap-1 py-2 px-3 rounded-xl transition-all duration-200 min-w-[56px]',
+                className={cn('flex flex-col items-center justify-center gap-1.5 py-1 px-1 rounded-2xl transition-all duration-300 min-w-[64px] relative active:scale-90',
                   active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}
                 aria-current={active ? 'page' : undefined}>
-                <Icon className={cn('transition-transform duration-200', active && 'scale-110')} strokeWidth={active ? 2.5 : 2} />
-                <span className="text-[10px] font-semibold leading-none">{item.label}</span>
-                {active && <div className="absolute bottom-2 w-1 h-1 rounded-full bg-emerald-500 dark:bg-emerald-400" />}
+                <div className={cn(
+                  "p-2 rounded-xl transition-all duration-300",
+                  active && "bg-emerald-50 dark:bg-emerald-500/10 scale-110 shadow-sm"
+                )}>
+                  <Icon className={cn('w-5 h-5 transition-transform duration-300')} strokeWidth={active ? 2.5 : 2} />
+                </div>
+                <span className={cn("text-[10px] font-bold tracking-tight transition-all", active ? "opacity-100 translate-y-0" : "opacity-80")}>{item.label}</span>
               </button>
             );
           })}

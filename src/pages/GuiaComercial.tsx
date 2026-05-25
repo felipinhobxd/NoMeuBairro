@@ -231,31 +231,32 @@ export default function GuiaComercial() {
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2 mt-3">
-                  {b.phone && <a href={`tel:${fmtPhone(b.phone)}`} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"><Phone className="w-3 h-3" />{b.phone}</a>}
-                  {b.whatsapp && <a href={`https://wa.me/55${fmtPhone(b.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-500/10 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-500/20 transition-colors"><MessageCircle className="w-3 h-3" />WhatsApp</a>}
-                  {b.address && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-400"><MapPin className="w-3 h-3" />{b.address}</span>}
+                  {b.phone && <a href={`tel:${fmtPhone(b.phone)}`} className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 active:scale-95 transition-all"><Phone className="w-4 h-4" />Ligar</a>}
+                  {b.whatsapp && <a href={`https://wa.me/55${fmtPhone(b.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 active:scale-95 transition-all"><MessageCircle className="w-4 h-4" />WhatsApp</a>}
                 </div>
+                {b.address && <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg"><MapPin className="w-3 h-3 shrink-0" />{b.address}</div>}
 
-                <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50">
+                <div className="flex gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/50">
                   <button
                     onClick={() => isAuthenticated ? setRatingTarget(b.id) : navigate('/login')}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-50 dark:bg-yellow-400/5 text-[11px] font-bold text-yellow-700 dark:text-yellow-400 hover:bg-yellow-100 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-yellow-50 dark:bg-yellow-400/5 text-xs font-bold text-yellow-700 dark:text-yellow-400 active:scale-95 transition-all"
                   >
-                    <Star className="w-3.5 h-3.5 fill-current" /> Avaliar
+                    <Star className="w-4 h-4 fill-current" /> Avaliar
                   </button>
                   <button
                     onClick={() => openRatings(b.id, b.name)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 active:scale-95 transition-all"
                   >
-                    <MessageSquare className="w-3.5 h-3.5" /> Ver Avaliações
+                    <MessageSquare className="w-4 h-4" /> Opiniões
                   </button>
-                  <div className="flex-1" />
-                  {b.createdBy && b.createdBy !== 'anonymous' && (
-                    <Link to={`/perfil/${b.createdBy}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors">
-                      Dono
-                    </Link>
-                  )}
                 </div>
+                {b.createdBy && b.createdBy !== 'anonymous' && (
+                  <div className="mt-2 flex justify-end">
+                    <Link to={`/perfil/${b.createdBy}`} className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 hover:underline">
+                      Ver Dono <Plus className="w-2.5 h-2.5" />
+                    </Link>
+                  </div>
+                )}
               </Card>
             );
           })}
