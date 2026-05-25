@@ -312,12 +312,12 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Mobile Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
-        <div className="flex items-center justify-around h-[72px] px-2 max-w-lg mx-auto">
+        <div className="flex items-center justify-around h-[72px] px-2 w-full">
           {navItems.map((item) => {
             const Icon = item.icon; const active = isActive(item.path);
             return (
               <button key={item.path} onClick={() => navigate(item.path)}
-                className={cn('flex flex-col items-center justify-center gap-1.5 py-1 px-1 rounded-2xl transition-all duration-300 min-w-[64px] relative active:scale-90',
+                className={cn('flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-300 flex-1 relative active:scale-90',
                   active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}
                 aria-current={active ? 'page' : undefined}>
                 <div className={cn(
