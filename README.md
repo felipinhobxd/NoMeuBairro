@@ -1,177 +1,72 @@
-# No Meu Bairro — Vitória Régia
+# 🏢 No Meu Bairro — Vitória Régia
 
-<p align="center">
-  <img alt="Status do Projeto" src="https://img.shields.io/badge/STATUS-EM%20ANDAMENTO-59C000?style=for-the-badge&labelColor=555555">
-</p>
+Plataforma comunitária interativa para moradores do bairro Vitória Régia registrarem problemas, acompanharem estatísticas locais, descobrirem comércios e fortalecerem a comunicação no bairro.
 
-<p align="center">
-  Plataforma comunitária para o bairro Vitória Régia, em Curitiba, com foco em relatos, guia comercial, mural de publicações e denúncias anônimas.
-</p>
+---
 
-## ✨ Visão geral
+### 🚧 Status do Projeto
+![Em Desenvolvimento](https://img.shields.io/badge/STATUS-EM%20DESENVOLVIMENTO-orange?style=for-the-badge)
 
-O projeto foi criado para fortalecer a comunicação entre moradores e apoiar a organização da comunidade. A aplicação reúne páginas para feed, guia comercial, mural, denúncias, login e perfis de usuários, além de recursos de segurança como botão de pânico e consentimento de cookies.
+### 💻 Tecnologias Utilizadas
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-1C1C1C?style=for-the-badge&logo=supabase&logoColor=3ECF8E)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Leaflet](https://img.shields.io/badge/Leaflet-199903?style=for-the-badge&logo=leaflet&logoColor=white)
+![Lucide](https://img.shields.io/badge/Lucide_Icons-F1F5F9?style=for-the-badge&logo=lucide&logoColor=black)
+![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
+![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)
 
-## 🚀 Acesse a aplicação
+---
 
-- **Site online:** https://nomeubairro.vercel.app/
-- **Repositório:** https://github.com/felipinhobxd/NoMeuBairro
+## 🌟 Funcionalidades Principais
 
-## 🛠️ Tecnologias utilizadas
+*   **📍 Mapa Comunitário**: Visualize todos os problemas do bairro em um mapa interativo com marcadores coloridos por categoria.
+*   **📊 Painel de Estatísticas**: Gráficos em tempo real que mostram os problemas mais frequentes e a taxa de solução do bairro.
+*   **🔍 Filtro "Perto de Mim"**: Use a geolocalização exata para ver apenas o que está acontecendo na sua rua ou quadra.
+*   **🛡️ Denúncias 100% Anônimas**: Sistema seguro de denúncias que garante total privacidade, mesmo estando logado.
+*   **⚖️ Painel do Administrador**: Central de moderação exclusiva para o administrador gerenciar denúncias e conteúdos ofensivos.
+*   **🏪 Guia Comercial com Avaliações**: Descubra serviços locais e avalie-os com sistema de 1 a 5 estrelas e comentários.
+*   **🔔 Notificações em Tempo Real**: Receba alertas instantâneos sempre que alguém interagir com suas postagens.
 
-<p align="center">
-  <img alt="Markdown" src="https://img.shields.io/badge/Markdown-000000?style=for-the-badge&logo=markdown&logoColor=white">
-  <img alt="Git" src="https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white">
-  <img alt="GitHub" src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white">
-  <img alt="Java" src="https://img.shields.io/badge/Java-F89820?style=for-the-badge&logo=openjdk&logoColor=white">
-  <img alt="SQL" src="https://img.shields.io/badge/SQL-0B4F6C?style=for-the-badge&logo=postgresql&logoColor=white">
-</p>
+---
 
-### Frontend
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- React Router DOM
-- Lucide React
-- Supabase SDK
-
-### Backend
-- Python
-- Flask
-- Flask-RESTful
-- Flask-CORS
-- Flask-Limiter
-- Flask-SQLAlchemy
-- Flask-Migrate
-- PostgreSQL / SQLAlchemy
-
-### Outros recursos
-- JWT
-- Argon2id para hash de senhas
-- Criptografia para denúncias
-- Gunicorn
-- Docker / Docker Compose
-
-## 📌 Funcionalidades
-
-- Feed principal da comunidade
-- Guia comercial com negócios locais
-- Mural de publicações
-- Sistema de denúncias anônimas
-- Login e perfis de usuário
-- Perfil público para visualização de usuários
-- Botão de pânico
-- Consentimento de cookies
-- Tema centralizado por provider
-- Controle de dados e autenticação
-
-## 🗂️ Estrutura do projeto
-
-```bash
-.
-├── backend/
-│   ├── app.py
-│   ├── config.py
-│   ├── middleware.py
-│   ├── models.py
-│   ├── schema.sql
-│   ├── wsgi.py
-│   └── ...
-├── src/
-│   ├── components/
-│   ├── contexts/
-│   ├── hooks/
-│   ├── pages/
-│   ├── types/
-│   ├── utils/
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
-├── index.html
-├── package.json
-├── vite.config.ts
-└── vercel.json
-```
-
-## ▶️ Como executar o projeto
+## 🚀 Como Rodar o Projeto
 
 ### Pré-requisitos
-- Node.js 18+
-- Python 3.11+
-- PostgreSQL
-- Git
+*   Node.js instalado
+*   Conta no Supabase
 
-### Frontend
+### Instalação
+1. Clone o repositório:
+   ```bash
+   git clone https://github.com/felipinhobxd/NoMeuBairro.git
+   ```
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Configure o arquivo `.env.local` na raiz com suas chaves do Supabase:
+   ```env
+   VITE_SUPABASE_URL=sua_url_aqui
+   VITE_SUPABASE_ANON_KEY=sua_chave_anon_aqui
+   ```
+4. Execute o banco de dados:
+   Copie o conteúdo de `backend/schema.sql` e cole no **SQL Editor** do Supabase.
+5. Inicie o servidor de desenvolvimento:
+   ```bash
+   npm run dev
+   ```
 
-```bash
-npm install
-npm run dev
-```
+---
 
-### Backend
+## 👨‍💻 Autor e Administrador
+**Felipe**  
+Email: `felipe@gmail.com`
 
-```bash
-cd backend
-python -m venv .venv
+---
 
-# Windows:
-.venv\\Scripts\\activate
-
-# Linux/macOS:
-source .venv/bin/activate
-
-pip install -r requirements.txt
-flask run
-```
-
-## 🔧 Build de produção
-
-### Frontend
-
-```bash
-npm run build
-npm run preview
-```
-
-### Backend
-
-```bash
-cd backend
-gunicorn wsgi:app
-```
-
-## ⚙️ Variáveis de ambiente
-
-Crie os arquivos de ambiente conforme o projeto exigir, por exemplo:
-
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-
-DATABASE_URL=your_database_url
-SECRET_KEY=your_secret_key
-JWT_SECRET_KEY=your_jwt_secret_key
-```
-
-## 📄 Banco de dados
-
-O arquivo `backend/schema.sql` contém a estrutura do banco, incluindo tabelas para usuários, posts, comentários, negócios locais, eventos, apoios e denúncias anônimas.
-
-## 🧩 Rotas principais
-
-- `/` - Feed
-- `/guia` - Guia comercial
-- `/mural` - Mural
-- `/denuncias` - Denúncias
-- `/login` - Login
-- `/perfil` - Perfil do usuário
-- `/perfil/:userId` - Perfil público
-
-## 👨‍💻 Autor
-
-Projeto publicado por **felipinhobxd**.
-
-## 📜 Licença
-
-Defina aqui a licença do projeto se desejar.
+## 📄 Licença
+Este projeto é para fins educacionais e comunitários.
