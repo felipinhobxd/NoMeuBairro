@@ -327,13 +327,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addBusinessRating = useCallback(async (data: { businessId: string; stars: number; comment?: string }) => {
     if (!user) return;
+
+    // Usando upsert com onConflict para resolver o erro 409 (Conflict)
+    // Isso garante que se já existir uma nota (mesmo business_id e user_id), ela seja ATUALIZADA.
     const { error } = await supabase.from('business_ratings').upsert({
       business_id: data.businessId,
       user_id: user.id,
       stars: data.stars,
       comment: data.comment
+    }, {
+      onConflict: 'business_id,user_id'
     });
-    if (!error) fetchData();
+
+    if (error) {
+      console.error('Erro ao salvar avaliação:', error);
+      throw error;
+    }
+
+    fetchData();
   }, [user, fetchData]);
 
   const getBusinessRatings = useCallback(async (businessId: string): Promise<BusinessRating[]> => {
