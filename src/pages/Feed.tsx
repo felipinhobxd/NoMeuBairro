@@ -70,7 +70,18 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
       </div>
       {replies.length > 0 && (
         <div className="mt-2 space-y-2">
-          {replies.map(r => <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} replyingTo={replyingTo} onDelete={onDelete} canDelete={canDelete} onReport={onReport} />)}
+          {replies.map(r => (
+            <CommentItem
+              key={r.id}
+              comment={r}
+              replies={[]}
+              onReply={onReply}
+              replyingTo={replyingTo}
+              onDelete={onDelete}
+              canDelete={canDelete || (user?.id === r.authorId)} // Adicionado: Admin ou o próprio autor da resposta pode excluir
+              onReport={onReport}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -545,7 +556,7 @@ export default function Feed() {
                         <p className="text-xs text-slate-400 text-center py-4">Nenhum comentário ainda. Seja o primeiro!</p>
                       ) : (
                         <div className="space-y-3">
-                          {rootComments.map((rc: Comment) => {
+                              {rootComments.map((rc: Comment) => {
                             const replies = postComments.filter((c: Comment) => c.parentId === rc.id);
                             return <CommentItem
                               key={rc.id}
