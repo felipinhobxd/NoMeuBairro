@@ -27,8 +27,8 @@ const statusOpts: { id: PostStatus | 'all'; label: string }[] = [
 ];
 const catOpts = Object.entries(postCategories).map(([v, d]) => ({ value: v, label: `${d.emoji} ${d.label}` }));
 
-function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelete }: {
-  comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; canDelete: boolean;
+function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelete, onReport }: {
+  comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; canDelete: boolean; onReport: (id: string) => void;
 }) {
   return (
     <div className={cn('group', comment.parentId && 'ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-3')}>
@@ -56,6 +56,10 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
                 replyingTo === comment.id ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400')}>
               Responder
             </button>
+            <button onClick={() => onReport(comment.id)}
+              className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors">
+              Denunciar
+            </button>
             {canDelete && (
               <button onClick={() => onDelete(comment.id)} className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors">
                 Excluir
@@ -66,7 +70,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, canDelet
       </div>
       {replies.length > 0 && (
         <div className="mt-2 space-y-2">
-          {replies.map(r => <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} replyingTo={replyingTo} onDelete={onDelete} canDelete={canDelete} />)}
+          {replies.map(r => <CommentItem key={r.id} comment={r} replies={[]} onReply={onReply} replyingTo={replyingTo} onDelete={onDelete} canDelete={canDelete} onReport={onReport} />)}
         </div>
       )}
     </div>
@@ -551,6 +555,7 @@ export default function Feed() {
                               replyingTo={curReply}
                               onDelete={handleDeleteComment}
                               canDelete={user?.id === rc.authorId}
+                              onReport={(id) => setShowReport({ commentId: id })}
                             />;
                           })}
                         </div>
