@@ -554,14 +554,14 @@ export default function Feed() {
                         )}
                         {post.status !== 'in_progress' && (
                           <button onClick={() => handleStatusChange(post.id, 'in_progress')}
-                            className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 active:scale-95 transition-all">
-                            Fazendo
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 ring-1 ring-blue-200 dark:ring-blue-500/20 transition-all">
+                            Em andamento
                           </button>
                         )}
                         {post.status !== 'resolved' && (
                           <button onClick={() => handleStatusChange(post.id, 'resolved')}
-                            className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 active:scale-95 transition-all">
-                            OK
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 ring-1 ring-emerald-200 dark:ring-emerald-500/20 transition-all">
+                            Resolvido
                           </button>
                         )}
                       </div>
