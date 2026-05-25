@@ -33,13 +33,14 @@ Plataforma comunitária interativa para moradores do bairro Vitória Régia regi
 
 ## 🌟 Funcionalidades Principais
 
-*   **📍 Mapa Comunitário**: Visualize todos os problemas do bairro em um mapa interativo com marcadores coloridos por categoria.
-*   **📊 Painel de Estatísticas**: Gráficos em tempo real que mostram os problemas mais frequentes e a taxa de solução do bairro.
-*   **🔍 Filtro "Perto de Mim"**: Use a geolocalização exata para ver apenas o que está acontecendo na sua rua ou quadra.
-*   **🛡️ Denúncias 100% Anônimas**: Sistema seguro de denúncias que garante total privacidade, mesmo estando logado.
-*   **⚖️ Painel do Administrador**: Central de moderação exclusiva para o administrador gerenciar denúncias e conteúdos ofensivos.
-*   **🏪 Guia Comercial com Avaliações**: Descubra serviços locais e avalie-os com sistema de 1 a 5 estrelas e comentários.
-*   **🔔 Notificações em Tempo Real**: Receba alertas instantâneos sempre que alguém interagir com suas postagens.
+*   **📝 Feed de Mensagens**: Registre e acompanhe problemas comunitários (buracos, iluminação, segurança) com fotos e descrições detalhadas.
+*   **📍 Mapa do Bairro**: Localize geograficamente todos os relatos em um mapa interativo, facilitando a visualização dos pontos críticos do Vitória Régia.
+*   **📊 Painel de Estatísticas**: Acompanhe gráficos em tempo real sobre os problemas mais frequentes e a taxa de solução do bairro.
+*   **🏪 Guia Comercial & Serviços**: Descubra e avalie comércios locais com sistema de 1 a 5 estrelas e comentários dos vizinhos.
+*   **🗓️ Mural de Eventos**: Fique por dentro de tudo o que acontece na comunidade, desde feiras locais até reuniões de moradores.
+*   **🛡️ Denúncias 100% Anônimas**: Canal seguro para relatos sensíveis, garantindo total privacidade e anonimato do morador.
+*   **⚖️ Painel do Administrador**: Ferramenta exclusiva para moderação, permitindo gerenciar denúncias e manter o ambiente organizado.
+*   **🔍 Filtro "Perto de Mim"**: Use a geolocalização exata para ver apenas as ocorrências que estão acontecendo na sua rua ou quadra.
 
 ---
 
