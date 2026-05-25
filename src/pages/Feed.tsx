@@ -441,7 +441,7 @@ export default function Feed() {
               return (
                 <Card key={post.id} id={`post-${post.id}`} className={cn(
                   isAnon && 'ring-red-200 dark:ring-red-500/20',
-                  'animate-card-enter active:scale-[0.99] touch-none md:active:scale-100 transition-transform'
+                  'animate-card-enter active:scale-[0.99] md:active:scale-100 transition-transform'
                 )}>
                   <div className="flex items-center gap-3 mb-4">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
