@@ -203,7 +203,7 @@ CREATE POLICY "Anyone can create posts" ON posts FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Authors can update own posts" ON posts;
 CREATE POLICY "Authors can update own posts" ON posts FOR UPDATE USING (auth.uid() = author_id);
 DROP POLICY IF EXISTS "Authors can delete own posts" ON posts;
-CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid() = author_id OR auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05');
+CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid() = author_id OR auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217');
 
 -- POLÍTICAS: Comments
 DROP POLICY IF EXISTS "Comments are public" ON comments;
@@ -211,7 +211,7 @@ CREATE POLICY "Comments are public" ON comments FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Anyone can comment" ON comments;
 CREATE POLICY "Anyone can comment" ON comments FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Authors can delete own comments" ON comments;
-CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05');
+CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217');
 
 -- POLÍTICAS: Supports
 DROP POLICY IF EXISTS "Supports are public" ON post_supports;
@@ -235,7 +235,7 @@ CREATE POLICY "System can insert notifications" ON notifications FOR INSERT WITH
 
 -- POLÍTICAS: Content Reports
 DROP POLICY IF EXISTS "Reports are visible to admin" ON content_reports;
-CREATE POLICY "Reports are visible to admin" ON content_reports FOR SELECT USING (auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05');
+CREATE POLICY "Reports are visible to admin" ON content_reports FOR SELECT USING (auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217');
 DROP POLICY IF EXISTS "Anyone can report content" ON content_reports;
 CREATE POLICY "Anyone can report content" ON content_reports FOR INSERT WITH CHECK (true);
 

@@ -173,7 +173,7 @@ export default function Layout({ children }: LayoutProps) {
   const [cepInput, setCepInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const location = useLocation();
-  const isAdmin = user?.id === '01524e31-9ada-4e1f-a3fc-bad691113e05';
+  const isAdmin = user?.id === '01524e31-9ada-4e1f-a3fc-bad691113e05' || user?.id === '8b1e03ce-59e5-4f48-9756-eb4e0ee91217';
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 

@@ -19,7 +19,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'pending' | 'all'>('pending');
 
-  const isAdmin = user?.id === '01524e31-9ada-4e1f-a3fc-bad691113e05';
+  const isAdmin = user?.id === '01524e31-9ada-4e1f-a3fc-bad691113e05' || user?.id === '8b1e03ce-59e5-4f48-9756-eb4e0ee91217';
 
   const loadReports = useCallback(async () => {
     setLoading(true);
