@@ -185,132 +185,74 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300" role="banner">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button onClick={() => navigate('/')} className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
-                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
+        <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-16 gap-4">
+            <div className="flex items-center gap-3 shrink-0">
+              <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
                   <img src="/logo.png" alt="" className="w-full h-full object-cover" />
                 </div>
-                <div className="flex flex-col items-start hidden sm:flex">
-                  <span className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
+                <div className="flex flex-col items-start hidden lg:flex">
+                  <span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
                 </div>
               </button>
 
-              <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
 
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro atual</span>
-                  <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200 leading-tight">{currentNeighborhood.name}</span>
+                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro</span>
+                  <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[80px] xl:max-w-none">{currentNeighborhood.name}</span>
                 </div>
               </div>
             </div>
 
-            {/* Neighborhood Selector Dropdown */}
-            {showLocationSelector && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowLocationSelector(false)} />
-                <div className="absolute left-4 top-16 mt-2 w-72 max-h-[480px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 z-50 overflow-hidden flex flex-col animate-scale-in origin-top-left">
-                  <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Buscar por CEP</h3>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Ex: 81470430"
-                        value={cepInput}
-                        onChange={(e) => setCepInput(e.target.value)}
-                        className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none"
-                        disabled={isSearching}
-                      />
-                      <button
-                        onClick={async () => {
-                          setIsSearching(true);
-                          const ok = await setNeighborhoodByCep(cepInput);
-                          setIsSearching(false);
-                          if (ok) {
-                            setShowLocationSelector(false);
-                            setCepInput('');
-                          } else {
-                            alert('CEP não encontrado ou fora de Curitiba.');
-                          }
-                        }}
-                        disabled={isSearching}
-                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                      >
-                        {isSearching ? '...' : 'OK'}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="overflow-y-auto flex-1 no-scrollbar p-2">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest p-2">Ou selecione na lista</p>
-                    <div className="grid grid-cols-1 gap-1">
-                      {curitibaNeighborhoods.map((n) => (
-                        <button
-                          key={n.name}
-                          onClick={() => {
-                            setNeighborhood(n.name);
-                            setShowLocationSelector(false);
-                          }}
-                          className={cn(
-                            "w-full px-3 py-2 rounded-xl text-left text-xs font-medium transition-colors",
-                            currentNeighborhood.name === n.name
-                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                              : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          )}
-                        >
-                          {n.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-            <nav className="hidden md:flex items-center gap-1" role="navigation" aria-label="Navegação principal">
+            <nav className="hidden md:flex items-center gap-0.5 lg:gap-1 flex-1 justify-center min-w-0" role="navigation" aria-label="Navegação principal">
               {navItems.map((item) => {
                 const Icon = item.icon; const active = isActive(item.path);
                 return (
                   <button key={item.path} onClick={() => navigate(item.path)}
-                    className={cn('flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0',
                       active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
                         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')}
                     aria-current={active ? 'page' : undefined}>
-                    <Icon className="w-4 h-4" /><span>{item.label}</span>
+                    <Icon className="w-4 h-4" />
+                    <span className="hidden xl:inline">{item.label}</span>
                   </button>
                 );
               })}
               {isAdmin && (
                 <button onClick={() => navigate('/admin')}
-                  className={cn('flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                  className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-bold transition-all duration-200 shrink-0',
                     location.pathname === '/admin' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')}
+                      : 'bg-indigo-600/5 text-indigo-600 hover:bg-indigo-600/10 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20')}
                 >
-                  <ShieldCheck className="w-4 h-4" /><span>Painel Admin</span>
+                  <ShieldCheck className="w-4 h-4" /><span className="hidden lg:inline">Painel Admin</span>
                 </button>
               )}
             </nav>
-            <div className="flex items-center gap-1.5">
-              <button onClick={toggle} className="p-2.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200"
+
+            <div className="flex items-center gap-1 lg:gap-2 shrink-0">
+              <button onClick={toggle} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200"
                 aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>
                 {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
               </button>
               <NotificationBell />
               {isAuthenticated && user ? (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 lg:gap-2">
                   <button onClick={() => navigate('/perfil')}
-                    className="w-9 h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors"
+                    className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors"
                     aria-label={`Perfil de ${user.name}`}>
                     {user.avatarUrl
                       ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
                       : user.name.charAt(0).toUpperCase()}
                   </button>
-                  <button onClick={logout} className="hidden md:flex p-2.5 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200" aria-label="Sair" title="Sair">
+                  <button onClick={logout} className="hidden lg:flex p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200" aria-label="Sair" title="Sair">
                     <LogOut className="w-[18px] h-[18px]" />
                   </button>
                 </div>
               ) : (
-                <button onClick={() => navigate('/login')} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-all duration-200 shadow-sm shadow-emerald-600/20 active:scale-[0.98]">
+                <button onClick={() => navigate('/login')} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold transition-all duration-200 shadow-sm shadow-emerald-600/20 active:scale-[0.98]">
                   <UserCircle className="w-4 h-4" /><span className="hidden sm:inline">Entrar</span>
                 </button>
               )}
