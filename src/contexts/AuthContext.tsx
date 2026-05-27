@@ -18,44 +18,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   // ─── Fetch Profile Data from our public.users table ───
-  const fetchProfile = useCallback(async (id: string, email: string) => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', id)
-      .single();
+  const fetchProfile = useCallback(async (id: string, email: string, metadataName?: string) => {
+    let attempts = 0;
+    const maxAttempts = 3;
 
-    if (data && !error) {
-      setUser({
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        avatarUrl: data.avatar_url,
-        badges: [],
-        reputation: data.reputation || 0,
-        postsCount: 0,
-        supportsReceived: 0,
-        createdAt: data.created_at,
-      });
-    } else {
-      // Fallback if public profile doesn't exist yet
-      setUser({
-        id, name: 'Morador', email, badges: [], reputation: 0, postsCount: 0, supportsReceived: 0, createdAt: new Date().toISOString()
-      });
+    while (attempts < maxAttempts) {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (data && !error) {
+        setUser({
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          avatarUrl: data.avatar_url,
+          badges: [],
+          reputation: data.reputation || 0,
+          postsCount: 0,
+          supportsReceived: 0,
+          createdAt: data.created_at,
+        });
+        return; // Sucesso!
+      }
+
+      // Se falhou, espera um pouco e tenta de novo (o trigger do Supabase pode ser lento)
+      attempts++;
+      if (attempts < maxAttempts) {
+        await new Promise(res => setTimeout(res, 1000 * attempts));
+      }
     }
+
+    // Fallback: Se após 3 tentativas não existir no DB, usa o que temos no metadata
+    setUser({
+      id,
+      name: metadataName || 'Morador',
+      email,
+      badges: [],
+      reputation: 0,
+      postsCount: 0,
+      supportsReceived: 0,
+      createdAt: new Date().toISOString()
+    });
   }, []);
 
   // ─── Initialize Session ───
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        fetchProfile(session.user.id, session.user.email!);
+        fetchProfile(
+          session.user.id,
+          session.user.email!,
+          session.user.user_metadata?.name
+        );
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        fetchProfile(session.user.id, session.user.email!);
+        fetchProfile(
+          session.user.id,
+          session.user.email!,
+          session.user.user_metadata?.name
+        );
       } else {
         setUser(null);
       }
@@ -78,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // If confirmation email is enabled, session might be null
     if (data.user) {
       if (data.session) {
-        await fetchProfile(data.user.id, email);
+        await fetchProfile(data.user.id, email, name);
         return { ok: true };
       }
       return { ok: true, pendingVerification: true };
@@ -92,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) return { ok: false, error: error.message };
     if (data.user) {
-      await fetchProfile(data.user.id, email);
+      await fetchProfile(data.user.id, email, data.user.user_metadata?.name);
       return { ok: true };
     }
     return { ok: false, error: 'Login falhou.' };
