@@ -190,58 +190,58 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon;
 
 -- POLÍTICAS: Users
-DROP POLICY IF EXISTS \"Profiles are public\" ON users;
-CREATE POLICY \"Profiles are public\" ON users FOR SELECT USING (true);
-DROP POLICY IF EXISTS \"Users can update own profile\" ON users;
-CREATE POLICY \"Users can update own profile\" ON users FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "Profiles are public" ON users;
+CREATE POLICY "Profiles are public" ON users FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can update own profile" ON users;
+CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
 
 -- POLÍTICAS: Posts
-DROP POLICY IF EXISTS \"Posts are public\" ON posts;
-CREATE POLICY \"Posts are public\" ON posts FOR SELECT USING (true);
-DROP POLICY IF EXISTS \"Anyone can create posts\" ON posts;
-CREATE POLICY \"Anyone can create posts\" ON posts FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS \"Authors can update own posts\" ON posts;
-CREATE POLICY \"Authors can update own posts\" ON posts FOR UPDATE USING (auth.uid() = author_id);
-DROP POLICY IF EXISTS \"Authors can delete own posts\" ON posts;
-CREATE POLICY \"Authors can delete own posts\" ON posts FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
+DROP POLICY IF EXISTS "Posts are public" ON posts;
+CREATE POLICY "Posts are public" ON posts FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Anyone can create posts" ON posts;
+CREATE POLICY "Anyone can create posts" ON posts FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Authors can update own posts" ON posts;
+CREATE POLICY "Authors can update own posts" ON posts FOR UPDATE USING (auth.uid() = author_id);
+DROP POLICY IF EXISTS "Authors can delete own posts" ON posts;
+CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
 
 -- POLÍTICAS: Comments
-DROP POLICY IF EXISTS \"Comments are public\" ON comments;
-CREATE POLICY \"Comments are public\" ON comments FOR SELECT USING (true);
-DROP POLICY IF EXISTS \"Anyone can comment\" ON comments FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS \"Authors can delete own comments\" ON comments;
-CREATE POLICY \"Authors can delete own comments\" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
+DROP POLICY IF EXISTS "Comments are public" ON comments;
+CREATE POLICY "Comments are public" ON comments FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Anyone can comment" ON comments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Authors can delete own comments" ON comments;
+CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
 
 -- POLÍTICAS: Supports
-DROP POLICY IF EXISTS \"Supports are public\" ON post_supports;
-CREATE POLICY \"Supports are public\" ON post_supports FOR SELECT USING (true);
-DROP POLICY IF EXISTS \"Auth users can support\" ON post_supports;
-CREATE POLICY \"Auth users can support\" ON post_supports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS \"Users can delete own support\" ON post_supports;
-CREATE POLICY \"Users can delete own support\" ON post_supports FOR DELETE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Supports are public" ON post_supports;
+CREATE POLICY "Supports are public" ON post_supports FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Auth users can support" ON post_supports;
+CREATE POLICY "Auth users can support" ON post_supports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Users can delete own support" ON post_supports;
+CREATE POLICY "Users can delete own support" ON post_supports FOR DELETE USING (auth.uid() = user_id);
 
 -- POLÍTICAS: Businesses
-DROP POLICY IF EXISTS \"Businesses are public\" ON businesses;
-CREATE POLICY \"Businesses are public\" ON businesses FOR SELECT USING (true);
-DROP POLICY IF EXISTS \"Auth users can create businesses\" ON businesses;
-CREATE POLICY \"Auth users can create businesses\" ON businesses FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Businesses are public" ON businesses;
+CREATE POLICY "Businesses are public" ON businesses FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Auth users can create businesses" ON businesses;
+CREATE POLICY "Auth users can create businesses" ON businesses FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 -- POLÍTICAS: Notifications
-DROP POLICY IF EXISTS \"Notifications are private\" ON notifications;
-CREATE POLICY \"Notifications are private\" ON notifications FOR SELECT USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS \"System can insert notifications\" ON notifications;
-CREATE POLICY \"System can insert notifications\" ON notifications FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Notifications are private" ON notifications;
+CREATE POLICY "Notifications are private" ON notifications FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "System can insert notifications" ON notifications;
+CREATE POLICY "System can insert notifications" ON notifications FOR INSERT WITH CHECK (true);
 
 -- POLÍTICAS: Content Reports
-DROP POLICY IF EXISTS \"Reports are visible to admin\" ON content_reports;
-CREATE POLICY \"Reports are visible to admin\" ON content_reports FOR SELECT USING (auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
-DROP POLICY IF EXISTS \"Anyone can report content\" ON content_reports;
-CREATE POLICY \"Anyone can report content\" ON content_reports FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Reports are visible to admin" ON content_reports;
+CREATE POLICY "Reports are visible to admin" ON content_reports FOR SELECT USING (auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
+DROP POLICY IF EXISTS "Anyone can report content" ON content_reports;
+CREATE POLICY "Anyone can report content" ON content_reports FOR INSERT WITH CHECK (true);
 
 -- Outras políticas (Shorthand para o restante)
-CREATE POLICY \"Badges are public\" ON badges FOR SELECT USING (true);
-CREATE POLICY \"Ratings are public\" ON business_ratings FOR SELECT USING (true);
-CREATE POLICY \"Attendance is public\" ON event_attendance FOR SELECT USING (true);
+CREATE POLICY "Badges are public" ON badges FOR SELECT USING (true);
+CREATE POLICY "Ratings are public" ON business_ratings FOR SELECT USING (true);
+CREATE POLICY "Attendance is public" ON event_attendance FOR SELECT USING (true);
 
 -- 7. FUNÇÕES E TRIGGERS
 
@@ -298,4 +298,3 @@ END; $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_count_comments AFTER INSERT OR DELETE ON comments FOR EACH ROW EXECUTE FUNCTION sync_post_counts();
 CREATE TRIGGER trg_count_supports AFTER INSERT OR DELETE ON post_supports FOR EACH ROW EXECUTE FUNCTION sync_post_counts();
-"
