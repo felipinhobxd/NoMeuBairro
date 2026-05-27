@@ -253,7 +253,10 @@ CREATE POLICY "Attendance is public" ON event_attendance FOR SELECT USING (true)
 CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_users_updated_at ON users;
 CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS trg_posts_updated_at ON posts;
 CREATE TRIGGER trg_posts_updated_at BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Sincronização de Usuário (Auth -> Public)
@@ -285,7 +288,10 @@ BEGIN
     RETURN NEW;
 EXCEPTION WHEN OTHERS THEN RETURN NEW; END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS trg_notify_comment ON comments;
 CREATE TRIGGER trg_notify_comment AFTER INSERT ON comments FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
+
+DROP TRIGGER IF EXISTS trg_notify_support ON post_supports;
 CREATE TRIGGER trg_notify_support AFTER INSERT ON post_supports FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
 
 -- Contadores Automáticos (Recálculo Real)
@@ -300,5 +306,8 @@ BEGIN
     RETURN NULL;
 END; $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_count_comments ON comments;
 CREATE TRIGGER trg_count_comments AFTER INSERT OR DELETE ON comments FOR EACH ROW EXECUTE FUNCTION sync_post_counts();
+
+DROP TRIGGER IF EXISTS trg_count_supports ON post_supports;
 CREATE TRIGGER trg_count_supports AFTER INSERT OR DELETE ON post_supports FOR EACH ROW EXECUTE FUNCTION sync_post_counts();

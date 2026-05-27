@@ -173,17 +173,19 @@ export default function Feed() {
       if (onlyMine && !user) return false;
 
       // Filter by proximity (e.g., 2km)
-      if (nearMe && userLocation && p.latitude && p.longitude) {
-        const dist = calculateDistance(userLocation.lat, userLocation.lng, Number(p.latitude), Number(p.longitude));
-        if (dist > 2) return false; // Show only within 2km
-      } else if (nearMe && !userLocation) {
-        return false; // While loading location, show nothing if nearMe is active
+      if (nearMe && p.latitude && p.longitude) {
+        // Se temos um local de busca (CEP), usamos ele. Senão, GPS.
+        const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+        const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
+        if (dist > 3) return false; // Mostra num raio de 3km do centro do bairro/CEP
+      } else if (nearMe && !p.latitude) {
+        return false;
       }
 
       if (q) return p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.location.toLowerCase().includes(q) || p.authorName.toLowerCase().includes(q);
       return true;
     });
-  }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user]);
+  }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user, currentNeighborhood]);
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
@@ -359,7 +361,7 @@ export default function Feed() {
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
-              type="search"
+              type="text"
               placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -371,6 +373,9 @@ export default function Feed() {
                     const ok = await setNeighborhoodByCep(clean);
                     if (ok) {
                       toast('Bairro e rua localizados!');
+
+                      // Forçar atualização do filtro de proximidade para o novo local
+                      setNearMe(true);
                       setSearchQuery('');
                     } else {
                       toast('CEP não encontrado em Curitiba.', 'error');
@@ -382,7 +387,12 @@ export default function Feed() {
               aria-label="Buscar relatos ou mudar CEP"
             />
             {searchQuery && (
-              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Limpar busca">
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10"
+                aria-label="Limpar busca"
+              >
                 <X className="w-4 h-4" />
               </button>
             )}
