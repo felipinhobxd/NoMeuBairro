@@ -8,7 +8,7 @@ import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Store,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
-  BarChart3, ShieldCheck,
+  BarChart3, ShieldCheck, Search
 } from 'lucide-react';
 import { timeAgo } from './UI';
 
@@ -171,6 +171,7 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [cepInput, setCepInput] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const location = useLocation();
   const isAdmin = user?.id === 'fbc66053-d56c-46f7-a92e-ea40062a216c';
   const isActive = (path: string) =>
@@ -186,15 +187,32 @@ export default function Layout({ children }: LayoutProps) {
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300" role="banner">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
-            <button onClick={() => setShowLocationSelector(!showLocationSelector)} className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Alterar bairro">
-              <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
-                <img src="/logo.png" alt="" className="w-full h-full object-cover" />
+            <div className="flex items-center gap-4">
+              <button onClick={() => navigate('/')} className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
+                <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
+                  <img src="/logo.png" alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex flex-col items-start hidden sm:flex">
+                  <span className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
+                </div>
+              </button>
+
+              <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 hidden sm:block" />
+
+              <div className="flex items-center gap-2">
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro atual</span>
+                  <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200 leading-tight">{currentNeighborhood.name}</span>
+                </div>
+                <button
+                  onClick={() => setShowLocationSelector(!showLocationSelector)}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 transition-colors"
+                  aria-label="Procurar outro bairro"
+                >
+                  <Search className="w-4 h-4" />
+                </button>
               </div>
-              <div className="flex flex-col items-start">
-                <span className="text-[15px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
-                <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">{currentNeighborhood.name}</span>
-              </div>
-            </button>
+            </div>
 
             {/* Neighborhood Selector Dropdown */}
             {showLocationSelector && (
@@ -202,31 +220,37 @@ export default function Layout({ children }: LayoutProps) {
                 <div className="fixed inset-0 z-40" onClick={() => setShowLocationSelector(false)} />
                 <div className="absolute left-4 top-16 mt-2 w-72 max-h-[480px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 z-50 overflow-hidden flex flex-col animate-scale-in origin-top-left">
                   <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Escolha seu Bairro</h3>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Buscar por CEP</h3>
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="CEP (ex: 81470-430)"
+                        placeholder="Ex: 81470430"
                         value={cepInput}
                         onChange={(e) => setCepInput(e.target.value)}
                         className="flex-1 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all outline-none"
+                        disabled={isSearching}
                       />
                       <button
-                        onClick={() => {
-                          if (setNeighborhoodByCep(cepInput)) {
+                        onClick={async () => {
+                          setIsSearching(true);
+                          const ok = await setNeighborhoodByCep(cepInput);
+                          setIsSearching(false);
+                          if (ok) {
                             setShowLocationSelector(false);
                             setCepInput('');
                           } else {
-                            alert('CEP não encontrado na base de Curitiba.');
+                            alert('CEP não encontrado ou fora de Curitiba.');
                           }
                         }}
-                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors"
+                        disabled={isSearching}
+                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors disabled:opacity-50"
                       >
-                        OK
+                        {isSearching ? '...' : 'OK'}
                       </button>
                     </div>
                   </div>
                   <div className="overflow-y-auto flex-1 no-scrollbar p-2">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest p-2">Ou selecione na lista</p>
                     <div className="grid grid-cols-1 gap-1">
                       {curitibaNeighborhoods.map((n) => (
                         <button

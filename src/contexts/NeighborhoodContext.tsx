@@ -90,7 +90,7 @@ export const curitibaNeighborhoods: Neighborhood[] = [
 interface NeighborhoodContextType {
   currentNeighborhood: Neighborhood;
   setNeighborhood: (name: string) => void;
-  setNeighborhoodByCep: (cep: string) => boolean;
+  setNeighborhoodByCep: (cep: string) => Promise<boolean>;
 }
 
 const NeighborhoodContext = createContext<NeighborhoodContextType>(null!);
@@ -115,33 +115,42 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const setNeighborhoodByCep = (cep: string): boolean => {
-    // Normaliza o CEP para busca
+  const setNeighborhoodByCep = async (cep: string): Promise<boolean> => {
     const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return false;
 
-    // Como Curitiba é CEP por rua, uma busca exata por "faixa" é complexa sem API externa.
-    // Para este MVP, vamos mapear alguns prefixos ou permitir que o usuário digite o CEP de exemplo.
-    // Uma abordagem melhor é usar os 5 primeiros dígitos para algumas regiões.
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const data = await response.json();
 
-    const found = curitibaNeighborhoods.find(n => n.cepExample.replace(/\D/g, '') === cleanCep);
+      if (data.erro) return false;
 
-    if (found) {
-      setCurrentNeighborhood(found);
-      localStorage.setItem('selected-neighborhood', found.name);
-      return true;
+      // Verifica se é de Curitiba
+      if (data.localidade !== 'Curitiba') {
+        alert('Este sistema é exclusivo para Curitiba.');
+        return false;
+      }
+
+      const neighborhoodName = data.bairro;
+
+      // Tenta encontrar o bairro na nossa lista oficial (ignorando acentos e case)
+      const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+      const found = curitibaNeighborhoods.find(n =>
+        normalize(n.name) === normalize(neighborhoodName)
+      );
+
+      if (found) {
+        setCurrentNeighborhood(found);
+        localStorage.setItem('selected-neighborhood', found.name);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      return false;
     }
-
-    // Fallback: Tenta encontrar pelo prefixo (primeiros 5 dígitos) se houver correspondência aproximada
-    const prefix = cleanCep.substring(0, 5);
-    const foundByPrefix = curitibaNeighborhoods.find(n => n.cepExample.replace(/\D/g, '').startsWith(prefix));
-
-    if (foundByPrefix) {
-      setCurrentNeighborhood(foundByPrefix);
-      localStorage.setItem('selected-neighborhood', foundByPrefix.name);
-      return true;
-    }
-
-    return false;
   };
 
   return (
