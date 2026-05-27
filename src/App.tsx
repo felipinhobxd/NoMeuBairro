@@ -2,6 +2,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
+import { NeighborhoodProvider } from './contexts/NeighborhoodContext';
 import { ToastProvider } from './components/UI';
 import Layout from './components/Layout';
 import { PanicButton, CookieConsent } from './components/Safety';
@@ -20,8 +21,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <DataProvider>
-          <ToastProvider>
+        <NeighborhoodProvider>
+          <DataProvider>
+            <ToastProvider>
             <HashRouter>
               <Layout>
                 <Routes>
@@ -40,8 +42,9 @@ export default function App() {
               <PanicButton />
               <CookieConsent />
             </HashRouter>
-          </ToastProvider>
-        </DataProvider>
+            </ToastProvider>
+          </DataProvider>
+        </NeighborhoodProvider>
       </AuthProvider>
     </ThemeProvider>
   );

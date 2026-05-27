@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2 } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
@@ -28,7 +28,7 @@ function fmtDate(d: string) {
 export default function Mural() {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
-  const { events, addEvent, deleteEvent, isMyEvent, toggleAttendance, getEventAttendees } = useData();
+  const { events, addEvent, deleteEvent, isMyEvent, toggleAttendance, getEventAttendees, fetchData, loading } = useData();
   const { toast } = useToast();
 
   const [activeType, setActiveType] = useState<EventType | 'all'>('all');
@@ -108,9 +108,22 @@ export default function Mural() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Mural da Comunidade</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Feiras, campanhas, eventos e avisos do bairro Vitória Régia</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Mural da Comunidade</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Feiras, campanhas, eventos e avisos do bairro Vitória Régia</p>
+        </div>
+        <button
+          onClick={() => {
+            fetchData();
+            toast('Atualizando mural...', 'info');
+          }}
+          disabled={loading}
+          className="mt-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
+          aria-label="Atualizar mural"
+        >
+          <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
+        </button>
       </div>
 
       <Card className="!p-3">

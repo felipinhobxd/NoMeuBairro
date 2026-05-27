@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  const register = useCallback(async (name: string, email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
+  const register = useCallback(async (name: string, email: string, password: string): Promise<{ ok: boolean; error?: string; pendingVerification?: boolean }> => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -74,10 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (error) return { ok: false, error: error.message };
+
+    // If confirmation email is enabled, session might be null
     if (data.user) {
-      await fetchProfile(data.user.id, email);
-      return { ok: true };
+      if (data.session) {
+        await fetchProfile(data.user.id, email);
+        return { ok: true };
+      }
+      return { ok: true, pendingVerification: true };
     }
+
     return { ok: false, error: 'Erro ao criar conta.' };
   }, [fetchProfile]);
 

@@ -15,18 +15,26 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setIsLoading(true);
     try {
       const result = mode === 'login'
         ? await login(email, password)
         : await register(name, email, password);
+
       if (result.ok) {
-        navigate('/perfil');
+        if (mode === 'register' && result.pendingVerification) {
+          setSuccess('Conta criada! Por favor, verifique seu e-mail para ativar sua conta.');
+          setMode('login');
+        } else {
+          navigate('/perfil');
+        }
       } else {
         setError(result.error ?? 'Erro desconhecido');
       }
@@ -118,6 +126,12 @@ export default function Login() {
 
             {error && (
               <div className="p-3 rounded-xl bg-red-50 dark:bg-red-500/10 text-sm text-red-600 dark:text-red-400">{error}</div>
+            )}
+
+            {success && (
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                {success}
+              </div>
             )}
 
             <button

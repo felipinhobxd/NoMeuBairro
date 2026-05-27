@@ -10,7 +10,7 @@ export function PanicButton() {
   return (
     <button
       onClick={executePanic}
-      className="fixed top-20 right-4 z-50 w-11 h-11 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg shadow-red-500/30 hover:shadow-red-500/50 flex items-center justify-center transition-all duration-200 active:scale-90 group"
+      className="fixed top-20 right-16 z-50 w-11 h-11 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg shadow-red-500/30 hover:shadow-red-500/50 flex items-center justify-center transition-all duration-200 active:scale-90 group"
       aria-label="Botão de saída rápida — pressione para sair imediatamente (ou pressione Esc duas vezes)"
       title="Saída rápida (Esc×2)"
     >

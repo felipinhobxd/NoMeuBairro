@@ -55,7 +55,7 @@ function LocationMarker({ position, setPosition, onSelect }: {
   );
 }
 
-export default function MapPicker({ onLocationSelect, initialLat, initialLng, address, className = "h-64 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700" }: MapPickerProps) {
+export default function MapPicker({ onLocationSelect, initialLat, initialLng, address, className = "h-64 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 z-0" }: MapPickerProps) {
   const [position, setPosition] = useState<[number, number] | null>(
     initialLat && initialLng ? [initialLat, initialLng] : null
   );

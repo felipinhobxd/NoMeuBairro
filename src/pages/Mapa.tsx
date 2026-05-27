@@ -2,6 +2,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useData } from '../contexts/DataContext';
+import { useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card, Badge } from '../components/UI';
 import { Map as MapIcon, Filter, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle } from 'lucide-react';
 import { useState, useMemo } from 'react';
@@ -64,6 +65,7 @@ function RecenterButton({ points }: { points: [number, number][] }) {
 
 export default function Mapa() {
   const { posts } = useData();
+  const { currentNeighborhood } = useNeighborhood();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
 
@@ -79,8 +81,8 @@ export default function Mapa() {
     filteredPosts.map(p => [Number(p.latitude), Number(p.longitude)] as [number, number]),
   [filteredPosts]);
 
-  // Centro inicial: Vitória Régia, Curitiba (aprox)
-  const defaultCenter: [number, number] = [-25.5415, -49.3375];
+  // Centro inicial dinâmico baseado no bairro selecionado
+  const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
 
   return (
     <div className="h-[calc(100vh-160px)] flex flex-col gap-4">

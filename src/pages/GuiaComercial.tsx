@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2, Star, MessageSquare } from 'lucide-react';
+import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2, Star, MessageSquare, RefreshCw } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer, timeAgo } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
@@ -39,7 +39,7 @@ const filterCats: { id: BusinessCategory | 'all'; label: string; emoji: string }
 export default function GuiaComercial() {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const { businesses, addBusiness, deleteBusiness, isMyBusiness, addBusinessRating, getBusinessRatings } = useData();
+  const { businesses, addBusiness, deleteBusiness, isMyBusiness, addBusinessRating, getBusinessRatings, fetchData, loading } = useData();
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
@@ -139,9 +139,22 @@ export default function GuiaComercial() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Guia Comercial</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Descubra negócios e serviços locais no Vitória Régia</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Guia Comercial</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Descubra negócios e serviços locais no Vitória Régia</p>
+        </div>
+        <button
+          onClick={() => {
+            fetchData();
+            toast('Atualizando guia...', 'info');
+          }}
+          disabled={loading}
+          className="mt-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
+          aria-label="Atualizar guia"
+        >
+          <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
+        </button>
       </div>
 
       <div className="relative">

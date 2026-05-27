@@ -12,6 +12,7 @@ interface DataContextType {
   unreadCount: number;
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;
+  fetchData: () => Promise<void>;
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
   addAnonymousPost: (data: { tipo: string; description: string; location: string; latitude?: number; longitude?: number }) => Promise<void>;
   addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
@@ -50,6 +51,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [processing, setProcessing] = useState<Set<string>>(new Set());
 
   const getMyAnonIds = useCallback((): Set<string> => {
@@ -68,6 +70,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [getMyAnonIds]);
 
   const fetchData = useCallback(async () => {
+    if (isFetching) return;
+    setIsFetching(true);
     try {
       // Busca básica que SEMPRE deve funcionar
       // Adicionamos 'post_supports(count)' para pegar o número REAL de apoios
@@ -190,11 +194,23 @@ export function DataProvider({ children }: { children: ReactNode }) {
       console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
+      setIsFetching(false);
     }
-  }, [user]);
+  }, [user, isFetching]);
 
   useEffect(() => {
     fetchData();
+
+    // ─── Visibility Change Listener ───
+    // Atualiza os dados quando o app volta para o primeiro plano (foreground)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('App visível, recarregando dados...');
+        fetchData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     console.log('Iniciando subscrição em tempo real...');
     const channel = supabase.channel('db-final-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload) => {
@@ -211,12 +227,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         console.log('NOVA NOTIFICAÇÃO RECEBIDA:', payload);
-        fetchData();
+        if (user && payload.new && payload.new.user_id === user.id) {
+           fetchData();
+        }
       })
       .subscribe((status) => {
         console.log('Status da subscrição:', status);
       });
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
   }, [fetchData]);
 
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
@@ -509,7 +530,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
   const contextValue = useMemo(() => ({
-    posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
+    posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading, fetchData,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
     isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus,

@@ -1,11 +1,12 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Geolocation } from '@capacitor/geolocation';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import {
   Plus, Filter, ChevronDown, Heart, MessageSquare,
   MapPin, ShieldAlert, AlertTriangle, Lightbulb, Zap,
-  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles,
+  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw,
 } from 'lucide-react';
 import {
   EmptyState, Card, Modal, Input, Textarea, Select, Button,
@@ -98,7 +99,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, onReport
 export default function Feed() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, reportContent } = useData();
+  const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, reportContent, fetchData, loading } = useData();
   const { toast } = useToast();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -182,57 +183,53 @@ export default function Feed() {
     });
   }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user]);
 
-  const toggleNearMe = useCallback(() => {
+  const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
-      if (!navigator.geolocation) {
-        toast('Geolocalização não é suportada pelo seu navegador.', 'error');
+      // Se já temos a localização, apenas ligamos o filtro
+      if (userLocation) {
+        setNearMe(true);
+        toast('Filtro de proximidade ativado.');
         return;
       }
 
       toast('Obtendo sua localização...', 'info');
 
-      // Desativamos HighAccuracy completamente na primeira tentativa para evitar timeout em PCs
-      const geoOptions = {
-        enableHighAccuracy: false,
-        timeout: 20000, // Aumentado para 20 segundos
-        maximumAge: 60000
-      };
+      try {
+        const permissions = await Geolocation.checkPermissions().catch(() => ({ location: 'prompt' }));
 
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          setUserLocation({ lat, lng });
+        if (permissions.location !== 'granted' && permissions.location !== 'limited') {
+          const request = await Geolocation.requestPermissions();
+          if (request.location !== 'granted' && request.location !== 'limited') {
+            toast('Permissão de localização negada.', 'error');
+            return;
+          }
+        }
+
+        const pos = await Geolocation.getCurrentPosition({
+          enableHighAccuracy: false,
+          timeout: 10000
+        });
+
+        if (pos.coords) {
+          setUserLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
           setNearMe(true);
           toast('Localização obtida com sucesso!');
-        },
-        (err) => {
-          console.error('Geolocation Error:', err);
-
-          // Tenta um fallback com cache infinito e tempo maior
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-              setNearMe(true);
-              toast('Localização obtida (Método alternativo).');
-            },
-            (err2) => {
-              console.error('Final Geolocation Error:', err2);
-              let msg = 'Não foi possível obter sua localização.';
-              if (err2.code === 1) msg = 'Permissão de localização negada.';
-              else if (err2.code === 3) msg = 'O navegador demorou muito para responder.';
-              toast(msg, 'error');
-            },
-            { enableHighAccuracy: false, timeout: 30000, maximumAge: Infinity }
-          );
-        },
-        geoOptions
-      );
+        }
+      } catch (err: any) {
+        console.error('Geolocation Error:', err);
+        let msg = 'Não foi possível obter sua localização.';
+        if (err.message?.includes('denied')) msg = 'Permissão de localização negada.';
+        toast(msg, 'error');
+        setNearMe(false);
+      }
     } else {
       setNearMe(false);
-      setUserLocation(null);
+      // Mantemos o userLocation no estado para não precisar pedir permissão/GPS de novo na próxima vez
     }
-  }, [nearMe, toast]);
+  }, [nearMe, userLocation, toast]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -316,9 +313,22 @@ export default function Feed() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatos Comunitários</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Registre e acompanhe problemas do bairro Vitória Régia</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatos Comunitários</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Registre e acompanhe problemas do bairro Vitória Régia</p>
+        </div>
+        <button
+          onClick={() => {
+            fetchData();
+            toast('Atualizando relatos...', 'info');
+          }}
+          disabled={loading}
+          className="mt-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50"
+          aria-label="Atualizar relatos"
+        >
+          <RefreshCw className={cn("w-5 h-5", loading && "animate-spin")} />
+        </button>
       </div>
 
       {/* Welcome (QOL) */}
