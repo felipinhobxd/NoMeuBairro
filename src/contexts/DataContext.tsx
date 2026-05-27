@@ -489,7 +489,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const getAllReports = useCallback(async () => {
-    if (user?.id !== 'fbc66053-d56c-46f7-a92e-ea40062a216c') return [];
+    if (user?.id !== '01524e31-9ada-4e1f-a3fc-bad691113e05') return [];
     const { data } = await supabase
       .from('content_reports')
       .select(`

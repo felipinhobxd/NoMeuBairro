@@ -33,7 +33,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, onReport
   comment: Comment; replies: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; onReport: (id: string) => void; currentUser: any; isPostOwner: boolean;
 }) {
   const isAuthor = currentUser?.id === comment.authorId;
-  const isAdmin = currentUser?.id === 'fbc66053-d56c-46f7-a92e-ea40062a216c';
+  const isAdmin = currentUser?.id === '01524e31-9ada-4e1f-a3fc-bad691113e05';
   const showDelete = isAuthor || isAdmin || isPostOwner;
 
   return (
