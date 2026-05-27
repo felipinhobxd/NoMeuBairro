@@ -130,21 +130,21 @@ export default function AdminPanel() {
 
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700 mb-4">
                     <p className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1.5">
-                      Conteúdo Denunciado:
+                      Conteúdo {report.status === 'pending' ? 'Denunciado' : 'Arquivado'}:
                     </p>
 
                     <div className="flex gap-3">
-                      {report.post?.image_url && (
+                      {(report.post?.image_url || report.archived_image_url) && (
                         <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-600 bg-white">
-                          <img src={report.post.image_url} alt="" className="w-full h-full object-cover" />
+                          <img src={report.post?.image_url || report.archived_image_url} alt="" className="w-full h-full object-cover" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-slate-700 dark:text-slate-300 italic font-medium leading-tight">
-                          {report.post?.title || "Comentário"}
+                          {report.post?.title || report.archived_title || (report.post_id ? "Postagem Apagada" : "Comentário")}
                         </p>
                         <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                          {report.post?.description || report.comment?.content}
+                          {report.post?.description || report.archived_description || report.comment?.content || "Conteúdo removido permanentemente."}
                         </p>
                       </div>
                     </div>

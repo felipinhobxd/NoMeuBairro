@@ -163,6 +163,12 @@ CREATE TABLE IF NOT EXISTS content_reports (
     comment_id      UUID REFERENCES comments(id) ON DELETE CASCADE,
     reason          TEXT NOT NULL,
     status          TEXT DEFAULT 'pending', -- 'pending', 'resolved', 'ignored'
+
+    -- Armazenamos os dados originais para histórico caso o post/comentário seja apagado
+    archived_title       TEXT,
+    archived_description TEXT,
+    archived_image_url   TEXT,
+
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -311,3 +317,32 @@ CREATE TRIGGER trg_count_comments AFTER INSERT OR DELETE ON comments FOR EACH RO
 
 DROP TRIGGER IF EXISTS trg_count_supports ON post_supports;
 CREATE TRIGGER trg_count_supports AFTER INSERT OR DELETE ON post_supports FOR EACH ROW EXECUTE FUNCTION sync_post_counts();
+
+-- ─── TRIGGER: Arquivar dados de denúncia antes de apagar o conteúdo ───
+CREATE OR REPLACE FUNCTION archive_report_content() RETURNS TRIGGER AS $$
+BEGIN
+    -- Se for um post, arquiva título, descrição e imagem
+    UPDATE content_reports
+    SET
+        archived_title = OLD.title,
+        archived_description = OLD.description,
+        archived_image_url = OLD.image_url
+    WHERE post_id = OLD.id;
+
+    RETURN OLD;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_archive_post_report ON posts;
+CREATE TRIGGER trg_archive_post_report BEFORE DELETE ON posts FOR EACH ROW EXECUTE FUNCTION archive_report_content();
+
+-- Para comentários
+CREATE OR REPLACE FUNCTION archive_comment_report() RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE content_reports
+    SET archived_description = OLD.content
+    WHERE comment_id = OLD.id;
+    RETURN OLD;
+END; $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_archive_comment_report ON comments;
+CREATE TRIGGER trg_archive_comment_report BEFORE DELETE ON comments FOR EACH ROW EXECUTE FUNCTION archive_comment_report();
