@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Geolocation } from '@capacitor/geolocation';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
+import { useNeighborhood } from '../contexts/NeighborhoodContext';
 import {
   Plus, Filter, ChevronDown, Heart, MessageSquare,
   MapPin, ShieldAlert, AlertTriangle, Lightbulb, Zap,
@@ -100,6 +101,7 @@ export default function Feed() {
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, reportContent, fetchData, loading } = useData();
+  const { currentNeighborhood, setNeighborhoodByCep } = useNeighborhood();
   const { toast } = useToast();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -353,15 +355,41 @@ export default function Feed() {
 
       {/* Search */}
       {posts.length > 0 && (
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input type="search" placeholder="Buscar relatos por título, descrição ou local..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" aria-label="Buscar relatos" />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Limpar busca">
-              <X className="w-4 h-4" />
-            </button>
-          )}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  const clean = searchQuery.replace(/\D/g, '');
+                  if (clean.length === 8) {
+                    toast('Buscando CEP...', 'info');
+                    const ok = await setNeighborhoodByCep(clean);
+                    if (ok) {
+                      toast('Bairro e rua localizados!');
+                      setSearchQuery('');
+                    } else {
+                      toast('CEP não encontrado em Curitiba.', 'error');
+                    }
+                  }
+                }
+              }}
+              className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+              aria-label="Buscar relatos ou mudar CEP"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Limpar busca">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-slate-400 px-1 italic">
+            Dica: Digite um CEP (ex: 81470430) e aperte Enter para focar no bairro e rua automaticamente.
+          </p>
         </div>
       )}
 

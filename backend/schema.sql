@@ -208,7 +208,8 @@ CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid
 -- POLÍTICAS: Comments
 DROP POLICY IF EXISTS "Comments are public" ON comments;
 CREATE POLICY "Comments are public" ON comments FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Anyone can comment" ON comments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Anyone can comment" ON comments;
+CREATE POLICY "Anyone can comment" ON comments FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Authors can delete own comments" ON comments;
 CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
 
@@ -239,8 +240,11 @@ DROP POLICY IF EXISTS "Anyone can report content" ON content_reports;
 CREATE POLICY "Anyone can report content" ON content_reports FOR INSERT WITH CHECK (true);
 
 -- Outras políticas (Shorthand para o restante)
+DROP POLICY IF EXISTS "Badges are public" ON badges;
 CREATE POLICY "Badges are public" ON badges FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Ratings are public" ON business_ratings;
 CREATE POLICY "Ratings are public" ON business_ratings FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Attendance is public" ON event_attendance;
 CREATE POLICY "Attendance is public" ON event_attendance FOR SELECT USING (true);
 
 -- 7. FUNÇÕES E TRIGGERS

@@ -204,13 +204,6 @@ export default function Layout({ children }: LayoutProps) {
                   <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro atual</span>
                   <span className="text-[13px] font-bold text-slate-700 dark:text-slate-200 leading-tight">{currentNeighborhood.name}</span>
                 </div>
-                <button
-                  onClick={() => setShowLocationSelector(!showLocationSelector)}
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-emerald-600 transition-colors"
-                  aria-label="Procurar outro bairro"
-                >
-                  <Search className="w-4 h-4" />
-                </button>
               </div>
             </div>
 
