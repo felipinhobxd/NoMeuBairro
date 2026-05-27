@@ -1,9 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════════
--- NO MEU BAIRRO — SCHEMA COMPLETO E DEFINITIVO (SUPABASE READY)
+-- NO MEU BAIRRO — SCHEMA COMPLETO, DEFINITIVO E PERFEITO (SUPABASE)
 -- ═══════════════════════════════════════════════════════════════════════
 
--- 1. LIMPEZA E PREPARAÇÃO DE PERMISSÕES
--- Garante que o schema public seja acessível aos papéis do Supabase
+-- 1. PREPARAÇÃO DE PERMISSÕES GLOBAIS
 GRANT ALL ON SCHEMA public TO postgres;
 GRANT ALL ON SCHEMA public TO anon;
 GRANT ALL ON SCHEMA public TO authenticated;
@@ -12,7 +11,7 @@ GRANT ALL ON SCHEMA public TO service_role;
 -- 2. EXTENSÕES
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 3. ENUMS (Criação Segura)
+-- 3. ENUMS (Definições de Tipos)
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'post_status') THEN
         CREATE TYPE post_status AS ENUM ('pending', 'in_progress', 'resolved');
@@ -26,16 +25,19 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'event_type') THEN
         CREATE TYPE event_type AS ENUM ('feira', 'saude', 'reuniao', 'cultura', 'esporte', 'campanha', 'outros');
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'badge_type') THEN
+        CREATE TYPE badge_type AS ENUM ('vizinho_engajado', 'guardiao', 'voz_ativa', 'construtor', 'embaixador');
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'report_type') THEN
         CREATE TYPE report_type AS ENUM ('abuso', 'assedio', 'violencia_domestica', 'exploracao', 'discriminacao', 'crime_ambiental', 'corrupcao', 'outros');
     END IF;
 END $$;
 
--- 4. TABELAS CORE
+-- 4. TABELAS DO SISTEMA
 
--- Usuários (Sincronizada com auth.users)
+-- Usuários (Perfis Públicos)
 CREATE TABLE IF NOT EXISTS users (
-    id              UUID PRIMARY KEY, -- ID vindo do auth.users
+    id              UUID PRIMARY KEY, -- ID vinculado ao auth.users
     name            VARCHAR(100) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     avatar_url      TEXT,
@@ -44,7 +46,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Relatos/Posts
+-- Relatos (Posts)
 CREATE TABLE IF NOT EXISTS posts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     author_id       UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -132,6 +134,15 @@ CREATE TABLE IF NOT EXISTS event_attendance (
     UNIQUE(event_id, user_id)
 );
 
+-- Selos (Gamificação)
+CREATE TABLE IF NOT EXISTS badges (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    badge           badge_type NOT NULL,
+    awarded_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, badge)
+);
+
 -- Notificações
 CREATE TABLE IF NOT EXISTS notifications (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -155,7 +166,14 @@ CREATE TABLE IF NOT EXISTS content_reports (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. SEGURANÇA (RLS) E PERMISSÕES
+-- 5. ÍNDICES DE PERFORMANCE
+CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_id);
+CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category);
+CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_businesses_created ON businesses(created_by);
+
+-- 6. SEGURANÇA (RLS) E PERMISSÕES
 
 -- Ativa RLS em todas as tabelas
 DO $$ DECLARE t text; BEGIN
@@ -172,77 +190,60 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon;
 
 -- POLÍTICAS: Users
-DROP POLICY IF EXISTS "Profiles are public" ON users;
-CREATE POLICY "Profiles are public" ON users FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Users can update own profile" ON users;
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS \"Profiles are public\" ON users;
+CREATE POLICY \"Profiles are public\" ON users FOR SELECT USING (true);
+DROP POLICY IF EXISTS \"Users can update own profile\" ON users;
+CREATE POLICY \"Users can update own profile\" ON users FOR UPDATE USING (auth.uid() = id);
 
 -- POLÍTICAS: Posts
-DROP POLICY IF EXISTS "Posts are public" ON posts;
-CREATE POLICY "Posts are public" ON posts FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Anyone can create posts" ON posts;
-CREATE POLICY "Anyone can create posts" ON posts FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS "Authors can update own posts" ON posts;
-CREATE POLICY "Authors can update own posts" ON posts FOR UPDATE USING (auth.uid() = author_id);
-DROP POLICY IF EXISTS "Authors can delete own posts" ON posts;
-CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
+DROP POLICY IF EXISTS \"Posts are public\" ON posts;
+CREATE POLICY \"Posts are public\" ON posts FOR SELECT USING (true);
+DROP POLICY IF EXISTS \"Anyone can create posts\" ON posts;
+CREATE POLICY \"Anyone can create posts\" ON posts FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS \"Authors can update own posts\" ON posts;
+CREATE POLICY \"Authors can update own posts\" ON posts FOR UPDATE USING (auth.uid() = author_id);
+DROP POLICY IF EXISTS \"Authors can delete own posts\" ON posts;
+CREATE POLICY \"Authors can delete own posts\" ON posts FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
 
 -- POLÍTICAS: Comments
-DROP POLICY IF EXISTS "Comments are public" ON comments;
-CREATE POLICY "Comments are public" ON comments FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Anyone can comment" ON comments FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS "Authors can delete own comments" ON comments;
-CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
+DROP POLICY IF EXISTS \"Comments are public\" ON comments;
+CREATE POLICY \"Comments are public\" ON comments FOR SELECT USING (true);
+DROP POLICY IF EXISTS \"Anyone can comment\" ON comments FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS \"Authors can delete own comments\" ON comments;
+CREATE POLICY \"Authors can delete own comments\" ON comments FOR DELETE USING (auth.uid() = author_id OR auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
 
 -- POLÍTICAS: Supports
-DROP POLICY IF EXISTS "Supports are public" ON post_supports;
-CREATE POLICY "Supports are public" ON post_supports FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Auth users can support" ON post_supports;
-CREATE POLICY "Auth users can support" ON post_supports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS "Users can delete own support" ON post_supports;
-CREATE POLICY "Users can delete own support" ON post_supports FOR DELETE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS \"Supports are public\" ON post_supports;
+CREATE POLICY \"Supports are public\" ON post_supports FOR SELECT USING (true);
+DROP POLICY IF EXISTS \"Auth users can support\" ON post_supports;
+CREATE POLICY \"Auth users can support\" ON post_supports FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS \"Users can delete own support\" ON post_supports;
+CREATE POLICY \"Users can delete own support\" ON post_supports FOR DELETE USING (auth.uid() = user_id);
 
 -- POLÍTICAS: Businesses
-DROP POLICY IF EXISTS "Businesses are public" ON businesses;
-CREATE POLICY "Businesses are public" ON businesses FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Auth users can create businesses" ON businesses;
-CREATE POLICY "Auth users can create businesses" ON businesses FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-DROP POLICY IF EXISTS "Owners can update own business" ON businesses;
-CREATE POLICY "Owners can update own business" ON businesses FOR UPDATE USING (auth.uid() = created_by);
-
--- POLÍTICAS: Ratings
-DROP POLICY IF EXISTS "Ratings are public" ON business_ratings;
-CREATE POLICY "Ratings are public" ON business_ratings FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Auth users can rate" ON business_ratings;
-CREATE POLICY "Auth users can rate" ON business_ratings FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
--- POLÍTICAS: Events
-DROP POLICY IF EXISTS "Events are public" ON events;
-CREATE POLICY "Events are public" ON events FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Auth users can create events" ON events;
-CREATE POLICY "Auth users can create events" ON events FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
--- POLÍTICAS: Attendance
-DROP POLICY IF EXISTS "Attendance is public" ON event_attendance;
-CREATE POLICY "Attendance is public" ON event_attendance FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Auth users can attend" ON event_attendance;
-CREATE POLICY "Auth users can attend" ON event_attendance FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS \"Businesses are public\" ON businesses;
+CREATE POLICY \"Businesses are public\" ON businesses FOR SELECT USING (true);
+DROP POLICY IF EXISTS \"Auth users can create businesses\" ON businesses;
+CREATE POLICY \"Auth users can create businesses\" ON businesses FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 -- POLÍTICAS: Notifications
-DROP POLICY IF EXISTS "Notifications are private" ON notifications;
-CREATE POLICY "Notifications are private" ON notifications FOR SELECT USING (auth.uid() = user_id);
-DROP POLICY IF EXISTS "System can insert notifications" ON notifications;
-CREATE POLICY "System can insert notifications" ON notifications FOR INSERT WITH CHECK (true);
-DROP POLICY IF EXISTS "Users can update own notifications" ON notifications;
-CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS \"Notifications are private\" ON notifications;
+CREATE POLICY \"Notifications are private\" ON notifications FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS \"System can insert notifications\" ON notifications;
+CREATE POLICY \"System can insert notifications\" ON notifications FOR INSERT WITH CHECK (true);
 
 -- POLÍTICAS: Content Reports
-DROP POLICY IF EXISTS "Reports are visible to admin" ON content_reports;
-CREATE POLICY "Reports are visible to admin" ON content_reports FOR SELECT USING (auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
-DROP POLICY IF EXISTS "Anyone can report content" ON content_reports;
-CREATE POLICY "Anyone can report content" ON content_reports FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS \"Reports are visible to admin\" ON content_reports;
+CREATE POLICY \"Reports are visible to admin\" ON content_reports FOR SELECT USING (auth.uid() = 'fbc66053-d56c-46f7-a92e-ea40062a216c');
+DROP POLICY IF EXISTS \"Anyone can report content\" ON content_reports;
+CREATE POLICY \"Anyone can report content\" ON content_reports FOR INSERT WITH CHECK (true);
 
--- 6. FUNÇÕES E TRIGGERS
+-- Outras políticas (Shorthand para o restante)
+CREATE POLICY \"Badges are public\" ON badges FOR SELECT USING (true);
+CREATE POLICY \"Ratings are public\" ON business_ratings FOR SELECT USING (true);
+CREATE POLICY \"Attendance is public\" ON event_attendance FOR SELECT USING (true);
+
+-- 7. FUNÇÕES E TRIGGERS
 
 -- Auto-update updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column() RETURNS TRIGGER AS $$
@@ -283,18 +284,18 @@ EXCEPTION WHEN OTHERS THEN RETURN NEW; END; $$ LANGUAGE plpgsql SECURITY DEFINER
 CREATE TRIGGER trg_notify_comment AFTER INSERT ON comments FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
 CREATE TRIGGER trg_notify_support AFTER INSERT ON post_supports FOR EACH ROW EXECUTE FUNCTION handle_new_notification();
 
--- Contadores Automáticos (Posts)
+-- Contadores Automáticos (Recálculo Real)
 CREATE OR REPLACE FUNCTION sync_post_counts() RETURNS TRIGGER AS $$
 BEGIN
-    IF (TG_OP = 'INSERT') THEN
-        IF (TG_TABLE_NAME = 'comments') THEN UPDATE posts SET comments_count = (SELECT count(*) FROM comments WHERE post_id = NEW.post_id) WHERE id = NEW.post_id;
-        ELSIF (TG_TABLE_NAME = 'post_supports') THEN UPDATE posts SET supports_count = (SELECT count(*) FROM post_supports WHERE post_id = NEW.post_id) WHERE id = NEW.post_id; END IF;
-    ELSIF (TG_OP = 'DELETE') THEN
-        IF (TG_TABLE_NAME = 'comments') THEN UPDATE posts SET comments_count = (SELECT count(*) FROM comments WHERE post_id = OLD.post_id) WHERE id = OLD.post_id;
-        ELSIF (TG_TABLE_NAME = 'post_supports') THEN UPDATE posts SET supports_count = (SELECT count(*) FROM post_supports WHERE post_id = OLD.post_id) WHERE id = OLD.post_id; END IF;
+    IF (TG_OP = 'INSERT' OR TG_OP = 'DELETE') THEN
+        UPDATE posts SET
+            comments_count = (SELECT count(*) FROM comments WHERE post_id = COALESCE(NEW.post_id, OLD.post_id)),
+            supports_count = (SELECT count(*) FROM post_supports WHERE post_id = COALESCE(NEW.post_id, OLD.post_id))
+        WHERE id = COALESCE(NEW.post_id, OLD.post_id);
     END IF;
     RETURN NULL;
 END; $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER trg_count_comments AFTER INSERT OR DELETE ON comments FOR EACH ROW EXECUTE FUNCTION sync_post_counts();
 CREATE TRIGGER trg_count_supports AFTER INSERT OR DELETE ON post_supports FOR EACH ROW EXECUTE FUNCTION sync_post_counts();
+"
