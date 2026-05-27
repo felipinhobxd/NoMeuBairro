@@ -196,7 +196,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       setIsFetching(false);
     }
-  }, [user, isFetching]);
+  }, [user]); // Removido isFetching daqui para evitar loop infinito
 
   useEffect(() => {
     fetchData();
