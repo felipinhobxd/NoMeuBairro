@@ -374,7 +374,12 @@ export default function Feed() {
                     if (ok) {
                       toast('Bairro e rua localizados!');
 
-                      // Forçar atualização do filtro de proximidade para o novo local
+                      // Sincronizar o filtro de localização com as coordenadas do novo bairro/CEP
+                      const target = curitibaNeighborhoods.find(n => n.name === (localStorage.getItem('selected-neighborhood') || 'Vitoria Regia'));
+                      if (target) {
+                        setUserLocation({ lat: target.latitude, lng: target.longitude });
+                      }
+
                       setNearMe(true);
                       setSearchQuery('');
                     } else {

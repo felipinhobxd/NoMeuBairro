@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Eye, Lock, AlertCircle, Send, CheckCircle2, Info, ArrowRight, MapPin } from 'lucide-react';
-import { Card, Textarea, Select, Button, Input } from '../components/UI';
+import { ShieldAlert, Eye, Lock, AlertCircle, Send, CheckCircle2, Info, ArrowRight, MapPin, Camera } from 'lucide-react';
+import { Card, Textarea, Select, Button, Input, ImageUpload } from '../components/UI';
 import { EmergencyContacts } from '../components/Safety';
 import MapPicker from '../components/MapPicker';
 import { useData } from '../contexts/DataContext';
@@ -29,21 +29,36 @@ export default function Denuncias() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
+  const [fi, setFi] = useState('');
+
+  const handleCepSearch = async (cep: string) => {
+    const clean = cep.replace(/\D/g, '');
+    if (clean.length === 8) {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          setLocalizacao(`${data.logradouro}, ${data.bairro} - Curitiba/PR`);
+        }
+      } catch {}
+    }
+  };
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       if (!tipo || !descricao.trim()) return;
       setIsSubmitting(true);
-      // Simulates E2EE encryption + API call with rate limiting
-      await new Promise((r) => setTimeout(r, 1200));
-      addAnonymousPost({
+
+      await addAnonymousPost({
         tipo,
         description: descricao,
         location: localizacao,
+        imageUrl: fi || undefined,
         latitude: fLat,
         longitude: fLng
       });
+
       setIsSubmitting(false);
       setSubmitted(true);
       setTipo('');
@@ -119,12 +134,27 @@ export default function Denuncias() {
                 value={descricao} onChange={e => setDescricao(e.target.value)} rows={6} required />
 
               <div className="space-y-4">
-                <Input
-                  label="Localização do ocorrido"
-                  placeholder="Ex: Rua das Flores, 123 - Próximo ao mercado"
-                  value={localizacao}
-                  onChange={e => setLocalizacao(e.target.value)}
-                />
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Anexar imagem (Opcional)
+                </label>
+                <ImageUpload value={fi} onChange={setFi} />
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Localização (Rua/Bairro)"
+                    placeholder="Ex: Rua das Flores, 123"
+                    value={localizacao}
+                    onChange={e => setLocalizacao(e.target.value)}
+                  />
+                  <Input
+                    label="Buscar por CEP"
+                    placeholder="Ex: 81460296"
+                    maxLength={8}
+                    onChange={e => handleCepSearch(e.target.value)}
+                  />
+                </div>
                 <MapPicker
                   onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }}
                   address={localizacao}

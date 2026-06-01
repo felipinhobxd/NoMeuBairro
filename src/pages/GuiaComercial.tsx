@@ -62,6 +62,8 @@ export default function GuiaComercial() {
   const [fwa, setFwa] = useState(''); const [fad, setFad] = useState('');
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
+  const [fOpen, setFOpen] = useState('');
+  const [fClose, setFClose] = useState('');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [expandedBiz, setExpandedBiz] = useState<Set<string>>(new Set());
 
@@ -96,10 +98,13 @@ export default function GuiaComercial() {
       phone: fph || undefined,
       whatsapp: fwa || undefined,
       address: fad || undefined,
+      openTime: fOpen || undefined,
+      closeTime: fClose || undefined,
       latitude: fLat,
       longitude: fLng
     });
     setShowCreate(false); setFn(''); setFc('servicos'); setFd(''); setFph(''); setFwa(''); setFad('');
+    setFOpen(''); setFClose('');
     setFLat(undefined); setFLng(undefined);
     toast('Negócio cadastrado com sucesso!');
   };
@@ -191,12 +196,41 @@ export default function GuiaComercial() {
             const isExpanded = expandedBiz.has(b.id);
             const shouldShowReadMore = b.description.length > 120;
 
+            const isOpen = () => {
+              if (!b.open_time || !b.close_time) return null;
+              const now = new Date();
+              const currentTime = now.getHours() * 60 + now.getMinutes();
+              const [hOpen, mOpen] = b.open_time.split(':').map(Number);
+              const [hClose, mClose] = b.close_time.split(':').map(Number);
+              const openTotal = hOpen * 60 + mOpen;
+              const closeTotal = hClose * 60 + mClose;
+
+              if (closeTotal > openTotal) {
+                return currentTime >= openTotal && currentTime < closeTotal;
+              } else {
+                // Caso feche após meia-noite
+                return currentTime >= openTotal || currentTime < closeTotal;
+              }
+            };
+
+            const openStatus = isOpen();
+
             return (
               <Card key={b.id} id={`biz-${b.id}`} className="animate-card-enter">
                 <div className="flex items-start gap-3">
                   <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 text-xl">{cat.emoji}</div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.name}</h3>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">{b.name}</h3>
+                      {openStatus !== null && (
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider",
+                          openStatus ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                        )}>
+                          {openStatus ? "Aberto" : "Fechado"}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">{cat.label}</span>
                       <span className="text-slate-300 dark:text-slate-700">•</span>
@@ -287,6 +321,10 @@ export default function GuiaComercial() {
           <Input label="Nome do negócio" placeholder="Ex: Padaria do Seu João" value={fn} onChange={e => setFn(e.target.value)} required />
           <Select label="Categoria" options={bizCatOpts} value={fc} onChange={e => setFc(e.target.value as BusinessCategory)} required />
           <Textarea label="Descrição" placeholder="Descreva os serviços oferecidos..." value={fd} onChange={e => setFd(e.target.value)} required />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Horário Abertura" type="time" value={fOpen} onChange={e => setFOpen(e.target.value)} />
+            <Input label="Horário Fechamento" type="time" value={fClose} onChange={e => setFClose(e.target.value)} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input label="Telefone" placeholder="(41) 99999-9999" value={fph} onChange={e => setFph(e.target.value)} />
             <Input label="WhatsApp" placeholder="(41) 99999-9999" value={fwa} onChange={e => setFwa(e.target.value)} />

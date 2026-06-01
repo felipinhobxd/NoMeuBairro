@@ -49,10 +49,12 @@ export default function AdminPanel() {
         await updateReportStatus(report.id, 'resolved');
       } else {
         await updateReportStatus(report.id, 'ignored');
-        toast('Denúncia ignorada.');
+        toast('Denúncia ignorada e movida para o histórico.');
       }
-      loadReports();
+      // Forçamos a atualização da lista após a ação
+      setTimeout(() => loadReports(), 500);
     } catch (error) {
+      console.error('Erro na moderação:', error);
       toast('Erro ao processar ação.', 'error');
     }
   };

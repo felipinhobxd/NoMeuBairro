@@ -96,6 +96,8 @@ CREATE TABLE IF NOT EXISTS businesses (
     latitude        DECIMAL(10, 8),
     longitude       DECIMAL(11, 8),
     image_url       TEXT,
+    open_time       TIME, -- Horário de abertura
+    close_time      TIME, -- Horário de fechamento
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -168,6 +170,8 @@ CREATE TABLE IF NOT EXISTS content_reports (
     archived_title       TEXT,
     archived_description TEXT,
     archived_image_url   TEXT,
+    archived_at          TIMESTAMPTZ, -- Quando foi arquivado (moderado)
+    archived_by          UUID, -- Quem moderou
 
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
@@ -244,6 +248,8 @@ DROP POLICY IF EXISTS "Reports are visible to admin" ON content_reports;
 CREATE POLICY "Reports are visible to admin" ON content_reports FOR SELECT USING (auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217');
 DROP POLICY IF EXISTS "Anyone can report content" ON content_reports;
 CREATE POLICY "Anyone can report content" ON content_reports FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Admins can update reports" ON content_reports;
+CREATE POLICY "Admins can update reports" ON content_reports FOR UPDATE USING (auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217');
 
 -- Outras políticas (Shorthand para o restante)
 DROP POLICY IF EXISTS "Badges are public" ON badges;
@@ -326,7 +332,8 @@ BEGIN
     SET
         archived_title = OLD.title,
         archived_description = OLD.description,
-        archived_image_url = OLD.image_url
+        archived_image_url = OLD.image_url,
+        archived_at = NOW()
     WHERE post_id = OLD.id;
 
     RETURN OLD;
@@ -339,7 +346,9 @@ CREATE TRIGGER trg_archive_post_report BEFORE DELETE ON posts FOR EACH ROW EXECU
 CREATE OR REPLACE FUNCTION archive_comment_report() RETURNS TRIGGER AS $$
 BEGIN
     UPDATE content_reports
-    SET archived_description = OLD.content
+    SET
+        archived_description = OLD.content,
+        archived_at = NOW()
     WHERE comment_id = OLD.id;
     RETURN OLD;
 END; $$ LANGUAGE plpgsql SECURITY DEFINER;

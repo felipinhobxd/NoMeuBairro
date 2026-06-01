@@ -14,8 +14,8 @@ interface DataContextType {
   loading: boolean;
   fetchData: () => Promise<void>;
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
-  addAnonymousPost: (data: { tipo: string; description: string; location: string; latitude?: number; longitude?: number }) => Promise<void>;
-  addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
+  addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
+  addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => Promise<void>;
   addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<void>;
   supportPost: (postId: string) => Promise<void>;
   addComment: (postId: string, content: string, parentId?: string) => Promise<void>;
@@ -255,13 +255,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, [user]);
 
-  const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; latitude?: number; longitude?: number }) => {
+  const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     // 100% Anônimo: author_id nulo e is_anonymous verdadeiro.
     const { data: postData, error: postErr } = await supabase.from('posts').insert({
       author_id: null,
       category: 'seguranca',
       title: `Denúncia: ${data.tipo}`,
       description: data.description,
+      image_url: data.imageUrl,
       location: data.location || 'Local Privado',
       latitude: data.latitude,
       longitude: data.longitude,
@@ -279,7 +280,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [addMyAnonId, fetchData]);
 
-  const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
+  const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => {
     if (!user) return;
     await supabase.from('businesses').insert({
       name: data.name,
@@ -289,6 +290,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       whatsapp: data.whatsapp,
       address: data.address,
       image_url: data.imageUrl,
+      open_time: data.openTime,
+      close_time: data.closeTime,
       latitude: data.latitude,
       longitude: data.longitude,
       created_by: user.id
