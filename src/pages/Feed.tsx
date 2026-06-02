@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -133,6 +133,13 @@ export default function Feed() {
   const [fd, setFd] = useState('');
   const [fi, setFi] = useState('');
 
+  // Sincroniza a localização virtual sempre que o bairro mudar (troca no Header ou Landing)
+  useEffect(() => {
+    if (currentNeighborhood) {
+      setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+    }
+  }, [currentNeighborhood]);
+
   const toggleDescription = useCallback((postId: string) => {
     setExpandedDescriptions(prev => {
       const next = new Set(prev);
@@ -164,7 +171,7 @@ export default function Feed() {
   // ─── Memoized filtering ─────────────────────────────
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const normalize = (s: string) => (s || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const currentNBName = normalize(currentNeighborhood.name);
 
     return posts.filter(p => {
@@ -177,44 +184,37 @@ export default function Feed() {
       if (onlyMine && !user) return false;
 
       // 3. LOGICA DE LOCALIZAÇÃO (Busca Têxtil ou Bairro Atual)
-      // Se tiver busca de texto (incluindo CEP digitado), prioriza a busca global.
+      // Se tiver busca de texto (incluindo CEP digitado), prioriza a busca global (vê Curitiba inteira).
       if (q) {
-        return p.title.toLowerCase().includes(q) ||
-               p.description.toLowerCase().includes(q) ||
-               p.location.toLowerCase().includes(q) ||
-               p.authorName.toLowerCase().includes(q);
+        return normalize(p.title).includes(q) ||
+               normalize(p.description).includes(q) ||
+               normalize(p.location).includes(q) ||
+               normalize(p.authorName).includes(q);
       }
 
-      // Se NÃO tiver busca de texto, filtra pelo bairro atual ou distância.
-      if (nearMe && p.latitude && p.longitude) {
-        const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+      // Se NÃO tiver busca de texto, filtra estritamente pelo bairro atual ou distância.
+      // Prioridade 1: Geográfica (Raio de 5km do centro do bairro)
+      const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+      if (p.latitude && p.longitude) {
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
-        // Raio de 5km para abranger bem o bairro e arredores
-        if (dist > 5) return false;
-      } else if (!nearMe) {
-        // Fallback por nome do bairro na string de localização (Busca inclusiva)
-        const postLoc = normalize(p.location || '');
-        if (!postLoc.includes(currentNBName)) return false;
+        if (dist <= 5) return true;
       }
 
-      return true;
+      // Prioridade 2: Nome do bairro (Busca inclusiva na string de localização)
+      const postLoc = normalize(p.location);
+      if (postLoc.includes(currentNBName)) return true;
+
+      // Se não bateu nem o GPS nem o Nome, esconde (Isolamento de Bairro)
+      return false;
     });
   }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user, currentNeighborhood]);
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
-      // Se já temos uma localização (via busca de CEP), apenas ativa o filtro
-      if (userLocation) {
-        setNearMe(true);
-        toast('Filtro de proximidade ativado.');
-        return;
-      }
-
-      toast('Obtendo sua localização...', 'info');
+      toast('Obtendo sua localização GPS...', 'info');
 
       if (!navigator.geolocation) {
-        toast('Navegador sem suporte a GPS. Usando localização aproximada do bairro.', 'warning');
-        setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+        toast('Navegador sem suporte a GPS. Usando localização do bairro.', 'warning');
         setNearMe(true);
         return;
       }
@@ -230,20 +230,21 @@ export default function Feed() {
         },
         (err) => {
           console.error('Geolocation Error:', err);
-          toast('GPS falhou. Usando localização aproximada do bairro.', 'warning');
-          setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+          toast('GPS falhou. Usando localização do bairro.', 'warning');
           setNearMe(true);
         },
         {
           enableHighAccuracy: false,
-          timeout: 15000,           // Aumentado para 15 segundos
+          timeout: 10000,
           maximumAge: 60000
         }
       );
     } else {
       setNearMe(false);
+      // Reseta para a localização do bairro quando desativa o "Perto de mim"
+      setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
     }
-  }, [nearMe, userLocation, toast, currentNeighborhood]);
+  }, [nearMe, currentNeighborhood, toast]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -344,7 +345,9 @@ export default function Feed() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatos Comunitários</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Registre e acompanhe problemas do bairro Vitória Régia</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Bairro atual: <strong className="text-emerald-600 dark:text-emerald-400">{currentNeighborhood.name}</strong>
+          </p>
         </div>
         <button
           onClick={() => {
@@ -368,7 +371,7 @@ export default function Feed() {
             <div className="flex-1 min-w-0">
               <h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-300">Olá, {user.name.split(' ')[0]}! Bem-vindo ao bairro.</h3>
               <p className="text-xs text-emerald-700/70 dark:text-emerald-400/60 mt-1 leading-relaxed">
-                Este é o espaço onde moradores se unem para melhorar o Vitória Régia. Crie seu primeiro relato e ajude a comunidade! 🌿
+                Este é o espaço onde moradores se unem para melhorar o bairro {currentNeighborhood.name}. Crie seu primeiro relato! 🌿
               </p>
               <Button size="sm" className="mt-3" onClick={() => setShowCreate(true)}>
                 <Sparkles className="w-3.5 h-3.5" /> Criar meu primeiro relato
@@ -383,7 +386,7 @@ export default function Feed() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
+            placeholder="Buscar por título ou digite um CEP para trocar de bairro..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={async (e) => {
@@ -399,21 +402,11 @@ export default function Feed() {
                     if (!data.erro) {
                       const ok = await setNeighborhoodByCep(clean);
                       if (ok) {
-                        toast('Bairro localizado!');
-
-                        // CORREÇÃO: Sincroniza as coordenadas para o filtro Perto de Mim
-                        const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-                        const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
-
-                        if (target) {
-                          setUserLocation({ lat: target.latitude, lng: target.longitude });
-                          setNearMe(true);
-                        }
-
+                        toast('Bairro localizado: ' + data.bairro);
                         setSearchQuery('');
                       }
                     } else {
-                      toast('CEP não encontrado ou fora de Curitiba.', 'error');
+                      toast('CEP não encontrado.', 'error');
                     }
                   } catch (error) {
                     toast('Erro ao buscar CEP.', 'error');
@@ -435,9 +428,6 @@ export default function Feed() {
             </button>
           )}
         </div>
-        <p className="text-[10px] text-slate-400 px-1 italic">
-          Dica: Digite um CEP (ex: 81470430) e aperte Enter para focar no bairro e rua automaticamente.
-        </p>
       </div>
 
       <Card className="!p-3">
@@ -501,8 +491,8 @@ export default function Feed() {
       {/* Content */}
       {filtered.length === 0 ? (
         <EmptyState icon={MessageSquare}
-          title={searchQuery ? 'Nenhum resultado encontrado' : onlyMine ? 'Você ainda não criou relatos' : 'Nenhum relato por enquanto'}
-          description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : onlyMine ? 'Clique no botão verde para criar seu primeiro relato no bairro.' : 'Seja o primeiro a registrar um problema. Sua voz importa!'}
+          title={searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum relato por enquanto'}
+          description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : `Seja o primeiro a registrar um problema no bairro ${currentNeighborhood.name}!`}
           action={searchQuery ? { label: 'Limpar busca', onClick: () => setSearchQuery('') }
             : isAuthenticated ? { label: 'Criar relato', onClick: () => setShowCreate(true) }
             : { label: 'Entrar para participar', onClick: () => navigate('/login') }} />
@@ -749,7 +739,7 @@ export default function Feed() {
             label="Categoria da Denúncia"
             options={[
               { value: '', label: 'Selecione uma categoria...' },
-              { value: 'Conteúdo ofensivo ou hódio', label: 'Conteúdo ofensivo ou hódio' },
+              { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' },
               { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' },
               { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' },
               { value: 'Conteúdo inadequado ou ilegal', label: 'Conteúdo inadequado ou ilegal' },
