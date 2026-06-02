@@ -171,10 +171,10 @@ export default function Feed() {
       if (onlyMine && !user) return false;
 
       if (nearMe && p.latitude && p.longitude) {
-        // CORREÇÃO: Aumentado para 10km para o CIC e sincronia CEP
+        // CORREÇÃO: Aumentado para 15km para o CIC e sincronia CEP
         const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
-        if (dist > 10) return false;
+        if (dist > 15) return false;
       } else if (nearMe && !p.latitude) {
         return false;
       }
@@ -186,16 +186,12 @@ export default function Feed() {
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
-      if (userLocation) {
-        setNearMe(true);
-        toast('Filtro de proximidade ativado.');
-        return;
-      }
-
       toast('Obtendo sua localização...', 'info');
 
       if (!navigator.geolocation) {
-        toast('Seu navegador não suporta geolocalização.', 'error');
+        toast('Navegador sem suporte a GPS. Usando localização aproximada do bairro.', 'warning');
+        setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+        setNearMe(true);
         return;
       }
 
@@ -206,22 +202,24 @@ export default function Feed() {
             lng: pos.coords.longitude
           });
           setNearMe(true);
-          toast('Localização obtida com sucesso!');
+          toast('Localização GPS obtida!');
         },
         (err) => {
           console.error('Geolocation Error:', err);
-          toast('Erro na localização. Tente novamente em alguns segundos.', 'error');
+          toast('GPS falhou. Usando localização aproximada do bairro.', 'warning');
+          setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+          setNearMe(true);
         },
         {
           enableHighAccuracy: false,
-          timeout: 15000,
+          timeout: 10000,
           maximumAge: 60000
         }
       );
     } else {
       setNearMe(false);
     }
-  }, [nearMe, userLocation, toast]);
+  }, [nearMe, userLocation, toast, currentNeighborhood]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -368,30 +366,32 @@ export default function Feed() {
               if (e.key === 'Enter') {
                 const clean = searchQuery.replace(/\D/g, '');
                 if (clean.length === 8) {
-                  // CORREÇÃO CRÍTICA: Limpa a busca de texto ANTES de tudo
+                  // CORREÇÃO CRÍTICA: Limpa a busca de texto IMEDIATAMENTE
+                  const cepValue = clean;
                   setSearchQuery('');
                   toast('Buscando CEP...', 'info');
 
                   try {
-                    const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+                    const res = await fetch(`https://viacep.com.br/ws/${cepValue}/json/`);
                     const data = await res.json();
 
                     if (!data.erro) {
-                      const ok = await setNeighborhoodByCep(clean);
+                      const ok = await setNeighborhoodByCep(cepValue);
                       if (ok) {
                         toast('Bairro localizado: ' + data.bairro);
 
-                        // Sincroniza as coordenadas
+                        // Sincroniza as coordenadas para o filtro Geográfico
                         const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
                         const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
 
                         if (target) {
+                          // Define o novo local central para o filtro de proximidade
                           setUserLocation({ lat: target.latitude, lng: target.longitude });
                           setNearMe(true);
                         }
                       }
                     } else {
-                      toast('CEP não encontrado em Curitiba.', 'error');
+                      toast('CEP não encontrado ou fora de Curitiba.', 'error');
                     }
                   } catch (error) {
                     toast('Erro ao buscar CEP.', 'error');

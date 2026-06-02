@@ -1,215 +1,257 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
-import { Card, useToast } from '../components/UI';
 import {
-  ShieldCheck, Trash2, CheckCircle,
-  XCircle, Clock, MessageSquare, FileText, User
+  Shield, Users, AlertTriangle, CheckCircle2, XCircle, Trash2,
+  Eye, Filter, Search, ChevronRight, MessageSquare, BarChart3, Clock,
+  ArrowUpRight, AlertCircle, History, RefreshCw, Undo, Archive
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { timeAgo } from '../components/UI';
+import { Card, Button, StatusBadge, timeAgo, useToast, Modal, Select, Textarea } from '../components/UI';
 import { cn } from '../utils/cn';
 
 export default function AdminPanel() {
   const { user } = useAuth();
-  const { getAllReports, updateReportStatus, deletePost, deleteComment } = useData();
+  const { reports, posts, updatePostStatus, deletePost, commentsByPost, deleteComment, fetchData, loading, archive, ignoreReport } = useData();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const [reports, setReports] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'pending' | 'all'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'stats'>('pending');
+  const [searchTerm, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [selectedReport, setSelectedReport] = useState<any>(null);
 
-  const isAdmin = user?.id === '9c90d435-bfe2-4936-98d1-2c6c1160db4b';
-
-  const loadReports = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getAllReports();
-      setReports(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar denúncias:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [getAllReports]);
+  // Redireciona se não for admin (ID específico trancado)
+  const ADMIN_ID = '9c90d435-bfe2-4936-98d1-2c6c1160db4b';
 
   useEffect(() => {
-    if (!isAdmin) {
+    if (!user || user.id !== ADMIN_ID) {
       navigate('/');
-      return;
     }
-    loadReports();
-  }, [isAdmin, navigate, loadReports]);
+  }, [user, navigate]);
 
-  const handleAction = async (report: any, action: 'delete' | 'ignore') => {
+  const stats = useMemo(() => {
+    const totalPosts = posts.length;
+    const pendingPosts = posts.filter(p => p.status === 'pending').length;
+    const resolvedPosts = posts.filter(p => p.status === 'resolved').length;
+    const totalReports = reports.length;
+    const pendingReports = reports.filter(r => r.status === 'pending').length;
+
+    return { totalPosts, pendingPosts, resolvedPosts, totalReports, pendingReports };
+  }, [posts, reports]);
+
+  const filteredReports = useMemo(() => {
+    return reports.filter(r => {
+      const matchesSearch = r.reason.toLowerCase().includes(searchTerm.toLowerCase());
+      const isHistory = activeTab === 'history';
+      const isStatusMatch = isHistory ? r.status !== 'pending' : r.status === 'pending';
+      return matchesSearch && isStatusMatch;
+    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [reports, searchTerm, activeTab]);
+
+  const handleIgnore = async (reportId: string) => {
     try {
-      if (action === 'delete') {
-        if (report.post_id) {
-          await deletePost(report.post_id);
-          toast('Postagem excluída permanentemente.');
-        } else if (report.comment_id) {
-          await deleteComment(report.comment_id);
-          toast('Comentário excluído permanentemente.');
-        }
-        await updateReportStatus(report.id, 'resolved');
-      } else {
-        await updateReportStatus(report.id, 'ignored');
-        toast('Denúncia ignorada e movida para o histórico.');
-      }
-
-      // Recarrega a lista imediatamente para refletir a mudança
-      await loadReports();
-    } catch (error) {
-      console.error('Erro na moderação:', error);
-      toast('Erro ao processar ação.', 'error');
+      await ignoreReport(reportId);
+      toast('Denúncia ignorada com sucesso.');
+      setSelectedReport(null);
+    } catch (err) {
+      toast('Erro ao ignorar denúncia.', 'error');
     }
   };
 
-  const filteredReports = reports.filter(r => {
-    if (filter === 'pending') {
-      return r.status === 'pending';
-    } else {
-      // No histórico, mostramos TUDO o que já foi processado (resolvido ou ignorado)
-      return r.status === 'resolved' || r.status === 'ignored';
+  const handleResolve = async (reportId: string, postId?: string, commentId?: string) => {
+    try {
+      if (postId) {
+        await updatePostStatus(postId, 'resolved');
+        toast('Relato marcado como resolvido.');
+      }
+      // Aqui poderíamos ter uma lógica de fechar a denúncia
+      setSelectedReport(null);
+    } catch (err) {
+      toast('Erro ao resolver denúncia.', 'error');
     }
-  });
+  };
 
-  if (!isAdmin) return null;
+  const handleDeleteContent = async (reportId: string, postId?: string, commentId?: string) => {
+    if (!window.confirm('Tem certeza que deseja EXCLUIR este conteúdo? Esta ação é irreversível.')) return;
+
+    try {
+      if (commentId) {
+        await deleteComment(commentId);
+        toast('Comentário excluído pelo administrador.');
+      } else if (postId) {
+        await deletePost(postId);
+        toast('Relato excluído pelo administrador.');
+      }
+      setSelectedReport(null);
+    } catch (err) {
+      toast('Erro ao excluir conteúdo.', 'error');
+    }
+  };
+
+  if (!user || user.id !== ADMIN_ID) return null;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-600">
-              <ShieldCheck className="w-6 h-6" />
-            </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Shield className="w-7 h-7 text-emerald-600" />
             Painel do Administrador
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Gerenciamento e moderação de conteúdo do bairro</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gestão de denúncias, usuários e estatísticas do bairro</p>
         </div>
-
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-          <button
-            onClick={() => setFilter('pending')}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-              filter === 'pending' ? "bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400" : "text-slate-500"
-            )}
-          >
-            Pendentes
-          </button>
-          <button
-            onClick={() => setFilter('all')}
-            className={cn(
-              "px-4 py-1.5 rounded-lg text-xs font-bold transition-all",
-              filter === 'all' ? "bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400" : "text-slate-500"
-            )}
-          >
-            Histórico
-          </button>
+        <div className="flex items-center gap-2">
+           <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>
+            <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            Sincronizar Dados
+          </Button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="py-20 text-center text-slate-400">Carregando denúncias...</div>
-      ) : filteredReports.length === 0 ? (
-        <Card className="py-20 text-center">
-          <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4 opacity-20" />
-          <p className="text-slate-500 font-medium">Tudo limpo! Nenhuma denúncia encontrada.</p>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {filteredReports.map((report) => (
-            <Card key={report.id} className={cn(
-              "border-l-4",
-              report.status === 'pending' ? "border-l-amber-500" :
-              report.status === 'resolved' ? "border-l-emerald-500" : "border-l-slate-300"
-            )}>
-              <div className="flex items-start gap-4">
-                <div className={cn(
-                  "p-2 rounded-lg shrink-0",
-                  report.post_id ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
-                )}>
-                  {report.post_id ? <FileText className="w-5 h-5" /> : <MessageSquare className="w-5 h-5" />}
-                </div>
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total de Relatos', value: stats.totalPosts, icon: MessageSquare, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-500/10' },
+          { label: 'Relatos Pendentes', value: stats.pendingPosts, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+          { label: 'Total Denúncias', value: stats.totalReports, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-500/10' },
+          { label: 'Denúncias Ativas', value: stats.pendingReports, icon: Shield, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+        ].map((s, i) => (
+          <Card key={i} className="!p-4 border-none shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className={cn("p-2 rounded-lg", s.bg)}>
+                <s.icon className={cn("w-5 h-5", s.color)} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
+                <p className="text-xl font-black text-slate-900 dark:text-white leading-tight">{s.value}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                      Denúncia de {report.post_id ? 'Postagem' : 'Comentário'}
-                    </span>
-                    <span className="text-[10px] text-slate-300">•</span>
-                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {timeAgo(report.created_at)}
-                    </span>
-                    {report.status !== 'pending' && (
-                      <span className={cn(
-                        "px-2 py-0.5 rounded text-[9px] font-black uppercase ml-auto",
-                        report.status === 'resolved' ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
-                      )}>
-                        {report.status === 'resolved' ? 'Resolvido (Apagado)' : 'Ignorado'}
-                      </span>
-                    )}
-                  </div>
+      {/* Main Tabs */}
+      <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-800">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={cn(
+            "px-4 py-2 text-sm font-bold transition-all border-b-2 -mb-[2px]",
+            activeTab === 'pending' ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Denúncias Pendentes
+          {stats.pendingReports > 0 && <span className="ml-2 px-1.5 py-0.5 rounded-full bg-red-100 text-red-600 text-[10px]">{stats.pendingReports}</span>}
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={cn(
+            "px-4 py-2 text-sm font-bold transition-all border-b-2 -mb-[2px]",
+            activeTab === 'history' ? "border-emerald-600 text-emerald-600" : "border-transparent text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Histórico (Arquivados)
+        </button>
+      </div>
 
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">
-                    Motivo: <span className="font-normal text-slate-600 dark:text-slate-400">"{report.reason}"</span>
-                  </h3>
-
-                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-700 mb-4">
-                    <p className="text-xs text-slate-500 uppercase font-bold mb-2 flex items-center gap-1.5">
-                      Conteúdo {report.status === 'pending' ? 'Denunciado' : 'Arquivado'}:
-                    </p>
-
-                    <div className="flex gap-3">
-                      {(report.post?.image_url || report.archived_image_url) && (
-                        <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-slate-200 dark:border-slate-600 bg-white">
-                          <img src={report.post?.image_url || report.archived_image_url} alt="" className="w-full h-full object-cover" />
+      <div className="space-y-4">
+        {filteredReports.length === 0 ? (
+          <div className="py-20 text-center">
+             <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                <CheckCircle2 className="w-8 h-8 text-slate-300" />
+             </div>
+             <h3 className="text-lg font-bold text-slate-900 dark:text-white">Tudo limpo por aqui!</h3>
+             <p className="text-sm text-slate-500 dark:text-slate-400">Nenhuma denúncia encontrada no momento.</p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {filteredReports.map(report => (
+              <Card key={report.id} className="!p-4 hover:ring-emerald-500/20 transition-all cursor-pointer group" onClick={() => setSelectedReport(report)}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "p-2 rounded-xl shrink-0 mt-1",
+                      report.status === 'pending' ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-400"
+                    )}>
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{report.postId ? 'Relato' : 'Comentário'} Denunciado</span>
+                        <span className="text-[10px] text-slate-400">•</span>
+                        <span className="text-[10px] text-slate-400">{timeAgo(report.createdAt)}</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-snug group-hover:text-emerald-600 transition-colors">
+                        {report.reason}
+                      </h3>
+                      {report.status !== 'pending' && (
+                        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          {report.status === 'ignored' ? 'IGNORADA' : 'RESOLVIDA'}
                         </div>
                       )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-700 dark:text-slate-300 italic font-medium leading-tight">
-                          {report.post?.title || report.archived_title || (report.post_id ? "Postagem Apagada" : "Comentário")}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                          {report.post?.description || report.archived_description || report.comment?.content || "Conteúdo removido permanentemente."}
-                        </p>
-                      </div>
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="flex items-center gap-4 text-[11px] text-slate-400">
-                      <span className="flex items-center gap-1.5">
-                        <User className="w-3 h-3" /> Denunciado por: <strong>{report.reporter?.name || 'Anônimo'}</strong>
-                      </span>
-                    </div>
-
-                    {report.status === 'pending' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleAction(report, 'ignore')}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-1.5"
-                        >
-                          <XCircle className="w-3.5 h-3.5" /> Ignorar
-                        </button>
-                        <button
-                          onClick={() => handleAction(report, 'delete')}
-                          className="px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-1.5"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Excluir Conteúdo
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-600 transition-all" />
                 </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Report Detail Modal */}
+      <Modal open={!!selectedReport} onClose={() => setSelectedReport(null)} title="Detalhes da Denúncia">
+        {selectedReport && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Motivo da Denúncia</span>
+                <span className="text-[10px] text-slate-400">{timeAgo(selectedReport.createdAt)}</span>
               </div>
-            </Card>
-          ))}
-        </div>
-      )}
+              <p className="text-sm font-semibold text-red-600 bg-red-50 dark:bg-red-500/10 p-3 rounded-lg border border-red-100 dark:border-red-500/20">
+                {selectedReport.reason}
+              </p>
+            </div>
+
+            {/* Snapshots do conteúdo original (mesmo se excluído) */}
+            <div className="space-y-3">
+               <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                 <Archive className="w-3.5 h-3.5" />
+                 Conteúdo Denunciado (Snapshot)
+               </h4>
+               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl">
+                 {selectedReport.postId ? (
+                   <div className="space-y-2">
+                     <p className="text-xs font-bold text-slate-400">Título do Relato:</p>
+                     <p className="text-sm font-semibold text-slate-900 dark:text-white">{selectedReport.postTitle || 'Título indisponível'}</p>
+                     <p className="text-xs font-bold text-slate-400 mt-3">Descrição:</p>
+                     <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">{selectedReport.postDescription || 'Descrição indisponível'}</p>
+                   </div>
+                 ) : (
+                   <div className="space-y-2">
+                     <p className="text-xs font-bold text-slate-400">Texto do Comentário:</p>
+                     <p className="text-sm text-slate-700 dark:text-slate-300 italic">"{selectedReport.commentContent || 'Comentário indisponível'}"</p>
+                   </div>
+                 )}
+               </div>
+            </div>
+
+            {selectedReport.status === 'pending' && (
+              <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <Button className="flex-1 min-w-[120px]" onClick={() => handleResolve(selectedReport.id, selectedReport.postId)}>
+                  <CheckCircle2 className="w-4 h-4" /> Marcar Resolvido
+                </Button>
+                <Button variant="secondary" className="flex-1 min-w-[120px]" onClick={() => handleIgnore(selectedReport.id)}>
+                  <Eye className="w-4 h-4" /> Ignorar
+                </Button>
+                <Button className="flex-1 min-w-[120px] bg-red-600 hover:bg-red-700 text-white" onClick={() => handleDeleteContent(selectedReport.id, selectedReport.postId, selectedReport.commentId)}>
+                  <Trash2 className="w-4 h-4" /> Excluir Conteúdo
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
