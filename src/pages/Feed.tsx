@@ -734,7 +734,7 @@ export default function Feed() {
           </div>
 
           <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} />
-          <Textarea label="Descrição" placeholder="Descreva o problem com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
+          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
           <ImageUpload value={fi} onChange={setFi} />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
