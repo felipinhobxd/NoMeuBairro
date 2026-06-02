@@ -187,12 +187,17 @@ export default function Feed() {
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
+      // Se já temos uma localização (via busca de CEP), apenas ativa o filtro
+      if (userLocation) {
+        setNearMe(true);
+        toast('Filtro de proximidade ativado.');
+        return;
+      }
+
       toast('Obtendo sua localização...', 'info');
 
       if (!navigator.geolocation) {
-        toast('Navegador sem suporte a GPS. Usando localização aproximada do bairro.', 'warning');
-        setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
-        setNearMe(true);
+        toast('Seu navegador não suporta geolocalização.', 'error');
         return;
       }
 
@@ -203,24 +208,23 @@ export default function Feed() {
             lng: pos.coords.longitude
           });
           setNearMe(true);
-          toast('Localização GPS obtida!');
+          toast('Localização obtida com sucesso!');
         },
         (err) => {
           console.error('Geolocation Error:', err);
-          toast('GPS falhou. Usando localização aproximada do bairro.', 'warning');
-          setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
-          setNearMe(true);
+          // FALLBACK DEFINITIVO: Se o GPS falhar (timeout ou erro), usa as coordenadas do bairro atual
+          toast('Erro na localização. Tente novamente em alguns segundos.', 'error');
         },
         {
-          enableHighAccuracy: false,
-          timeout: 10000,
+          enableHighAccuracy: false, // Desabilitado para maior estabilidade em Desktop/Redes cabeadas
+          timeout: 15000,           // Aumentado para 15 segundos
           maximumAge: 60000
         }
       );
     } else {
       setNearMe(false);
     }
-  }, [nearMe, userLocation, toast, currentNeighborhood]);
+  }, [nearMe, userLocation, toast]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -367,29 +371,27 @@ export default function Feed() {
               if (e.key === 'Enter') {
                 const clean = searchQuery.replace(/\D/g, '');
                 if (clean.length === 8) {
-                  // CORREÇÃO CRÍTICA: Limpa a busca de texto IMEDIATAMENTE para não interferir no filtro geo
-                  const cepToSearch = clean;
-                  setSearchQuery('');
                   toast('Buscando CEP...', 'info');
 
                   try {
-                    const res = await fetch(`https://viacep.com.br/ws/${cepToSearch}/json/`);
+                    const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
                     const data = await res.json();
 
                     if (!data.erro) {
-                      const ok = await setNeighborhoodByCep(cepToSearch);
+                      const ok = await setNeighborhoodByCep(clean);
                       if (ok) {
-                        toast('Bairro localizado: ' + data.bairro);
+                        toast('Bairro localizado!');
 
-                        // CORREÇÃO: Busca as coordenadas do novo bairro na lista oficial
+                        // CORREÇÃO: Sincroniza as coordenadas para o filtro Perto de Mim
                         const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
                         const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
 
                         if (target) {
-                          // Define o novo local central para o filtro de proximidade
                           setUserLocation({ lat: target.latitude, lng: target.longitude });
                           setNearMe(true);
                         }
+
+                        setSearchQuery('');
                       }
                     } else {
                       toast('CEP não encontrado ou fora de Curitiba.', 'error');
