@@ -164,10 +164,27 @@ function NotificationBell() {
 
 function NeighborhoodPicker() {
   const { setNeighborhood, setNeighborhoodByCep } = useNeighborhood();
+  const { posts } = useData();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [cepInput, setCepInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+
+  const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const neighborhoodCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    posts.forEach(p => {
+      const loc = normalize(p.location || '');
+      curitibaNeighborhoods.forEach(n => {
+        const nName = normalize(n.name);
+        if (loc.includes(nName)) {
+          counts[n.name] = (counts[n.name] || 0) + 1;
+        }
+      });
+    });
+    return counts;
+  }, [posts]);
 
   const filteredNeighborhoods = useMemo(() => {
     return curitibaNeighborhoods.filter(n =>
@@ -227,20 +244,28 @@ function NeighborhoodPicker() {
 
         <div className="flex-1 overflow-y-auto p-6 sm:p-8 no-scrollbar bg-white dark:bg-slate-900">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {filteredNeighborhoods.map((n) => (
-              <button
-                key={n.name}
-                onClick={() => setNeighborhood(n.name)}
-                className="group p-4 rounded-2xl bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/50 dark:hover:bg-emerald-500/10 border border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-500/30 text-left transition-all duration-200 active:scale-[0.97]"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate">
-                    {n.name}
-                  </span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
-                </div>
-              </button>
-            ))}
+            {filteredNeighborhoods.map((n) => {
+              const count = neighborhoodCounts[n.name] || 0;
+              return (
+                <button
+                  key={n.name}
+                  onClick={() => setNeighborhood(n.name)}
+                  className="group p-4 rounded-2xl bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/50 dark:hover:bg-emerald-500/10 border border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-500/30 text-left transition-all duration-200 active:scale-[0.97] flex flex-col gap-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate">
+                      {n.name}
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                  {count > 0 && (
+                    <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded-lg w-fit">
+                      {count} {count === 1 ? 'RELATO' : 'RELATOS'}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
           {filteredNeighborhoods.length === 0 && (
             <div className="py-12 text-center text-slate-400">
