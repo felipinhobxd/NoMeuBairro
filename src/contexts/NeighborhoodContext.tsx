@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 
 export interface Neighborhood {
   name: string;
@@ -7,7 +7,7 @@ export interface Neighborhood {
   cepExample: string;
 }
 
-// Lista completa dos 75 bairros de Curitiba com coordenadas aproximadas e CEPs de exemplo
+// Lista completa dos 75 bairros de Curitiba
 export const curitibaNeighborhoods: Neighborhood[] = [
   { name: 'Abranches', latitude: -25.3725, longitude: -49.2708, cepExample: '82130-010' },
   { name: 'Água Verde', latitude: -25.4519, longitude: -49.2847, cepExample: '80240-000' },
@@ -89,12 +89,15 @@ export const curitibaNeighborhoods: Neighborhood[] = [
 
 interface NeighborhoodContextType {
   currentNeighborhood: Neighborhood;
+  isNeighborhoodSelected: boolean;
   setNeighborhood: (name: string) => void;
   setNeighborhoodByCep: (cep: string) => Promise<boolean>;
+  clearSelection: () => void;
 }
 
 const NeighborhoodContext = createContext<NeighborhoodContextType>(null!);
 
+// Bairro "Cidade Industrial" como padrão técnico, mas o usuário DEVE escolher no início
 const DEFAULT_NEIGHBORHOOD = curitibaNeighborhoods.find(n => n.name === 'Cidade Industrial') || curitibaNeighborhoods[0];
 
 export function NeighborhoodProvider({ children }: { children: ReactNode }) {
@@ -107,12 +110,22 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
     return DEFAULT_NEIGHBORHOOD;
   });
 
+  const [isNeighborhoodSelected, setIsNeighborhoodSelected] = useState<boolean>(() => {
+    return !!localStorage.getItem('selected-neighborhood');
+  });
+
   const setNeighborhood = (name: string) => {
     const found = curitibaNeighborhoods.find(n => n.name === name);
     if (found) {
       setCurrentNeighborhood(found);
+      setIsNeighborhoodSelected(true);
       localStorage.setItem('selected-neighborhood', found.name);
     }
+  };
+
+  const clearSelection = () => {
+    localStorage.removeItem('selected-neighborhood');
+    setIsNeighborhoodSelected(false);
   };
 
   const setNeighborhoodByCep = async (cep: string): Promise<boolean> => {
@@ -125,15 +138,12 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
 
       if (data.erro) return false;
 
-      // Verifica se é de Curitiba
       if (data.localidade !== 'Curitiba') {
         alert('Este sistema é exclusivo para Curitiba.');
         return false;
       }
 
       const neighborhoodName = data.bairro;
-
-      // Tenta encontrar o bairro na nossa lista oficial (ignorando acentos e case)
       const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
       const found = curitibaNeighborhoods.find(n =>
@@ -142,6 +152,7 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
 
       if (found) {
         setCurrentNeighborhood(found);
+        setIsNeighborhoodSelected(true);
         localStorage.setItem('selected-neighborhood', found.name);
         return true;
       }
@@ -154,7 +165,7 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <NeighborhoodContext.Provider value={{ currentNeighborhood, setNeighborhood, setNeighborhoodByCep }}>
+    <NeighborhoodContext.Provider value={{ currentNeighborhood, isNeighborhoodSelected, setNeighborhood, setNeighborhoodByCep, clearSelection }}>
       {children}
     </NeighborhoodContext.Provider>
   );

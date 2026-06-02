@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect } from 'react';
+import { type ReactNode, useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,9 +8,9 @@ import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Store,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
-  BarChart3, ShieldCheck, Search
+  BarChart3, ShieldCheck, Search, ChevronRight, Building2, Sparkles, MapPinned
 } from 'lucide-react';
-import { timeAgo } from './UI';
+import { timeAgo, Button, Card, Input } from './UI';
 
 const navItems = [
   { path: '/', label: 'Feed', icon: LayoutGrid },
@@ -162,22 +162,121 @@ function NotificationBell() {
   );
 }
 
+function NeighborhoodPicker() {
+  const { setNeighborhood, setNeighborhoodByCep } = useNeighborhood();
+  const { toast } = useToast();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [cepInput, setCepInput] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+
+  const filteredNeighborhoods = useMemo(() => {
+    return curitibaNeighborhoods.filter(n =>
+      n.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ).sort((a, b) => a.name.localeCompare(b.name));
+  }, [searchTerm]);
+
+  const handleCepSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cepInput.length !== 8) return;
+    setIsSearching(true);
+    const ok = await setNeighborhoodByCep(cepInput);
+    setIsSearching(false);
+    if (!ok) toast('CEP não encontrado ou fora de Curitiba.', 'error');
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 animate-fade-in">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col !p-0 shadow-2xl border-none ring-1 ring-white/10 dark:ring-emerald-500/20">
+        <div className="p-6 sm:p-8 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-br from-emerald-600 to-teal-700 text-white relative overflow-hidden">
+          <div className="relative z-10">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight mb-2 flex items-center gap-3">
+              <MapPinned className="w-8 h-8" />
+              Bem-vindo ao No Meu Bairro
+            </h2>
+            <p className="text-emerald-50/80 text-sm sm:text-base font-medium max-w-xl">
+              Para começar, selecione seu bairro ou digite seu CEP. Vamos conectar você com o que acontece ao seu redor. 🌿
+            </p>
+          </div>
+          <Sparkles className="absolute -right-4 -top-4 w-32 h-32 text-white/10 rotate-12" />
+        </div>
+
+        <div className="p-6 bg-slate-50 dark:bg-slate-900/50 flex flex-col sm:flex-row gap-4 border-b border-slate-100 dark:border-slate-800">
+          <form onSubmit={handleCepSearch} className="flex-1 flex gap-2">
+            <Input
+              placeholder="Digite seu CEP (ex: 81460296)"
+              value={cepInput}
+              onChange={e => setCepInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+              className="flex-1 !bg-white dark:!bg-slate-800"
+            />
+            <Button type="submit" disabled={isSearching || cepInput.length !== 8}>
+              {isSearching ? '...' : 'Buscar'}
+            </Button>
+          </form>
+          <div className="hidden sm:block w-px bg-slate-200 dark:bg-slate-800" />
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar bairro pelo nome..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 no-scrollbar bg-white dark:bg-slate-900">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {filteredNeighborhoods.map((n) => (
+              <button
+                key={n.name}
+                onClick={() => setNeighborhood(n.name)}
+                className="group p-4 rounded-2xl bg-slate-50 hover:bg-emerald-50 dark:bg-slate-800/50 dark:hover:bg-emerald-500/10 border border-slate-100 dark:border-slate-800 hover:border-emerald-200 dark:hover:border-emerald-500/30 text-left transition-all duration-200 active:scale-[0.97]"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate">
+                    {n.name}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
+                </div>
+              </button>
+            ))}
+          </div>
+          {filteredNeighborhoods.length === 0 && (
+            <div className="py-12 text-center text-slate-400">
+              <Building2 className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p>Nenhum bairro encontrado com "{searchTerm}"</p>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 interface LayoutProps { children: ReactNode }
 
 export default function Layout({ children }: LayoutProps) {
   const { isDark, toggle } = useTheme();
   const { user, isAuthenticated, logout } = useAuth();
-  const { currentNeighborhood, setNeighborhood, setNeighborhoodByCep } = useNeighborhood();
+  const { currentNeighborhood, isNeighborhoodSelected, clearSelection } = useNeighborhood();
   const navigate = useNavigate();
-  const [showLocationSelector, setShowLocationSelector] = useState(false);
-  const [cepInput, setCepInput] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
   const location = useLocation();
   const isAdmin = user?.id === '9c90d435-bfe2-4936-98d1-2c6c1160db4b';
+
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [location.pathname]);
+
+  // Se o bairro NÃO foi selecionado, mostra APENAS o seletor de bairro
+  if (!isNeighborhoodSelected) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+         <NeighborhoodPicker />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -199,12 +298,17 @@ export default function Layout({ children }: LayoutProps) {
 
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
 
-              <div className="flex items-center gap-2">
+              <button
+                onClick={clearSelection}
+                className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all"
+                title="Mudar de bairro"
+              >
                 <div className="flex flex-col items-start">
                   <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro</span>
                   <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[80px] xl:max-w-none">{currentNeighborhood.name}</span>
                 </div>
-              </div>
+                <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
+              </button>
             </div>
 
             <nav className="hidden md:flex items-center gap-0.5 lg:gap-1 flex-1 justify-center min-w-0" role="navigation" aria-label="Navegação principal">
