@@ -58,8 +58,8 @@ export default function AdminPanel() {
         toast('Denúncia ignorada e movida para o histórico.');
       }
 
-      // Pequeno delay para garantir sincronia e recarregar
-      setTimeout(() => loadReports(), 800);
+      // Recarrega a lista imediatamente
+      await loadReports();
     } catch (error) {
       console.error('Erro na moderação:', error);
       toast('Erro ao processar ação.', 'error');
