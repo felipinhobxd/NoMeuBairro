@@ -191,8 +191,9 @@ export default function Feed() {
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
         // Raio de 5km para abranger bem o bairro e arredores
         if (dist > 5) return false;
-      } else {
-        // Fallback por nome do bairro na string de localização
+      } else if (!nearMe) {
+        // CORREÇÃO: Se não tem busca de texto e Perto de mim está OFF,
+        // filtra pelo bairro selecionado no início do site.
         const postLoc = normalize(p.location || '');
         if (!postLoc.includes(currentNBName)) return false;
       }
