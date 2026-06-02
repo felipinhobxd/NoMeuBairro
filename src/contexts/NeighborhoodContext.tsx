@@ -95,7 +95,7 @@ interface NeighborhoodContextType {
 
 const NeighborhoodContext = createContext<NeighborhoodContextType>(null!);
 
-const DEFAULT_NEIGHBORHOOD = curitibaNeighborhoods.find(n => n.name === 'Vitoria Regia') || curitibaNeighborhoods[0];
+const DEFAULT_NEIGHBORHOOD = curitibaNeighborhoods.find(n => n.name === 'Cidade Industrial') || curitibaNeighborhoods[0];
 
 export function NeighborhoodProvider({ children }: { children: ReactNode }) {
   const [currentNeighborhood, setCurrentNeighborhood] = useState<Neighborhood>(() => {
