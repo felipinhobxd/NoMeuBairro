@@ -58,7 +58,7 @@ export default function AdminPanel() {
         toast('Denúncia ignorada e movida para o histórico.');
       }
 
-      // Recarrega a lista imediatamente
+      // Recarrega a lista imediatamente para refletir a mudança
       await loadReports();
     } catch (error) {
       console.error('Erro na moderação:', error);
@@ -70,6 +70,7 @@ export default function AdminPanel() {
     if (filter === 'pending') {
       return r.status === 'pending';
     } else {
+      // No histórico, mostramos TUDO o que já foi processado (resolvido ou ignorado)
       return r.status === 'resolved' || r.status === 'ignored';
     }
   });
@@ -145,10 +146,10 @@ export default function AdminPanel() {
                     </span>
                     {report.status !== 'pending' && (
                       <span className={cn(
-                        "px-1.5 py-0.5 rounded text-[9px] font-black uppercase ml-auto",
+                        "px-2 py-0.5 rounded text-[9px] font-black uppercase ml-auto",
                         report.status === 'resolved' ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
                       )}>
-                        {report.status === 'resolved' ? 'Conteúdo Apagado' : 'Ignorada'}
+                        {report.status === 'resolved' ? 'Resolvido (Apagado)' : 'Ignorado'}
                       </span>
                     )}
                   </div>
