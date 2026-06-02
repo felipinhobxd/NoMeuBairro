@@ -38,7 +38,8 @@ export default function Denuncias() {
         const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
         const data = await res.json();
         if (!data.erro) {
-          setLocalizacao(`${data.logradouro}, ${data.bairro} - Curitiba/PR`);
+          // Pega apenas o nome da rua (logradouro)
+          setLocalizacao(data.logradouro);
         }
       } catch {}
     }

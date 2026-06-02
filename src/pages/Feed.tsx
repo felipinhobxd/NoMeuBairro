@@ -214,9 +214,14 @@ export default function Feed() {
         },
         (err) => {
           console.error('Geolocation Error:', err);
-          toast('Permissão de localização negada ou GPS desligado.', 'error');
+          // Tenta um fallback com precisão menor se o timeout persistir
+          toast('Erro na localização. Tente novamente em alguns segundos.', 'error');
         },
-        { enableHighAccuracy: false, timeout: 10000 }
+        {
+          enableHighAccuracy: false,
+          timeout: 15000, // Aumentado para 15s para conexões lentas
+          maximumAge: 60000 // Cache de 1 minuto
+        }
       );
     } else {
       setNearMe(false);
@@ -248,8 +253,8 @@ export default function Feed() {
         const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
         const data = await res.json();
         if (!data.erro) {
-          const address = `${data.logradouro}, ${data.bairro} - Curitiba/PR`;
-          setFl(address);
+          // Pega apenas o nome da rua (logradouro)
+          setFl(data.logradouro);
           toast('Rua localizada pelo CEP!');
         }
       } catch {}
@@ -378,7 +383,9 @@ export default function Feed() {
                       toast('Bairro e rua localizados!');
 
                       // Sincronizar o filtro de localização com as coordenadas do novo bairro/CEP
-                      const target = curitibaNeighborhoods.find(n => n.name === (localStorage.getItem('selected-neighborhood') || 'Vitoria Regia'));
+                      const savedNeighborhood = localStorage.getItem('selected-neighborhood');
+                      const target = curitibaNeighborhoods.find(n => n.name === savedNeighborhood);
+
                       if (target) {
                         setUserLocation({ lat: target.latitude, lng: target.longitude });
                       }
