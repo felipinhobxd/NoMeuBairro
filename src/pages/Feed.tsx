@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Geolocation } from '@capacitor/geolocation';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNeighborhood, curitibaNeighborhoods } from '../contexts/NeighborhoodContext';
@@ -84,8 +83,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, onReport
               onReply={onReply}
               replyingTo={replyingTo}
               onDelete={onDelete}
-              canDelete={false} // Não é mais usado, a lógica agora é interna
-              onReport={onReport} // Passando a função de denúncia para as respostas
+              onReport={onReport}
               currentUser={currentUser}
               isPostOwner={isPostOwner}
             />
@@ -153,7 +151,7 @@ export default function Feed() {
 
   // ─── Haversine Distance Formula ────────────────────────
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Earth's radius in km
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -172,12 +170,10 @@ export default function Feed() {
       if (onlyMine && user && p.authorId !== user.id) return false;
       if (onlyMine && !user) return false;
 
-      // Filter by proximity (e.g., 2km)
       if (nearMe && p.latitude && p.longitude) {
-        // Se temos um local de busca (CEP), usamos ele. Senão, GPS.
         const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
-        if (dist > 3) return false; // Mostra num raio de 3km do centro do bairro/CEP
+        if (dist > 3) return false;
       } else if (nearMe && !p.latitude) {
         return false;
       }
@@ -197,7 +193,6 @@ export default function Feed() {
 
       toast('Obtendo sua localização...', 'info');
 
-      // Use a API nativa do navegador (mais estável para Web/Vercel)
       if (!navigator.geolocation) {
         toast('Seu navegador não suporta geolocalização.', 'error');
         return;
@@ -214,13 +209,12 @@ export default function Feed() {
         },
         (err) => {
           console.error('Geolocation Error:', err);
-          // Tenta um fallback com precisão menor se o timeout persistir
           toast('Erro na localização. Tente novamente em alguns segundos.', 'error');
         },
         {
           enableHighAccuracy: false,
-          timeout: 15000, // Aumentado para 15s para conexões lentas
-          maximumAge: 60000 // Cache de 1 minuto
+          timeout: 15000,
+          maximumAge: 60000
         }
       );
     } else {
@@ -253,7 +247,6 @@ export default function Feed() {
         const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
         const data = await res.json();
         if (!data.erro) {
-          // Pega apenas o nome da rua (logradouro)
           setFl(data.logradouro);
           toast('Rua localizada pelo CEP!');
         }
@@ -343,7 +336,6 @@ export default function Feed() {
         </button>
       </div>
 
-      {/* Welcome (QOL) */}
       {isAuthenticated && user && posts.length === 0 && (
         <Card className="!bg-gradient-to-br !from-emerald-50 !to-teal-50 dark:!from-emerald-500/5 dark:!to-teal-500/5 !ring-emerald-200 dark:!ring-emerald-500/20 animate-fade-in">
           <div className="flex items-start gap-4">
@@ -363,62 +355,54 @@ export default function Feed() {
         </Card>
       )}
 
-      {/* Search */}
-      {posts.length > 0 && (
-        <div className="space-y-2">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={async (e) => {
-                if (e.key === 'Enter') {
-                  const clean = searchQuery.replace(/\D/g, '');
-                  if (clean.length === 8) {
-                    toast('Buscando CEP...', 'info');
-                    const ok = await setNeighborhoodByCep(clean);
-                    if (ok) {
-                      toast('Bairro e rua localizados!');
-
-                      // Sincronizar o filtro de localização com as coordenadas do novo bairro/CEP
-                      const savedNeighborhood = localStorage.getItem('selected-neighborhood');
-                      const target = curitibaNeighborhoods.find(n => n.name === savedNeighborhood);
-
-                      if (target) {
-                        setUserLocation({ lat: target.latitude, lng: target.longitude });
-                      }
-
-                      setNearMe(true);
-                      setSearchQuery('');
-                    } else {
-                      toast('CEP não encontrado em Curitiba.', 'error');
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === 'Enter') {
+                const clean = searchQuery.replace(/\D/g, '');
+                if (clean.length === 8) {
+                  toast('Buscando CEP...', 'info');
+                  const ok = await setNeighborhoodByCep(clean);
+                  if (ok) {
+                    toast('Bairro e rua localizados!');
+                    const savedNeighborhood = localStorage.getItem('selected-neighborhood');
+                    const target = curitibaNeighborhoods.find(n => n.name === savedNeighborhood);
+                    if (target) {
+                      setUserLocation({ lat: target.latitude, lng: target.longitude });
                     }
+                    setNearMe(true);
+                    setSearchQuery('');
+                  } else {
+                    toast('CEP não encontrado em Curitiba.', 'error');
                   }
                 }
-              }}
-              className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-              aria-label="Buscar relatos ou mudar CEP"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10"
-                aria-label="Limpar busca"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          <p className="text-[10px] text-slate-400 px-1 italic">
-            Dica: Digite um CEP (ex: 81470430) e aperte Enter para focar no bairro e rua automaticamente.
-          </p>
+              }
+            }}
+            className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+            aria-label="Buscar relatos ou mudar CEP"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10"
+              aria-label="Limpar busca"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-      )}
+        <p className="text-[10px] text-slate-400 px-1 italic">
+          Dica: Digite um CEP (ex: 81470430) e aperte Enter para focar no bairro e rua automaticamente.
+        </p>
+      </div>
 
-      {/* Filters */}
       <Card className="!p-3">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1" role="tablist">
@@ -434,7 +418,6 @@ export default function Feed() {
               );
             })}
           </div>
-          {/* Meus relatos toggle */}
           {isAuthenticated && (
             <button onClick={() => setOnlyMine(!onlyMine)}
               className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
@@ -446,7 +429,6 @@ export default function Feed() {
             </button>
           )}
 
-          {/* Perto de mim toggle */}
           <button onClick={toggleNearMe}
             className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0',
               nearMe ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-500/20'
@@ -479,7 +461,6 @@ export default function Feed() {
         )}
       </Card>
 
-      {/* Content */}
       {filtered.length === 0 ? (
         <EmptyState icon={MessageSquare}
           title={searchQuery ? 'Nenhum resultado encontrado' : onlyMine ? 'Você ainda não criou relatos' : 'Nenhum relato por enquanto'}
@@ -606,7 +587,6 @@ export default function Feed() {
                       Denunciar
                     </button>
 
-                    {/* Status buttons — owner only */}
                     {isMyPost(post) && (
                       <div className="flex items-center gap-1.5 ml-auto overflow-x-auto no-scrollbar pb-1">
                         {post.status !== 'pending' && (

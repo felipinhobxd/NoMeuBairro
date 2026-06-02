@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
-import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2, Star, MessageSquare, RefreshCw } from 'lucide-react';
+import { Store, Search, Phone, MapPin, MessageCircle, Plus, Trash2, Star, MessageSquare, RefreshCw, Clock } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer, timeAgo } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
@@ -37,7 +37,7 @@ const filterCats: { id: BusinessCategory | 'all'; label: string; emoji: string }
 ];
 
 export default function GuiaComercial() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const { businesses, addBusiness, deleteBusiness, isMyBusiness, addBusinessRating, getBusinessRatings, fetchData, loading } = useData();
   const { toast } = useToast();
@@ -208,7 +208,6 @@ export default function GuiaComercial() {
               if (closeTotal > openTotal) {
                 return currentTime >= openTotal && currentTime < closeTotal;
               } else {
-                // Caso feche após meia-noite
                 return currentTime >= openTotal || currentTime < closeTotal;
               }
             };
@@ -280,6 +279,11 @@ export default function GuiaComercial() {
                 <div className="flex flex-wrap gap-2 mt-3">
                   {b.phone && <a href={`tel:${fmtPhone(b.phone)}`} className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 active:scale-95 transition-all"><Phone className="w-4 h-4" />Ligar</a>}
                   {b.whatsapp && <a href={`https://wa.me/55${fmtPhone(b.whatsapp)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 active:scale-95 transition-all"><MessageCircle className="w-4 h-4" />WhatsApp</a>}
+                  {b.open_time && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
+                      <Clock className="w-3.5 h-3.5" /> {b.open_time.substring(0,5)} - {b.close_time?.substring(0,5)}
+                    </div>
+                  )}
                 </div>
                 {b.address && <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 p-2 rounded-lg"><MapPin className="w-3 h-3 shrink-0" />{b.address}</div>}
 
@@ -321,10 +325,12 @@ export default function GuiaComercial() {
           <Input label="Nome do negócio" placeholder="Ex: Padaria do Seu João" value={fn} onChange={e => setFn(e.target.value)} required />
           <Select label="Categoria" options={bizCatOpts} value={fc} onChange={e => setFc(e.target.value as BusinessCategory)} required />
           <Textarea label="Descrição" placeholder="Descreva os serviços oferecidos..." value={fd} onChange={e => setFd(e.target.value)} required />
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="Horário Abertura" type="time" value={fOpen} onChange={e => setFOpen(e.target.value)} />
             <Input label="Horário Fechamento" type="time" value={fClose} onChange={e => setFClose(e.target.value)} />
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="Telefone" placeholder="(41) 99999-9999" value={fph} onChange={e => setFph(e.target.value)} />
             <Input label="WhatsApp" placeholder="(41) 99999-9999" value={fwa} onChange={e => setFwa(e.target.value)} />
@@ -344,7 +350,6 @@ export default function GuiaComercial() {
         onClose={() => setZoomedImage(null)}
       />
 
-      {/* Modal de Avaliação */}
       <Modal open={!!ratingTarget} onClose={() => setRatingTarget(null)} title="Avaliar Negócio">
         <div className="space-y-5">
           <div className="flex flex-col items-center gap-2 py-2">
@@ -381,7 +386,6 @@ export default function GuiaComercial() {
         </div>
       </Modal>
 
-      {/* Modal de Lista de Avaliações */}
       <Modal
         open={!!viewRatingsTarget}
         onClose={() => setViewRatingsTarget(null)}
