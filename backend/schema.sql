@@ -215,9 +215,8 @@ CREATE POLICY "Authors can update own posts" ON posts FOR UPDATE USING (auth.uid
 DROP POLICY IF EXISTS "Authors can delete own posts" ON posts;
 CREATE POLICY "Authors can delete own posts" ON posts FOR DELETE USING (
     auth.uid() = author_id OR
-    (author_id IS NULL AND is_anonymous = true) OR -- Permite deletar post anônimo sem conta
-    auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR
-    auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217'
+    (author_id IS NULL AND is_anonymous = true) OR
+    auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
 );
 
 -- POLÍTICAS: Comments
@@ -228,8 +227,7 @@ CREATE POLICY "Anyone can comment" ON comments FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Authors can delete own comments" ON comments;
 CREATE POLICY "Authors can delete own comments" ON comments FOR DELETE USING (
     auth.uid() = author_id OR
-    auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR
-    auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217'
+    auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
 );
 
 -- POLÍTICAS: Supports
@@ -255,15 +253,13 @@ CREATE POLICY "System can insert notifications" ON notifications FOR INSERT WITH
 -- POLÍTICAS: Content Reports
 DROP POLICY IF EXISTS "Reports are visible to admin" ON content_reports;
 CREATE POLICY "Reports are visible to admin" ON content_reports FOR SELECT USING (
-    auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR
-    auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217'
+    auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
 );
 DROP POLICY IF EXISTS "Anyone can report content" ON content_reports;
 CREATE POLICY "Anyone can report content" ON content_reports FOR INSERT WITH CHECK (true);
 DROP POLICY IF EXISTS "Admins can update reports" ON content_reports;
 CREATE POLICY "Admins can update reports" ON content_reports FOR UPDATE USING (
-    auth.uid() = '01524e31-9ada-4e1f-a3fc-bad691113e05' OR
-    auth.uid() = '8b1e03ce-59e5-4f48-9756-eb4e0ee91217'
+    auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
 );
 
 -- Outras políticas (Shorthand para o restante)

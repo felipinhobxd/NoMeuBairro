@@ -339,7 +339,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const getAllReports = useCallback(async () => {
-    const admins = ['01524e31-9ada-4e1f-a3fc-bad691113e05', '8b1e03ce-59e5-4f48-9756-eb4e0ee91217'];
+    const admins = ['9c90d435-bfe2-4936-98d1-2c6c1160db4b'];
     if (!user || !admins.includes(user.id)) return [];
     const { data } = await supabase.from('content_reports').select('*, reporter:reporter_id(name), post:post_id(title, description, image_url), comment:comment_id(content)').order('created_at', { ascending: false });
     return data || [];
