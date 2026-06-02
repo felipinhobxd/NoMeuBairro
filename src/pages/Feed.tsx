@@ -171,6 +171,7 @@ export default function Feed() {
       if (onlyMine && !user) return false;
 
       if (nearMe && p.latitude && p.longitude) {
+        // CORREÇÃO: Usa o userLocation (definido por GPS ou por CEP)
         const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
         if (dist > 3) return false;
@@ -368,18 +369,32 @@ export default function Feed() {
                 const clean = searchQuery.replace(/\D/g, '');
                 if (clean.length === 8) {
                   toast('Buscando CEP...', 'info');
-                  const ok = await setNeighborhoodByCep(clean);
-                  if (ok) {
-                    toast('Bairro e rua localizados!');
-                    const savedNeighborhood = localStorage.getItem('selected-neighborhood');
-                    const target = curitibaNeighborhoods.find(n => n.name === savedNeighborhood);
-                    if (target) {
-                      setUserLocation({ lat: target.latitude, lng: target.longitude });
+
+                  try {
+                    const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+                    const data = await res.json();
+
+                    if (!data.erro) {
+                      const ok = await setNeighborhoodByCep(clean);
+                      if (ok) {
+                        toast('Bairro localizado!');
+
+                        // CORREÇÃO: Sincroniza as coordenadas para o filtro Perto de Mim
+                        const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                        const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
+
+                        if (target) {
+                          setUserLocation({ lat: target.latitude, lng: target.longitude });
+                          setNearMe(true);
+                        }
+
+                        setSearchQuery('');
+                      }
+                    } else {
+                      toast('CEP não encontrado ou fora de Curitiba.', 'error');
                     }
-                    setNearMe(true);
-                    setSearchQuery('');
-                  } else {
-                    toast('CEP não encontrado em Curitiba.', 'error');
+                  } catch (error) {
+                    toast('Erro ao buscar CEP.', 'error');
                   }
                 }
               }
@@ -461,6 +476,7 @@ export default function Feed() {
         )}
       </Card>
 
+      {/* Content */}
       {filtered.length === 0 ? (
         <EmptyState icon={MessageSquare}
           title={searchQuery ? 'Nenhum resultado encontrado' : onlyMine ? 'Você ainda não criou relatos' : 'Nenhum relato por enquanto'}
