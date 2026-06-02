@@ -171,10 +171,11 @@ export default function Feed() {
       if (onlyMine && !user) return false;
 
       if (nearMe && p.latitude && p.longitude) {
-        // CORREÇÃO: Aumentado para 15km para o CIC e sincronia CEP
+        // CORREÇÃO: Usa o userLocation (definido por GPS ou por CEP)
         const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
-        if (dist > 15) return false;
+        // Raio de 3km para ser preciso
+        if (dist > 3) return false;
       } else if (nearMe && !p.latitude) {
         return false;
       }
@@ -366,21 +367,21 @@ export default function Feed() {
               if (e.key === 'Enter') {
                 const clean = searchQuery.replace(/\D/g, '');
                 if (clean.length === 8) {
-                  // CORREÇÃO CRÍTICA: Limpa a busca de texto IMEDIATAMENTE
-                  const cepValue = clean;
+                  // CORREÇÃO CRÍTICA: Limpa a busca de texto IMEDIATAMENTE para não interferir no filtro geo
+                  const cepToSearch = clean;
                   setSearchQuery('');
                   toast('Buscando CEP...', 'info');
 
                   try {
-                    const res = await fetch(`https://viacep.com.br/ws/${cepValue}/json/`);
+                    const res = await fetch(`https://viacep.com.br/ws/${cepToSearch}/json/`);
                     const data = await res.json();
 
                     if (!data.erro) {
-                      const ok = await setNeighborhoodByCep(cepValue);
+                      const ok = await setNeighborhoodByCep(cepToSearch);
                       if (ok) {
                         toast('Bairro localizado: ' + data.bairro);
 
-                        // Sincroniza as coordenadas para o filtro Geográfico
+                        // CORREÇÃO: Busca as coordenadas do novo bairro na lista oficial
                         const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
                         const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
 
