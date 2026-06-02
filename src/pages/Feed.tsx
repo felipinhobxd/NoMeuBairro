@@ -176,27 +176,25 @@ export default function Feed() {
       if (onlyMine && user && p.authorId !== user.id) return false;
       if (onlyMine && !user) return false;
 
-      // 3. LOGICA DE LOCALIZAÇÃO E CEP (O Coração do Filtro)
-      // Se tiver busca de texto (q), prioriza a busca global por texto.
-      // Se NÃO tiver busca de texto, filtra estritamente pelo bairro atual ou proximidade.
-      if (!q) {
-        if (nearMe && p.latitude && p.longitude) {
-          const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
-          const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
-          if (dist > 3) return false;
-        } else {
-          // Fallback: Se não tem GPS ou NearMe está desligado, filtra pelo nome do bairro na localização
-          const postLoc = normalize(p.location || '');
-          if (!postLoc.includes(currentNBName)) return false;
-        }
-      }
-
-      // 4. Filtro de Busca por Texto (Se digitado algo que não seja o CEP processado)
+      // 3. LOGICA DE LOCALIZAÇÃO (Busca Têxtil ou Bairro Atual)
+      // Se tiver busca de texto (incluindo CEP digitado), prioriza a busca global.
       if (q) {
         return p.title.toLowerCase().includes(q) ||
                p.description.toLowerCase().includes(q) ||
                p.location.toLowerCase().includes(q) ||
                p.authorName.toLowerCase().includes(q);
+      }
+
+      // Se NÃO tiver busca de texto, filtra pelo bairro atual ou distância.
+      if (nearMe && p.latitude && p.longitude) {
+        const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+        const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
+        // Raio de 5km para abranger bem o bairro e arredores
+        if (dist > 5) return false;
+      } else {
+        // Fallback por nome do bairro na string de localização
+        const postLoc = normalize(p.location || '');
+        if (!postLoc.includes(currentNBName)) return false;
       }
 
       return true;
@@ -215,7 +213,9 @@ export default function Feed() {
       toast('Obtendo sua localização...', 'info');
 
       if (!navigator.geolocation) {
-        toast('Seu navegador não suporta geolocalização.', 'error');
+        toast('Navegador sem suporte a GPS. Usando localização aproximada do bairro.', 'warning');
+        setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+        setNearMe(true);
         return;
       }
 
@@ -226,15 +226,16 @@ export default function Feed() {
             lng: pos.coords.longitude
           });
           setNearMe(true);
-          toast('Localização obtida com sucesso!');
+          toast('Localização GPS obtida!');
         },
         (err) => {
           console.error('Geolocation Error:', err);
-          // FALLBACK DEFINITIVO: Se o GPS falhar (timeout ou erro), usa as coordenadas do bairro atual
-          toast('Erro na localização. Tente novamente em alguns segundos.', 'error');
+          toast('GPS falhou. Usando localização aproximada do bairro.', 'warning');
+          setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+          setNearMe(true);
         },
         {
-          enableHighAccuracy: false, // Desabilitado para maior estabilidade em Desktop/Redes cabeadas
+          enableHighAccuracy: false,
           timeout: 15000,           // Aumentado para 15 segundos
           maximumAge: 60000
         }
@@ -242,7 +243,7 @@ export default function Feed() {
     } else {
       setNearMe(false);
     }
-  }, [nearMe, userLocation, toast]);
+  }, [nearMe, userLocation, toast, currentNeighborhood]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -732,7 +733,7 @@ export default function Feed() {
           </div>
 
           <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} />
-          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
+          <Textarea label="Descrição" placeholder="Descreva o problem com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
           <ImageUpload value={fi} onChange={setFi} />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
