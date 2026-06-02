@@ -164,23 +164,41 @@ export default function Feed() {
   // ─── Memoized filtering ─────────────────────────────
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
+    const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const currentNBName = normalize(currentNeighborhood.name);
+
     return posts.filter(p => {
+      // 1. Filtros Globais (Categoria e Status)
       if (activeCategory && p.category !== activeCategory) return false;
       if (activeStatus !== 'all' && p.status !== activeStatus) return false;
+
+      // 2. Filtro de Autor
       if (onlyMine && user && p.authorId !== user.id) return false;
       if (onlyMine && !user) return false;
 
-      if (nearMe && p.latitude && p.longitude) {
-        // CORREÇÃO: Usa o userLocation (definido por GPS ou por CEP)
-        const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
-        const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
-        // Raio de 3km para ser preciso
-        if (dist > 3) return false;
-      } else if (nearMe && !p.latitude) {
-        return false;
+      // 3. LOGICA DE LOCALIZAÇÃO E CEP (O Coração do Filtro)
+      // Se tiver busca de texto (q), prioriza a busca global por texto.
+      // Se NÃO tiver busca de texto, filtra estritamente pelo bairro atual ou proximidade.
+      if (!q) {
+        if (nearMe && p.latitude && p.longitude) {
+          const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+          const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
+          if (dist > 3) return false;
+        } else {
+          // Fallback: Se não tem GPS ou NearMe está desligado, filtra pelo nome do bairro na localização
+          const postLoc = normalize(p.location || '');
+          if (!postLoc.includes(currentNBName)) return false;
+        }
       }
 
-      if (q) return p.title.toLowerCase().includes(q) || p.description.toLowerCase().includes(q) || p.location.toLowerCase().includes(q) || p.authorName.toLowerCase().includes(q);
+      // 4. Filtro de Busca por Texto (Se digitado algo que não seja o CEP processado)
+      if (q) {
+        return p.title.toLowerCase().includes(q) ||
+               p.description.toLowerCase().includes(q) ||
+               p.location.toLowerCase().includes(q) ||
+               p.authorName.toLowerCase().includes(q);
+      }
+
       return true;
     });
   }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user, currentNeighborhood]);
