@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Geolocation } from '@capacitor/geolocation';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
-import { useNeighborhood } from '../contexts/NeighborhoodContext';
+import { useNeighborhood, curitibaNeighborhoods } from '../contexts/NeighborhoodContext';
 import {
   Plus, Filter, ChevronDown, Heart, MessageSquare,
   MapPin, ShieldAlert, AlertTriangle, Lightbulb, Zap,
@@ -189,7 +189,6 @@ export default function Feed() {
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
-      // Se já temos a localização, apenas ligamos o filtro
       if (userLocation) {
         setNearMe(true);
         toast('Filtro de proximidade ativado.');
@@ -198,40 +197,29 @@ export default function Feed() {
 
       toast('Obtendo sua localização...', 'info');
 
-      try {
-        const permissions = await Geolocation.checkPermissions().catch(() => ({ location: 'prompt' }));
+      // Use a API nativa do navegador (mais estável para Web/Vercel)
+      if (!navigator.geolocation) {
+        toast('Seu navegador não suporta geolocalização.', 'error');
+        return;
+      }
 
-        if (permissions.location !== 'granted' && permissions.location !== 'limited') {
-          const request = await Geolocation.requestPermissions();
-          if (request.location !== 'granted' && request.location !== 'limited') {
-            toast('Permissão de localização negada.', 'error');
-            return;
-          }
-        }
-
-        const pos = await Geolocation.getCurrentPosition({
-          enableHighAccuracy: false,
-          timeout: 10000
-        });
-
-        if (pos.coords) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
           setUserLocation({
             lat: pos.coords.latitude,
             lng: pos.coords.longitude
           });
           setNearMe(true);
           toast('Localização obtida com sucesso!');
-        }
-      } catch (err: any) {
-        console.error('Geolocation Error:', err);
-        let msg = 'Não foi possível obter sua localização.';
-        if (err.message?.includes('denied')) msg = 'Permissão de localização negada.';
-        toast(msg, 'error');
-        setNearMe(false);
-      }
+        },
+        (err) => {
+          console.error('Geolocation Error:', err);
+          toast('Permissão de localização negada ou GPS desligado.', 'error');
+        },
+        { enableHighAccuracy: false, timeout: 10000 }
+      );
     } else {
       setNearMe(false);
-      // Mantemos o userLocation no estado para não precisar pedir permissão/GPS de novo na próxima vez
     }
   }, [nearMe, userLocation, toast]);
 
@@ -252,6 +240,21 @@ export default function Feed() {
     setFLat(undefined); setFLng(undefined);
     toast('Relato publicado com sucesso!');
   }, [ft, fd, fl, fc, fi, fLat, fLng, addPost, toast]);
+
+  const handlePostCepSearch = async (cep: string) => {
+    const clean = cep.replace(/\D/g, '');
+    if (clean.length === 8) {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          const address = `${data.logradouro}, ${data.bairro} - Curitiba/PR`;
+          setFl(address);
+          toast('Rua localizada pelo CEP!');
+        }
+      } catch {}
+    }
+  };
 
   const handleSupport = useCallback((id: string) => {
     const isSupported = supported.has(id);
@@ -693,7 +696,17 @@ export default function Feed() {
         <form onSubmit={e => { e.preventDefault(); handleCreate(); }} className="space-y-4">
           <Input label="Título" placeholder="Ex: Buraco na Rua das Flores" value={ft} onChange={e => setFt(e.target.value)} required />
           <Select label="Categoria" options={catOpts} value={fc} onChange={e => setFc(e.target.value as PostCategory)} required />
-          <Input label="Localização" placeholder="Ex: Rua das Flores, esquina com Av. Brasil" value={fl} onChange={e => setFl(e.target.value)} required />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => setFl(e.target.value)} required />
+            <Input
+              label="Buscar por CEP"
+              placeholder="Ex: 81460296"
+              maxLength={8}
+              onChange={e => handlePostCepSearch(e.target.value)}
+            />
+          </div>
+
           <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} />
           <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
           <ImageUpload value={fi} onChange={setFi} />
