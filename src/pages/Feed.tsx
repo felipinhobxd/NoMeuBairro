@@ -192,8 +192,7 @@ export default function Feed() {
         // Raio de 5km para abranger bem o bairro e arredores
         if (dist > 5) return false;
       } else if (!nearMe) {
-        // CORREÇÃO: Se não tem busca de texto e Perto de mim está OFF,
-        // filtra pelo bairro selecionado no início do site.
+        // Fallback por nome do bairro na string de localização (Busca inclusiva)
         const postLoc = normalize(p.location || '');
         if (!postLoc.includes(currentNBName)) return false;
       }
@@ -750,7 +749,7 @@ export default function Feed() {
             label="Categoria da Denúncia"
             options={[
               { value: '', label: 'Selecione uma categoria...' },
-              { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' },
+              { value: 'Conteúdo ofensivo ou hódio', label: 'Conteúdo ofensivo ou hódio' },
               { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' },
               { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' },
               { value: 'Conteúdo inadequado ou ilegal', label: 'Conteúdo inadequado ou ilegal' },
