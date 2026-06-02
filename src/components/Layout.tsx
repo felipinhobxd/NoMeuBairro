@@ -10,7 +10,7 @@ import {
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
   BarChart3, ShieldCheck, Search, ChevronRight, Building2, Sparkles, MapPinned
 } from 'lucide-react';
-import { timeAgo, Button, Card, Input } from './UI';
+import { timeAgo, Button, Card, Input, useToast } from './UI';
 
 const navItems = [
   { path: '/', label: 'Feed', icon: LayoutGrid },
