@@ -163,7 +163,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       setIsFetching(false);
     }
-  }, [user]);
+  }, [user, isFetching]);
 
   useEffect(() => {
     fetchData();
@@ -171,6 +171,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, () => fetchData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        if (user && payload.new && payload.new.user_id === user.id) {
+           fetchData();
+        }
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);

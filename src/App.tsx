@@ -24,24 +24,24 @@ export default function App() {
         <NeighborhoodProvider>
           <DataProvider>
             <ToastProvider>
-            <HashRouter>
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Feed />} />
-                  <Route path="/guia" element={<GuiaComercial />} />
-                  <Route path="/mural" element={<Mural />} />
-                  <Route path="/denuncias" element={<Denuncias />} />
-                  <Route path="/mapa" element={<Mapa />} />
-                  <Route path="/estatisticas" element={<Estatisticas />} />
-                  <Route path="/admin" element={<AdminPanel />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/perfil" element={<Profile />} />
-                  <Route path="/perfil/:userId" element={<PublicProfile />} />
-                </Routes>
-              </Layout>
-              <PanicButton />
-              <CookieConsent />
-            </HashRouter>
+              <HashRouter>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Feed />} />
+                    <Route path="/guia" element={<GuiaComercial />} />
+                    <Route path="/mural" element={<Mural />} />
+                    <Route path="/denuncias" element={<Denuncias />} />
+                    <Route path="/mapa" element={<Mapa />} />
+                    <Route path="/estatisticas" element={<Estatisticas />} />
+                    <Route path="/admin" element={<AdminPanel />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/perfil" element={<Profile />} />
+                    <Route path="/perfil/:userId" element={<PublicProfile />} />
+                  </Routes>
+                </Layout>
+                <PanicButton />
+                <CookieConsent />
+              </HashRouter>
             </ToastProvider>
           </DataProvider>
         </NeighborhoodProvider>

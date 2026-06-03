@@ -34,14 +34,14 @@ export default function AdminPanel() {
     const totalPosts = posts.length;
     const pendingPosts = posts.filter(p => p.status === 'pending').length;
     const resolvedPosts = posts.filter(p => p.status === 'resolved').length;
-    const totalReports = reports.length;
-    const pendingReports = reports.filter(r => r.status === 'pending').length;
+    const totalReports = (reports || []).length;
+    const pendingReports = (reports || []).filter(r => r.status === 'pending').length;
 
     return { totalPosts, pendingPosts, resolvedPosts, totalReports, pendingReports };
   }, [posts, reports]);
 
   const filteredReports = useMemo(() => {
-    return reports.filter(r => {
+    return (reports || []).filter(r => {
       const matchesSearch = r.reason.toLowerCase().includes(searchTerm.toLowerCase());
       const isHistory = activeTab === 'history';
       const isStatusMatch = isHistory ? r.status !== 'pending' : r.status === 'pending';
@@ -51,7 +51,9 @@ export default function AdminPanel() {
 
   const handleIgnore = async (reportId: string) => {
     try {
-      await ignoreReport(reportId);
+      if (typeof ignoreReport === 'function') {
+        await ignoreReport(reportId);
+      }
       toast('Denúncia ignorada com sucesso.');
       setSelectedReport(null);
     } catch (err) {
@@ -99,7 +101,7 @@ export default function AdminPanel() {
             <Shield className="w-7 h-7 text-emerald-600" />
             Painel do Administrador
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gestão de denúncias, usuários e estatísticas do bairro</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Gestão de denúncias e estatísticas</p>
         </div>
         <div className="flex items-center gap-2">
            <Button variant="secondary" size="sm" onClick={fetchData} disabled={loading}>

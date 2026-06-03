@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useData } from '../contexts/DataContext';
+import { useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card, postCategories } from '../components/UI';
 import {
   BarChart3, PieChart, Activity, CheckCircle2,
@@ -9,6 +10,7 @@ import { cn } from '../utils/cn';
 
 export default function Estatisticas() {
   const { posts } = useData();
+  const { currentNeighborhood } = useNeighborhood();
 
   const stats = useMemo(() => {
     const total = posts.length;
@@ -61,7 +63,7 @@ export default function Estatisticas() {
           </div>
           Estatísticas do Bairro
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Transparência e dados sobre a manutenção do Vitória Régia</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Transparência e dados sobre a manutenção em {currentNeighborhood.name}</p>
       </div>
 
       {/* Resumo Rápido */}
@@ -147,7 +149,7 @@ export default function Estatisticas() {
                 <h4 className="text-xs font-bold text-slate-900 dark:text-white">Insight da Comunidade</h4>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                   O problema mais recorrente é <span className="font-bold text-emerald-600 dark:text-emerald-400">"{postCategories[stats.mostCommonCat.name as keyof typeof postCategories]?.label}"</span>.
-                  Continue relatando e apoiando para que as autoridades priorizem o Vitória Régia!
+                  Continue relatando e apoiando para que as autoridades priorizem o bairro {currentNeighborhood.name}!
                 </p>
               </div>
             </div>

@@ -147,7 +147,7 @@ export default function GuiaComercial() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Guia Comercial</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Descubra negócios e serviços locais no Vitória Régia</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Descubra negócios e serviços locais</p>
         </div>
         <button
           onClick={() => {

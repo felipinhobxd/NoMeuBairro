@@ -211,6 +211,13 @@ export default function Feed() {
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
+      // Se já temos a localização, apenas ligamos o filtro
+      if (userLocation && (userLocation.lat !== currentNeighborhood.latitude || userLocation.lng !== currentNeighborhood.longitude)) {
+        setNearMe(true);
+        toast('Filtro de proximidade ativado.');
+        return;
+      }
+
       toast('Obtendo sua localização GPS...', 'info');
 
       if (!navigator.geolocation) {
@@ -244,7 +251,7 @@ export default function Feed() {
       // Reseta para a localização do bairro quando desativa o "Perto de mim"
       setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
     }
-  }, [nearMe, currentNeighborhood, toast]);
+  }, [nearMe, currentNeighborhood, userLocation, toast]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -723,7 +730,7 @@ export default function Feed() {
           </div>
 
           <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} />
-          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
+          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={setFd(e.target.value)} required />
           <ImageUpload value={fi} onChange={setFi} />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
