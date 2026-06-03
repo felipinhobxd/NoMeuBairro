@@ -211,13 +211,6 @@ export default function Feed() {
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
-      // Se já temos a localização, apenas ligamos o filtro
-      if (userLocation && (userLocation.lat !== currentNeighborhood.latitude || userLocation.lng !== currentNeighborhood.longitude)) {
-        setNearMe(true);
-        toast('Filtro de proximidade ativado.');
-        return;
-      }
-
       toast('Obtendo sua localização GPS...', 'info');
 
       if (!navigator.geolocation) {
@@ -251,7 +244,7 @@ export default function Feed() {
       // Reseta para a localização do bairro quando desativa o "Perto de mim"
       setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
     }
-  }, [nearMe, currentNeighborhood, userLocation, toast]);
+  }, [nearMe, currentNeighborhood, toast]);
 
   // ─── Handlers ────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -393,7 +386,7 @@ export default function Feed() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar por título ou digite um CEP para trocar de bairro..."
+            placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={async (e) => {
@@ -409,11 +402,21 @@ export default function Feed() {
                     if (!data.erro) {
                       const ok = await setNeighborhoodByCep(clean);
                       if (ok) {
-                        toast('Bairro localizado: ' + data.bairro);
+                        toast('Bairro localizado!');
+
+                        // Sincroniza as coordenadas para o filtro Perto de Mim
+                        const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                        const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
+
+                        if (target) {
+                          setUserLocation({ lat: target.latitude, lng: target.longitude });
+                          setNearMe(true);
+                        }
+
                         setSearchQuery('');
                       }
                     } else {
-                      toast('CEP não encontrado.', 'error');
+                      toast('CEP não encontrado ou fora de Curitiba.', 'error');
                     }
                   } catch (error) {
                     toast('Erro ao buscar CEP.', 'error');
@@ -499,7 +502,7 @@ export default function Feed() {
       {filtered.length === 0 ? (
         <EmptyState icon={MessageSquare}
           title={searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum relato por enquanto'}
-          description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : `Seja o primeiro a registrar um problema no bairro ${currentNeighborhood.name}!`}
+          description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : `Seja o primeiro a registrar um problema no bairro ${currentNeighborhood.name}. Sua voz importa!`}
           action={searchQuery ? { label: 'Limpar busca', onClick: () => setSearchQuery('') }
             : isAuthenticated ? { label: 'Criar relato', onClick: () => setShowCreate(true) }
             : { label: 'Entrar para participar', onClick: () => navigate('/login') }} />
@@ -730,7 +733,7 @@ export default function Feed() {
           </div>
 
           <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} />
-          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={setFd(e.target.value)} required />
+          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
           <ImageUpload value={fi} onChange={setFi} />
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button>
