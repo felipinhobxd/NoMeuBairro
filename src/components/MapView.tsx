@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
-import { TouchPointer, MousePointer2 } from 'lucide-react';
+import { MousePointer2 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { cn } from '../utils/cn';
 
@@ -61,7 +61,7 @@ export default function MapView({ lat, lng, title, className = "h-48 w-full roun
           aria-label="Ativar mapa"
         >
           <div className="bg-white/90 dark:bg-slate-800/90 px-3 py-1.5 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 flex items-center gap-2 animate-scale-in">
-            <TouchPointer className="w-4 h-4 text-emerald-600" />
+            <MousePointer2 className="w-4 h-4 text-emerald-600" />
             <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200">Toque para interagir</span>
           </div>
         </button>
