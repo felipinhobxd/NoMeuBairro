@@ -60,7 +60,7 @@ export default function MapView({ lat, lng, title, className = "h-48 w-full roun
         dragging={false}
         touchZoom={false}
         doubleClickZoom={false}
-        zoomControl={isInteractive}
+        zoomControl={true} // Mantém os botões de + e - visíveis por padrão
         style={{ height: '100%', width: '100%', zIndex: 0 }}
       >
         <TileLayer
