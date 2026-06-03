@@ -163,7 +163,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       setIsFetching(false);
     }
-  }, [user, isFetching]);
+  }, [user]);
 
   useEffect(() => {
     fetchData();
