@@ -273,13 +273,13 @@ CREATE POLICY "Authors can delete own events" ON events FOR DELETE USING (
     auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
 );
 
--- Outras políticas (Shorthand para o restante)
-DROP POLICY IF EXISTS "Badges are public" ON badges;
-CREATE POLICY "Badges are public" ON badges FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Ratings are public" ON business_ratings;
-CREATE POLICY "Ratings are public" ON business_ratings FOR SELECT USING (true);
+-- POLÍTICAS: Event Attendance
 DROP POLICY IF EXISTS "Attendance is public" ON event_attendance;
 CREATE POLICY "Attendance is public" ON event_attendance FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Auth users can toggle attendance" ON event_attendance;
+CREATE POLICY "Auth users can toggle attendance" ON event_attendance FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Users can delete own attendance" ON event_attendance;
+CREATE POLICY "Users can delete own attendance" ON event_attendance FOR DELETE USING (auth.uid() = user_id);
 
 -- 7. FUNÇÕES E TRIGGERS
 
