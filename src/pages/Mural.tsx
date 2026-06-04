@@ -51,6 +51,7 @@ export default function Mural() {
   const [fdate, setFdate] = useState(''); const [floc, setFloc] = useState(''); const [fdesc, setFdesc] = useState('');
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   // ─── Haversine Distance Formula ────────────────────────
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;

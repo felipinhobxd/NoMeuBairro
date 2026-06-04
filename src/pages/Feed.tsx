@@ -183,6 +183,9 @@ export default function Feed() {
       if (onlyMine && user && p.authorId !== user.id) return false;
       if (onlyMine && !user) return false;
 
+      // CORREÇÃO: Denúncias Anônimas aparecem em TODOS os bairros
+      if (p.authorId === 'anonymous') return true;
+
       // 3. LOGICA DE LOCALIZAÇÃO (Busca Têxtil ou Bairro Atual)
       // Se tiver busca de texto (incluindo CEP digitado), prioriza a busca global (vê Curitiba inteira).
       if (q) {
