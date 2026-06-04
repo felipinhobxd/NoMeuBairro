@@ -171,6 +171,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => fetchData())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         if (user && payload.new && payload.new.user_id === user.id) {
            fetchData();
@@ -178,7 +180,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [fetchData]);
+  }, [fetchData, user]);
 
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return;
@@ -234,7 +236,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
     if (!user) return;
-    await supabase.from('events').insert({
+    const { error } = await supabase.from('events').insert({
       title: data.title,
       description: data.description,
       event_date: data.date,
@@ -244,7 +246,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       longitude: data.longitude,
       created_by: user.id
     });
-  }, [user]);
+
+    if (!error) {
+      fetchData();
+    } else {
+      console.error('Error adding event:', error);
+    }
+  }, [user, fetchData]);
 
   const supportPost = useCallback(async (postId: string) => {
     if (!user || processing.has(postId)) return;

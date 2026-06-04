@@ -113,9 +113,9 @@ export default function Mural() {
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [filtered]);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!ft.trim() || !fdate || !floc.trim() || !fdesc.trim()) return;
-    addEvent({
+    await addEvent({
       title: ft,
       description: fdesc,
       date: fdate,
