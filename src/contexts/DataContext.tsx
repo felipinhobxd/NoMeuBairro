@@ -13,10 +13,10 @@ interface DataContextType {
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;
   fetchData: () => Promise<void>;
-  addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
-  addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<void>;
-  addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => Promise<void>;
-  addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<void>;
+  addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
+  addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
+  addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
+  addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   supportPost: (postId: string) => Promise<void>;
   addComment: (postId: string, content: string, parentId?: string) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
@@ -183,8 +183,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [fetchData, user]);
 
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
-    if (!user) return;
-    await supabase.from('posts').insert({
+    if (!user) return { error: 'Not authenticated' };
+    const res = await supabase.from('posts').insert({
       author_id: user.id,
       category: data.category,
       title: data.title,
@@ -195,7 +195,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       longitude: data.longitude,
       is_anonymous: false
     });
-  }, [user]);
+    if (!res.error) fetchData();
+    return res;
+  }, [user, fetchData]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     const { data: postData, error: postErr } = await supabase.from('posts').insert({
@@ -214,11 +216,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addMyAnonId(postData.id);
       fetchData();
     }
+    return { error: postErr };
   }, [addMyAnonId, fetchData]);
 
   const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => {
-    if (!user) return;
-    await supabase.from('businesses').insert({
+    if (!user) return { error: 'Not authenticated' };
+    const res = await supabase.from('businesses').insert({
       name: data.name,
       description: data.description,
       category: data.category,
@@ -232,11 +235,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       longitude: data.longitude,
       created_by: user.id
     });
-  }, [user]);
+    if (!res.error) fetchData();
+    return res;
+  }, [user, fetchData]);
 
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
-    if (!user) return;
-    const { error } = await supabase.from('events').insert({
+    if (!user) return { error: 'Not authenticated' };
+    const res = await supabase.from('events').insert({
       title: data.title,
       description: data.description,
       event_date: data.date,
@@ -246,12 +251,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       longitude: data.longitude,
       created_by: user.id
     });
-
-    if (!error) {
-      fetchData();
-    } else {
-      console.error('Error adding event:', error);
-    }
+    if (!res.error) fetchData();
+    return res;
   }, [user, fetchData]);
 
   const supportPost = useCallback(async (postId: string) => {

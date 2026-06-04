@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useNeighborhood } from '../contexts/NeighborhoodContext';
-import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw, Search, X } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer } from '../components/UI';
 import MapView from '../components/MapView';
 import MapPicker from '../components/MapPicker';
@@ -30,28 +30,33 @@ export default function Mural() {
   const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const { events, addEvent, deleteEvent, isMyEvent, toggleAttendance, getEventAttendees, fetchData, loading } = useData();
+  const { currentNeighborhood } = useNeighborhood();
   const { toast } = useToast();
 
   const [activeType, setActiveType] = useState<EventType | 'all'>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [nearMe, setNearMe] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const [viewAttendeesTarget, setViewAttendeesTarget] = useState<{ id: string; title: string } | null>(null);
   const [currentAttendees, setCurrentAttendees] = useState<any[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
-  const [userAttendance, setUserAttendance] = useState<Set<string>>(new Set());
 
-  // Detecta quais eventos o usuário atual vai comparecer (simplificado via localStorage para UX rápida + DB)
   useEffect(() => {
-    // Aqui poderíamos buscar do banco, mas para manter a performance,
-    // a verificação real acontece no toggleAttendance do DataContext.
-  }, [events, user]);
+    if (currentNeighborhood) {
+      setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+    }
+  }, [currentNeighborhood]);
 
   const [ft, setFt] = useState(''); const [ftype, setFtype] = useState<EventType>('reuniao');
   const [fdate, setFdate] = useState(''); const [floc, setFloc] = useState(''); const [fdesc, setFdesc] = useState('');
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+
   // ─── Haversine Distance Formula ────────────────────────
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -63,7 +68,6 @@ export default function Mural() {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
-  const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   const typeCounts = useMemo(() => {
     const c: Record<string, number> = { all: events.length };
@@ -80,53 +84,63 @@ export default function Mural() {
     });
   };
 
-  const { currentNeighborhood } = useNeighborhood();
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-
-  useEffect(() => {
-    if (currentNeighborhood) {
-      setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
-    }
-  }, [currentNeighborhood]);
-
   const filtered = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     const normalize = (s: string) => (s || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
     const currentNBName = normalize(currentNeighborhood.name);
 
     return events.filter(e => {
-      // Filtro de Categoria
+      // 1. Filtro de Categoria
       if (activeType !== 'all' && e.type !== activeType) return false;
 
-      // Lógica de Localização (Mesma do Feed)
-      const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
-      if (e.latitude && e.longitude) {
-        const dist = calculateDistance(center.lat, center.lng, Number(e.latitude), Number(e.longitude));
-        if (dist <= 5) return true;
+      // 2. Busca por Texto (Global)
+      if (q) {
+        return normalize(e.title).includes(q) ||
+               normalize(e.description).includes(q) ||
+               normalize(e.location).includes(q);
       }
 
-      const loc = normalize(e.location);
-      if (loc.includes(currentNBName)) return true;
+      // 3. Lógica de Localização (Bairro)
+      if (nearMe && e.latitude && e.longitude) {
+        const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+        const dist = calculateDistance(center.lat, center.lng, Number(e.latitude), Number(e.longitude));
+        if (dist > 5) return false;
+      } else if (!nearMe) {
+        const loc = normalize(e.location);
+        if (!loc.includes(currentNBName)) return false;
+      }
 
-      return false;
+      return true;
     });
-  }, [events, activeType, currentNeighborhood, userLocation]);
+  }, [events, activeType, searchQuery, nearMe, userLocation, currentNeighborhood]);
 
   const sorted = useMemo(() => [...filtered].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [filtered]);
 
   const handleCreate = async () => {
     if (!ft.trim() || !fdate || !floc.trim() || !fdesc.trim()) return;
-    await addEvent({
+
+    // Auto-adiciona o nome do bairro se não estiver no local para garantir visibilidade
+    const finalLocation = floc.toLowerCase().includes(currentNeighborhood.name.toLowerCase())
+      ? floc
+      : `${floc}, ${currentNeighborhood.name}`;
+
+    const { error } = await addEvent({
       title: ft,
       description: fdesc,
       date: fdate,
-      location: floc,
+      location: finalLocation,
       type: ftype,
       latitude: fLat,
       longitude: fLng
     });
-    setShowCreate(false); setFt(''); setFtype('reuniao'); setFdate(''); setFloc(''); setFdesc('');
-    setFLat(undefined); setFLng(undefined);
-    toast('Evento publicado com sucesso!');
+
+    if (!error) {
+      setShowCreate(false); setFt(''); setFtype('reuniao'); setFdate(''); setFloc(''); setFdesc('');
+      setFLat(undefined); setFLng(undefined);
+      toast('Evento publicado com sucesso!');
+    } else {
+      toast('Erro ao publicar evento. Verifique sua conexão.', 'error');
+    }
   };
 
   const handleDelete = useCallback((id: string) => { deleteEvent(id); setConfirmDeleteId(null); toast('Evento removido.', 'info'); }, [deleteEvent, toast]);
@@ -153,7 +167,9 @@ export default function Mural() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Mural da Comunidade</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Feiras, campanhas, eventos e avisos do bairro Vitória Régia</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            Bairro atual: <strong className="text-emerald-600 dark:text-emerald-400">{currentNeighborhood.name}</strong>
+          </p>
         </div>
         <button
           onClick={() => {
@@ -168,12 +184,30 @@ export default function Mural() {
         </button>
       </div>
 
+      <div className="space-y-2">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar eventos no mural..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 transition-colors">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       <Card className="!p-3">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {filterTypes.map(t => {
             const count = typeCounts[t.id] ?? 0;
             return (
-              <button key={t.id} onClick={() => setActiveType(t.id)}
+              <button key={t.id} role="tab" aria-selected={activeType === t.id} onClick={() => setActiveType(t.id)}
                 className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all',
                   activeType === t.id ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')}>
                 <span role="img" aria-hidden="true">{t.emoji}</span>{t.label}
@@ -185,8 +219,9 @@ export default function Mural() {
       </Card>
 
       {sorted.length === 0 ? (
-        <EmptyState icon={CalendarDays} title="Nenhum evento no mural"
-          description="Tem algo acontecendo no bairro? Compartilhe com toda a comunidade!"
+        <EmptyState icon={CalendarDays}
+          title={searchQuery ? 'Nenhum evento encontrado' : 'Nenhum evento no mural'}
+          description={searchQuery ? `Nenhum resultado para "${searchQuery}".` : `Tem algo acontecendo no bairro ${currentNeighborhood.name}? Compartilhe com a comunidade!`}
           action={isAuthenticated ? { label: 'Publicar evento', onClick: () => setShowCreate(true) } : { label: 'Entrar para participar', onClick: () => navigate('/login') }} />
       ) : (
         <div className="space-y-3 stagger">
