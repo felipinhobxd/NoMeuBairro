@@ -262,6 +262,17 @@ CREATE POLICY "Admins can update reports" ON content_reports FOR UPDATE USING (
     auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
 );
 
+-- POLÍTICAS: Events
+DROP POLICY IF EXISTS "Events are public" ON events;
+CREATE POLICY "Events are public" ON events FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Anyone can create events" ON events;
+CREATE POLICY "Anyone can create events" ON events FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Authors can delete own events" ON events;
+CREATE POLICY "Authors can delete own events" ON events FOR DELETE USING (
+    auth.uid() = created_by OR
+    auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
+);
+
 -- Outras políticas (Shorthand para o restante)
 DROP POLICY IF EXISTS "Badges are public" ON badges;
 CREATE POLICY "Badges are public" ON badges FOR SELECT USING (true);
