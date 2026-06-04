@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { useNavigate, Link } from 'react-router-dom';
+import { useNeighborhood } from '../contexts/NeighborhoodContext';
 import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast, ImageViewer } from '../components/UI';
 import MapView from '../components/MapView';
@@ -50,7 +51,17 @@ export default function Mural() {
   const [fdate, setFdate] = useState(''); const [floc, setFloc] = useState(''); const [fdesc, setFdesc] = useState('');
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
-  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  // ─── Haversine Distance Formula ────────────────────────
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
 
   const typeCounts = useMemo(() => {
@@ -68,8 +79,38 @@ export default function Mural() {
     });
   };
 
-  const filtered = events.filter(e => activeType === 'all' || e.type === activeType);
-  const sorted = [...filtered].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const { currentNeighborhood } = useNeighborhood();
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (currentNeighborhood) {
+      setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
+    }
+  }, [currentNeighborhood]);
+
+  const filtered = useMemo(() => {
+    const normalize = (s: string) => (s || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const currentNBName = normalize(currentNeighborhood.name);
+
+    return events.filter(e => {
+      // Filtro de Categoria
+      if (activeType !== 'all' && e.type !== activeType) return false;
+
+      // Lógica de Localização (Mesma do Feed)
+      const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
+      if (e.latitude && e.longitude) {
+        const dist = calculateDistance(center.lat, center.lng, Number(e.latitude), Number(e.longitude));
+        if (dist <= 5) return true;
+      }
+
+      const loc = normalize(e.location);
+      if (loc.includes(currentNBName)) return true;
+
+      return false;
+    });
+  }, [events, activeType, currentNeighborhood, userLocation]);
+
+  const sorted = useMemo(() => [...filtered].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()), [filtered]);
 
   const handleCreate = () => {
     if (!ft.trim() || !fdate || !floc.trim() || !fdesc.trim()) return;
