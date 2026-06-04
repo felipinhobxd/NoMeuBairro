@@ -292,7 +292,15 @@ export default function Layout({ children }: LayoutProps) {
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
-  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [location.pathname]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Atualiza o título da aba do navegador dinamicamente
+    if (currentNeighborhood) {
+      document.title = `No Meu Bairro — ${currentNeighborhood.name}`;
+    } else {
+      document.title = "No Meu Bairro";
+    }
+  }, [location.pathname, currentNeighborhood]);
 
   // Se o bairro NÃO foi selecionado, mostra APENAS o seletor de bairro
   if (!isNeighborhoodSelected) {
