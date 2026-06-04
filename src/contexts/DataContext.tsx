@@ -333,19 +333,48 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user, fetchData]);
 
   const getEventAttendees = useCallback(async (eventId: string) => {
-    const { data } = await supabase.from('event_attendance').select('*, users(name, avatar_url)').eq('event_id', eventId);
-    return data || [];
+    const { data } = await supabase
+      .from('event_attendance')
+      .select('*, users(id, name, avatar_url)')
+      .eq('event_id', eventId);
+
+    if (!data) return [];
+    return data.map(att => ({
+      id: att.id,
+      userId: att.users?.id,
+      userName: att.users?.name || 'Morador',
+      userAvatarUrl: att.users?.avatar_url
+    }));
   }, []);
 
   const addBusinessRating = useCallback(async (data: { businessId: string; stars: number; comment?: string }) => {
     if (!user) return;
-    await supabase.from('business_ratings').upsert({ business_id: data.businessId, user_id: user.id, stars: data.stars, comment: data.comment }, { onConflict: 'business_id,user_id' });
+    await supabase.from('business_ratings').upsert({
+      business_id: data.businessId,
+      user_id: user.id,
+      stars: data.stars,
+      comment: data.comment
+    }, { onConflict: 'business_id,user_id' });
     fetchData();
   }, [user, fetchData]);
 
   const getBusinessRatings = useCallback(async (businessId: string) => {
-    const { data } = await supabase.from('business_ratings').select('*, users(name, avatar_url)').eq('business_id', businessId).order('created_at', { ascending: false });
-    return data || [];
+    const { data } = await supabase
+      .from('business_ratings')
+      .select('*, users(id, name, avatar_url)')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    if (!data) return [];
+    return data.map(r => ({
+      id: r.id,
+      stars: r.stars,
+      comment: r.comment,
+      createdAt: r.created_at,
+      userId: r.users?.id,
+      userName: r.users?.name || 'Morador',
+      userAvatarUrl: r.users?.avatar_url
+    }));
   }, []);
 
   const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => {
