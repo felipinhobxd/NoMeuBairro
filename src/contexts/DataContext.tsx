@@ -348,14 +348,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addBusinessRating = useCallback(async (data: { businessId: string; stars: number; comment?: string }) => {
-    if (!user) return;
-    await supabase.from('business_ratings').upsert({
+    if (!user) {
+      console.error('Rating error: User not authenticated');
+      return;
+    }
+
+    console.log('Attempting to add rating:', { business_id: data.businessId, user_id: user.id, stars: data.stars });
+
+    const { data: res, error } = await supabase.from('business_ratings').upsert({
       business_id: data.businessId,
       user_id: user.id,
       stars: data.stars,
-      comment: data.comment
-    }, { onConflict: 'business_id,user_id' });
-    fetchData();
+      comment: data.comment,
+      created_at: new Date().toISOString() // Força atualização do timestamp no upsert
+    }, { onConflict: 'business_id,user_id' }).select();
+
+    if (error) {
+      console.error('Supabase error adding rating:', error);
+      throw error;
+    }
+
+    console.log('Rating saved successfully:', res);
+    await fetchData();
   }, [user, fetchData]);
 
   const getBusinessRatings = useCallback(async (businessId: string) => {
