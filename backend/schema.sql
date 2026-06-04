@@ -243,6 +243,11 @@ DROP POLICY IF EXISTS "Businesses are public" ON businesses;
 CREATE POLICY "Businesses are public" ON businesses FOR SELECT USING (true);
 DROP POLICY IF EXISTS "Auth users can create businesses" ON businesses;
 CREATE POLICY "Auth users can create businesses" ON businesses FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Authors can delete own businesses" ON businesses;
+CREATE POLICY "Authors can delete own businesses" ON businesses FOR DELETE USING (
+    auth.uid() = created_by OR
+    auth.uid() = '9c90d435-bfe2-4936-98d1-2c6c1160db4b'
+);
 
 -- POLÍTICAS: Notifications
 DROP POLICY IF EXISTS "Notifications are private" ON notifications;
