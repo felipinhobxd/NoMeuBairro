@@ -9,7 +9,7 @@ interface DataContextType {
   events: CommunityEvent[];
   comments: Comment[];
   notifications: AppNotification[];
-  reports: any[]; // Novo estado para denúncias
+  reports: any[];
   unreadCount: number;
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;
@@ -50,7 +50,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [reports, setReports] = useState<any[]>([]); // Novo estado para denúncias
+  const [reports, setReports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [processing, setProcessing] = useState<Set<string>>(new Set());
@@ -126,11 +126,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
           })));
         }
 
-        // Busca denúncias apenas para o ADMIN
         if (user.id === '9c90d435-bfe2-4936-98d1-2c6c1160db4b') {
           const { data: reportData } = await supabase
             .from('content_reports')
-            .select('*, reporter:reporter_id(name), post:post_id(title, description, image_url), comment:comment_id(content)')
+            .select('*, reporter:reporter_id(name), moderator:archived_by(name), post:post_id(title, description, image_url), comment:comment_id(content)')
             .order('created_at', { ascending: false });
           if (reportData) setReports(reportData);
         }
@@ -184,7 +183,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_reports' }, () => fetchData()) // Sincroniza denúncias
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_reports' }, () => fetchData())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         if (user && payload.new && payload.new.user_id === user.id) {
            fetchData();
@@ -395,11 +394,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => {
     await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason });
-    await fetchData(); // Atualiza painel admin se estiver aberto
+    await fetchData();
   }, [user, fetchData]);
 
   const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => {
-    const { error } = await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId);
+    const { error } = await supabase.from('content_reports').update({
+        status,
+        archived_at: new Date().toISOString(),
+        archived_by: user?.id
+    }).eq('id', reportId);
     if (error) console.error('Erro ao atualizar denúncia:', error);
     await fetchData();
   }, [user, fetchData]);

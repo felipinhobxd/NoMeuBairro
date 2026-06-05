@@ -5,7 +5,7 @@ import { useData } from '../contexts/DataContext';
 import {
   Shield, Users, AlertTriangle, CheckCircle2, XCircle, Trash2,
   Eye, Filter, Search, ChevronRight, MessageSquare, BarChart3, Clock,
-  ArrowUpRight, AlertCircle, History, RefreshCw, Undo, Archive
+  ArrowUpRight, AlertCircle, History, RefreshCw, Undo, Archive, UserCheck
 } from 'lucide-react';
 import { Card, Button, StatusBadge, timeAgo, useToast, Modal, Select, Textarea } from '../components/UI';
 import { cn } from '../utils/cn';
@@ -45,7 +45,11 @@ export default function AdminPanel() {
       const isHistory = activeTab === 'history';
       const isStatusMatch = isHistory ? r.status !== 'pending' : r.status === 'pending';
       return matchesSearch && isStatusMatch;
-    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }).sort((a, b) => {
+        const dateA = new Date(a.archived_at || a.created_at).getTime();
+        const dateB = new Date(b.archived_at || b.created_at).getTime();
+        return dateB - dateA;
+    });
   }, [reports, searchTerm, activeTab]);
 
   const handleModeration = async (reportId: string, status: 'resolved' | 'ignored') => {
@@ -86,7 +90,7 @@ export default function AdminPanel() {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Shield className="w-6 h-6 text-emerald-600" /> Painel Administrativo
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Moderação de conteúdo e estatísticas do bairro</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Moderação de conteúdo e rastreabilidade do bairro</p>
         </div>
         <Button variant="secondary" onClick={() => fetchData()} disabled={loading}>
           <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} /> Atualizar Dados
@@ -116,7 +120,7 @@ export default function AdminPanel() {
             <p className="text-xs font-bold text-slate-500 uppercase">Pendentes</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.pendingPosts}</p>
           </Card>
-          <Card className="!p-4 border-l-4 border-emerald-50">
+          <Card className="!p-4 border-l-4 border-emerald-500">
             <p className="text-xs font-bold text-slate-500 uppercase">Resolvidos</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.resolvedPosts}</p>
           </Card>
@@ -147,10 +151,22 @@ export default function AdminPanel() {
                         <span className={cn("px-2 py-0.5 rounded text-[10px] font-black uppercase", r.post_id ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700")}>
                           {r.post_id ? 'Relato' : 'Comentário'}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-bold">{timeAgo(r.created_at)}</span>
+                        <span className="text-[10px] text-slate-400 font-bold">{timeAgo(r.archived_at || r.created_at)}</span>
+                        {r.status !== 'pending' && (
+                            <span className={cn("px-2 py-0.5 rounded text-[9px] font-black uppercase", r.status === 'resolved' ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                                {r.status === 'resolved' ? 'Resolvida' : 'Ignorada'}
+                            </span>
+                        )}
                       </div>
                       <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">Motivo: {r.reason}</h3>
-                      <p className="text-xs text-slate-500 mt-1">Denunciado por: <span className="font-bold">{r.reporter?.name || 'Anônimo'}</span></p>
+                      <div className="flex items-center gap-4 mt-1.5">
+                        <p className="text-[11px] text-slate-500">Denunciado por: <span className="font-bold text-slate-700 dark:text-slate-300">{r.reporter?.name || 'Anônimo'}</span></p>
+                        {r.status !== 'pending' && (
+                           <p className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-bold">
+                             <UserCheck className="w-3 h-3" /> Moderado por: {r.moderator?.name || 'Sistema/Admin'}
+                           </p>
+                        )}
+                      </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-slate-300" />
                   </div>
@@ -188,8 +204,13 @@ export default function AdminPanel() {
                 <Button variant="danger" className="!text-[11px]" onClick={() => handleDeleteContent(selectedReport.id, selectedReport.post_id, selectedReport.comment_id)}>Excluir Conteúdo</Button>
               </div>
             ) : (
-              <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-bold text-center">
-                Denúncia já processada como: {selectedReport.status === 'resolved' ? 'RESOLVIDA' : 'IGNORADA'}
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-bold text-center">
+                    Ação: {selectedReport.status === 'resolved' ? 'CONTEÚDO EXCLUÍDO' : 'DENÚNCIA IGNORADA'}
+                </div>
+                <p className="text-[11px] text-center text-slate-400 font-medium">
+                    Moderado por <strong>{selectedReport.moderator?.name || 'Administrador'}</strong> em {new Date(selectedReport.archived_at).toLocaleString('pt-BR')}
+                </p>
               </div>
             )}
           </div>
