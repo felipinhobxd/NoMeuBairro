@@ -9,13 +9,14 @@ interface DataContextType {
   events: CommunityEvent[];
   comments: Comment[];
   notifications: AppNotification[];
+  reports: any[]; // Novo estado para denúncias
   unreadCount: number;
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;
   fetchData: () => Promise<void>;
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
-  addBusiness: (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
+  addBusiness: (data: { name: string; description: string; category: BusinessCategory; neighborhood?: string; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   supportPost: (postId: string) => Promise<void>;
   addComment: (postId: string, content: string, parentId?: string) => Promise<void>;
@@ -29,7 +30,6 @@ interface DataContextType {
   addBusinessRating: (data: { businessId: string; stars: number; comment?: string }) => Promise<void>;
   getBusinessRatings: (businessId: string) => Promise<any[]>;
   reportContent: (data: { postId?: string; commentId?: string; reason: string }) => Promise<void>;
-  getAllReports: () => Promise<any[]>;
   updateReportStatus: (reportId: string, status: 'resolved' | 'ignored') => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;
   deleteAllNotifications: () => Promise<void>;
@@ -50,6 +50,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [reports, setReports] = useState<any[]>([]); // Novo estado para denúncias
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [processing, setProcessing] = useState<Set<string>>(new Set());
@@ -124,12 +125,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
             isRead: n.is_read, createdAt: n.created_at
           })));
         }
+
+        // Busca denúncias apenas para o ADMIN
+        if (user.id === '9c90d435-bfe2-4936-98d1-2c6c1160db4b') {
+          const { data: reportData } = await supabase
+            .from('content_reports')
+            .select('*, reporter:reporter_id(name), post:post_id(title, description, image_url), comment:comment_id(content)')
+            .order('created_at', { ascending: false });
+          if (reportData) setReports(reportData);
+        }
       }
 
       if (bizRes.data) {
         setBusinesses(bizRes.data.map(b => ({
           id: b.id, name: b.name, description: b.description, category: b.category,
           phone: b.phone, whatsapp: b.whatsapp, address: b.address,
+          neighborhood: b.neighborhood,
           latitude: b.latitude, longitude: b.longitude, imageUrl: b.image_url,
           open_time: b.open_time, close_time: b.close_time,
           createdBy: b.created_by,
@@ -173,6 +184,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'content_reports' }, () => fetchData()) // Sincroniza denúncias
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         if (user && payload.new && payload.new.user_id === user.id) {
            fetchData();
@@ -195,7 +207,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       longitude: data.longitude,
       is_anonymous: false
     });
-    if (!res.error) fetchData();
+    if (!res.error) await fetchData();
     return res;
   }, [user, fetchData]);
 
@@ -214,12 +226,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     if (!postErr && postData) {
       addMyAnonId(postData.id);
-      fetchData();
+      await fetchData();
     }
     return { error: postErr };
   }, [addMyAnonId, fetchData]);
 
-  const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => {
+  const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; neighborhood?: string; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
     const res = await supabase.from('businesses').insert({
       name: data.name,
@@ -228,6 +240,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       phone: data.phone,
       whatsapp: data.whatsapp,
       address: data.address,
+      neighborhood: data.neighborhood,
       image_url: data.imageUrl,
       open_time: data.openTime,
       close_time: data.closeTime,
@@ -235,23 +248,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       longitude: data.longitude,
       created_by: user.id
     });
-    if (!res.error) fetchData();
-    return res;
-  }, [user, fetchData]);
-
-  const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
-    if (!user) return { error: 'Not authenticated' };
-    const res = await supabase.from('events').insert({
-      title: data.title,
-      description: data.description,
-      event_date: data.date,
-      location: data.location,
-      type: data.type,
-      latitude: data.latitude,
-      longitude: data.longitude,
-      created_by: user.id
-    });
-    if (!res.error) fetchData();
+    if (!res.error) await fetchData();
     return res;
   }, [user, fetchData]);
 
@@ -265,7 +262,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } else {
         await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
       }
-      fetchData();
+      await fetchData();
     } finally {
       setProcessing(prev => { const next = new Set(prev); next.delete(postId); return next; });
     }
@@ -274,12 +271,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
     if (!user) return;
     await supabase.from('comments').insert({ post_id: postId, author_id: user.id, parent_id: parentId, content });
-    fetchData();
+    await fetchData();
   }, [user, fetchData]);
 
   const deleteComment = useCallback(async (commentId: string) => {
     await supabase.from('comments').delete().eq('id', commentId);
-    fetchData();
+    await fetchData();
   }, [fetchData]);
 
   const deletePost = useCallback(async (postId: string) => {
@@ -290,35 +287,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ids.delete(postId);
         localStorage.setItem(SK_MY_ANON, JSON.stringify([...ids]));
       }
-      fetchData();
+      await fetchData();
     }
   }, [getMyAnonIds, fetchData]);
 
   const updatePostStatus = useCallback(async (postId: string, status: PostStatus) => {
     await supabase.from('posts').update({ status }).eq('id', postId);
-    fetchData();
+    await fetchData();
   }, [fetchData]);
 
   const markNotificationsAsRead = useCallback(async () => {
     if (!user) return;
     await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id);
-    fetchData();
+    await fetchData();
   }, [user, fetchData]);
 
   const deleteAllNotifications = useCallback(async () => {
     if (!user) return;
     await supabase.from('notifications').delete().eq('user_id', user.id);
-    fetchData();
+    await fetchData();
   }, [user, fetchData]);
 
   const deleteBusiness = useCallback(async (businessId: string) => {
     await supabase.from('businesses').delete().eq('id', businessId);
-    fetchData();
+    await fetchData();
   }, [fetchData]);
 
   const deleteEvent = useCallback(async (eventId: string) => {
     await supabase.from('events').delete().eq('id', eventId);
-    fetchData();
+    await fetchData();
   }, [fetchData]);
 
   const toggleAttendance = useCallback(async (eventId: string) => {
@@ -329,83 +326,83 @@ export function DataProvider({ children }: { children: ReactNode }) {
     } else {
       await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
     }
-    fetchData();
+    await fetchData();
   }, [user, fetchData]);
 
   const getEventAttendees = useCallback(async (eventId: string) => {
-    const { data } = await supabase
-      .from('event_attendance')
-      .select('*, users(id, name, avatar_url)')
-      .eq('event_id', eventId);
-
-    if (!data) return [];
-    return data.map(att => ({
-      id: att.id,
-      userId: att.users?.id,
-      userName: att.users?.name || 'Morador',
-      userAvatarUrl: att.users?.avatar_url
-    }));
+    try {
+      const { data, error } = await supabase
+        .from('event_attendance')
+        .select(`id, users:user_id (name, avatar_url)`)
+        .eq('event_id', eventId);
+      if (error) { console.error('Error fetching attendees:', error); return []; }
+      return (data || []).map((att: any) => ({
+        id: att.id,
+        userName: att.users?.name || 'Morador',
+        userAvatarUrl: att.users?.avatar_url
+      }));
+    } catch { return []; }
   }, []);
 
   const addBusinessRating = useCallback(async (data: { businessId: string; stars: number; comment?: string }) => {
-    if (!user) {
-      console.error('Rating error: User not authenticated');
-      return;
-    }
-
-    console.log('Attempting to add rating:', { business_id: data.businessId, user_id: user.id, stars: data.stars });
-
-    const { data: res, error } = await supabase.from('business_ratings').upsert({
+    if (!user) return;
+    const { error } = await supabase.from('business_ratings').upsert({
       business_id: data.businessId,
       user_id: user.id,
       stars: data.stars,
       comment: data.comment,
-      created_at: new Date().toISOString() // Força atualização do timestamp no upsert
-    }, { onConflict: 'business_id,user_id' }).select();
+      created_at: new Date().toISOString()
+    }, { onConflict: 'business_id,user_id' });
 
-    if (error) {
-      console.error('Supabase error adding rating:', error);
-      throw error;
-    }
-
-    console.log('Rating saved successfully:', res);
+    if (error) { console.error('Error adding rating:', error); throw error; }
     await fetchData();
   }, [user, fetchData]);
 
   const getBusinessRatings = useCallback(async (businessId: string) => {
-    const { data } = await supabase
-      .from('business_ratings')
-      .select('*, users(id, name, avatar_url)')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
-
-    if (!data) return [];
-    return data.map(r => ({
-      id: r.id,
-      stars: r.stars,
-      comment: r.comment,
-      createdAt: r.created_at,
-      userId: r.users?.id,
-      userName: r.users?.name || 'Morador',
-      userAvatarUrl: r.users?.avatar_url
-    }));
+    try {
+      const { data, error } = await supabase
+        .from('business_ratings')
+        .select(`id, stars, comment, createdAt:created_at, users:user_id (name, avatar_url)`)
+        .eq('business_id', businessId)
+        .order('created_at', { ascending: false });
+      if (error) { console.error('Error fetching ratings:', error); return []; }
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        stars: r.stars,
+        comment: r.comment,
+        createdAt: r.createdAt,
+        userName: r.users?.name || 'Morador',
+        userAvatarUrl: r.users?.avatar_url
+      }));
+    } catch { return []; }
   }, []);
+
+  const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
+    if (!user) return { error: 'Not authenticated' };
+    const res = await supabase.from('events').insert({
+      title: data.title,
+      description: data.description,
+      event_date: data.date,
+      location: data.location,
+      type: data.type,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      created_by: user.id
+    });
+    if (!res.error) await fetchData();
+    return res;
+  }, [user, fetchData]);
 
   const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => {
     await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason });
-  }, [user]);
-
-  const getAllReports = useCallback(async () => {
-    const admins = ['9c90d435-bfe2-4936-98d1-2c6c1160db4b'];
-    if (!user || !admins.includes(user.id)) return [];
-    const { data } = await supabase.from('content_reports').select('*, reporter:reporter_id(name), post:post_id(title, description, image_url), comment:comment_id(content)').order('created_at', { ascending: false });
-    return data || [];
-  }, [user]);
+    await fetchData(); // Atualiza painel admin se estiver aberto
+  }, [user, fetchData]);
 
   const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => {
     const { error } = await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId);
     if (error) console.error('Erro ao atualizar denúncia:', error);
-  }, [user]);
+    await fetchData();
+  }, [user, fetchData]);
 
   const isMyPost = useCallback((post: { id: string; authorId: string }) => {
     if (getMyAnonIds().has(post.id)) return true;
@@ -423,15 +420,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [comments]);
 
   const contextValue = useMemo(() => ({
-    posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading, fetchData,
+    posts, businesses, events, comments, notifications, reports, unreadCount, commentsByPost, loading, fetchData,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
-    isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus,
+    isMyPost, isMyBusiness, isMyEvent, reportContent, updateReportStatus,
     addBusinessRating, getBusinessRatings, toggleAttendance, getEventAttendees
-  }), [posts, businesses, events, comments, notifications, unreadCount, commentsByPost, loading,
+  }), [posts, businesses, events, comments, notifications, reports, unreadCount, commentsByPost, loading,
     addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications,
-    isMyPost, isMyBusiness, isMyEvent, reportContent, getAllReports, updateReportStatus,
+    isMyPost, isMyBusiness, isMyEvent, reportContent, updateReportStatus,
     addBusinessRating, getBusinessRatings, toggleAttendance, getEventAttendees]);
 
   return <DataContext.Provider value={contextValue}>{children}</DataContext.Provider>;
