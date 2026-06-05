@@ -51,6 +51,7 @@ export default function AdminPanel() {
   const handleModeration = async (reportId: string, status: 'resolved' | 'ignored') => {
     try {
       await updateReportStatus(reportId, status);
+      await fetchData(); // Força atualização das estatísticas
       toast(status === 'resolved' ? 'Conteúdo moderado com sucesso.' : 'Denúncia ignorada.');
       setSelectedReport(null);
     } catch (err) {
@@ -68,6 +69,7 @@ export default function AdminPanel() {
         await deletePost(postId);
       }
       await updateReportStatus(reportId, 'resolved');
+      await fetchData(); // Força atualização das estatísticas
       toast('Conteúdo excluído e denúncia resolvida.');
       setSelectedReport(null);
     } catch (err) {
@@ -114,7 +116,7 @@ export default function AdminPanel() {
             <p className="text-xs font-bold text-slate-500 uppercase">Pendentes</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.pendingPosts}</p>
           </Card>
-          <Card className="!p-4 border-l-4 border-emerald-500">
+          <Card className="!p-4 border-l-4 border-emerald-50">
             <p className="text-xs font-bold text-slate-500 uppercase">Resolvidos</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.resolvedPosts}</p>
           </Card>
@@ -181,9 +183,8 @@ export default function AdminPanel() {
             </div>
 
             {selectedReport.status === 'pending' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                 <Button variant="secondary" className="!text-[11px]" onClick={() => handleModeration(selectedReport.id, 'ignored')}>Ignorar</Button>
-                <Button variant="primary" className="!text-[11px]" onClick={() => handleResolve(selectedReport.id, selectedReport.post_id)}>Resolver</Button>
                 <Button variant="danger" className="!text-[11px]" onClick={() => handleDeleteContent(selectedReport.id, selectedReport.post_id, selectedReport.comment_id)}>Excluir Conteúdo</Button>
               </div>
             ) : (
