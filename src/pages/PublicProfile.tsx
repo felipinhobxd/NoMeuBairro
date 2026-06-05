@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
-import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../utils/supabase';
 import {
   MessageSquare, Heart, Award, CheckCircle2,
   Store, CalendarDays, ArrowLeft, ShieldAlert,
-  MapPin, Clock
+  MapPin, Loader2
 } from 'lucide-react';
 import { Card, Button, StatusBadge, CategoryBadge, timeAgo } from '../components/UI';
 import { cn } from '../utils/cn';
@@ -22,21 +22,33 @@ export default function PublicProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { posts, businesses, events } = useData();
-  const { user: currentUser } = useAuth();
 
-  // In a real Supabase app, we would fetch the user by ID.
-  // Here we simulate it by finding the user in the posts or businesses they created.
-  // Or we could have a list of users in DataContext.
-  const profileUser = useMemo(() => {
-    // If it's the current user, we already have their data
-    if (currentUser?.id === userId) return currentUser;
+  const [profileUser, setProfileUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-    // Otherwise find an item they created to extract their name
-    const post = posts.find(p => p.authorId === userId);
-    if (post) return { id: post.authorId, name: post.authorName, avatarUrl: post.authorAvatarUrl, createdAt: post.createdAt };
+  // Busca os dados do perfil diretamente do Supabase para garantir visibilidade pública
+  useEffect(() => {
+    async function loadProfile() {
+      if (!userId) return;
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
 
-    return null;
-  }, [userId, posts, currentUser]);
+        if (!error && data) {
+          setProfileUser(data);
+        }
+      } catch (err) {
+        console.error('Error loading public profile:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProfile();
+  }, [userId]);
 
   const stats = useMemo(() => {
     const userPosts = posts.filter(p => p.authorId === userId);
@@ -62,6 +74,15 @@ export default function PublicProfile() {
     };
   }, [userId, posts, businesses, events]);
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
+        <p className="text-slate-500 font-medium">Carregando morador...</p>
+      </div>
+    );
+  }
+
   if (!profileUser) {
     return (
       <div className="max-w-2xl mx-auto py-12 text-center">
@@ -83,8 +104,8 @@ export default function PublicProfile() {
       <Card>
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
-            {profileUser.avatarUrl ? (
-              <img src={profileUser.avatarUrl} alt={profileUser.name} className="w-full h-full object-cover" />
+            {profileUser.avatar_url ? (
+              <img src={profileUser.avatar_url} alt={profileUser.name} className="w-full h-full object-cover" />
             ) : (
               profileUser.name.charAt(0).toUpperCase()
             )}
@@ -93,11 +114,11 @@ export default function PublicProfile() {
             <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{profileUser.name}</h2>
             <div className="flex items-center gap-3 mt-1">
               <span className="text-xs text-slate-400">
-                Morador do Vitória Régia
+                Morador do bairro
               </span>
               <span className="w-1 h-1 rounded-full bg-slate-300" />
               <span className="text-xs text-slate-400">
-                Ativo há {timeAgo(profileUser.createdAt)}
+                Ativo desde {new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
               </span>
             </div>
           </div>
