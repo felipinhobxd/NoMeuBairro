@@ -133,7 +133,7 @@ export default function Feed() {
   const [fd, setFd] = useState('');
   const [fi, setFi] = useState('');
 
-  // Sincroniza a localização virtual sempre que o bairro mudar (troca no Header ou Landing)
+  // Sincroniza a localização virtual sempre que o bairro mudar
   useEffect(() => {
     if (currentNeighborhood) {
       setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude });
@@ -183,11 +183,7 @@ export default function Feed() {
       if (onlyMine && user && p.authorId !== user.id) return false;
       if (onlyMine && !user) return false;
 
-      // CORREÇÃO: Denúncias Anônimas aparecem em TODOS os bairros
-      if (p.authorId === 'anonymous') return true;
-
       // 3. LOGICA DE LOCALIZAÇÃO (Busca Têxtil ou Bairro Atual)
-      // Se tiver busca de texto (incluindo CEP digitado), prioriza a busca global (vê Curitiba inteira).
       if (q) {
         return normalize(p.title).includes(q) ||
                normalize(p.description).includes(q) ||
@@ -195,19 +191,18 @@ export default function Feed() {
                normalize(p.authorName).includes(q);
       }
 
-      // Se NÃO tiver busca de texto, filtra estritamente pelo bairro atual ou distância.
-      // Prioridade 1: Geográfica (Raio de 5km do centro do bairro)
+      // AGORA RESPEITA O BAIRRO (MESMO SENDO ANÔNIMO)
+      // Prioridade 1: Geográfica (Raio de 5km)
       const center = userLocation || { lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude };
       if (p.latitude && p.longitude) {
         const dist = calculateDistance(center.lat, center.lng, Number(p.latitude), Number(p.longitude));
         if (dist <= 5) return true;
       }
 
-      // Prioridade 2: Nome do bairro (Busca inclusiva na string de localização)
+      // Prioridade 2: Nome do bairro
       const postLoc = normalize(p.location);
       if (postLoc.includes(currentNBName)) return true;
 
-      // Se não bateu nem o GPS nem o Nome, esconde (Isolamento de Bairro)
       return false;
     });
   }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user, currentNeighborhood]);
@@ -389,7 +384,7 @@ export default function Feed() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Buscar por título ou digite um CEP para mudar de bairro/rua..."
+            placeholder="Buscar por título ou digite um CEP para trocar de bairro..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onKeyDown={async (e) => {
@@ -405,21 +400,11 @@ export default function Feed() {
                     if (!data.erro) {
                       const ok = await setNeighborhoodByCep(clean);
                       if (ok) {
-                        toast('Bairro localizado!');
-
-                        // Sincroniza as coordenadas para o filtro Perto de Mim
-                        const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-                        const target = curitibaNeighborhoods.find(n => normalize(n.name) === normalize(data.bairro));
-
-                        if (target) {
-                          setUserLocation({ lat: target.latitude, lng: target.longitude });
-                          setNearMe(true);
-                        }
-
+                        toast('Bairro localizado: ' + data.bairro);
                         setSearchQuery('');
                       }
                     } else {
-                      toast('CEP não encontrado ou fora de Curitiba.', 'error');
+                      toast('CEP não encontrado.', 'error');
                     }
                   } catch (error) {
                     toast('Erro ao buscar CEP.', 'error');
@@ -450,7 +435,7 @@ export default function Feed() {
               const count = statusCounts[s.id] ?? 0;
               return (
                 <button key={s.id} role="tab" aria-selected={activeStatus === s.id} onClick={() => setActiveStatus(s.id)}
-                  className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5',
+                  className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all',
                     activeStatus === s.id ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')}>
                   {s.label}
                   {count > 0 && <span className={cn('px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none', activeStatus === s.id ? 'bg-white/20' : 'bg-slate-200/80 dark:bg-slate-700')}>{count}</span>}
@@ -505,7 +490,7 @@ export default function Feed() {
       {filtered.length === 0 ? (
         <EmptyState icon={MessageSquare}
           title={searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum relato por enquanto'}
-          description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : `Seja o primeiro a registrar um problema no bairro ${currentNeighborhood.name}. Sua voz importa!`}
+          description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : `Seja o primeiro a registrar um problema no bairro ${currentNeighborhood.name}!`}
           action={searchQuery ? { label: 'Limpar busca', onClick: () => setSearchQuery('') }
             : isAuthenticated ? { label: 'Criar relato', onClick: () => setShowCreate(true) }
             : { label: 'Entrar para participar', onClick: () => navigate('/login') }} />
@@ -613,7 +598,7 @@ export default function Feed() {
                     </button>
                     <button onClick={() => toggleComments(post.id)}
                       className={cn('flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95',
-                        isExpanded ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400')}
+                        isExpanded ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400')}
                       aria-expanded={isExpanded}>
                       <MessageSquare className="w-4 h-4" />
                       <span>{postComments.length > 0 ? postComments.length : ''} Comentário{postComments.length !== 1 ? 's' : ''}</span>
@@ -644,7 +629,7 @@ export default function Feed() {
                         )}
                         {post.status !== 'resolved' && (
                           <button onClick={() => handleStatusChange(post.id, 'resolved')}
-                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 ring-1 ring-emerald-200 dark:ring-emerald-500/20 transition-all">
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 ring-1 ring-blue-200 dark:ring-blue-500/20 transition-all">
                             Resolvido
                           </button>
                         )}

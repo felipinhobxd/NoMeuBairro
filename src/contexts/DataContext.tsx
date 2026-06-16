@@ -9,7 +9,7 @@ interface DataContextType {
   events: CommunityEvent[];
   comments: Comment[];
   notifications: AppNotification[];
-  reports: any[];
+      reports: any[];
   unreadCount: number;
   commentsByPost: Record<string, Comment[]>;
   loading: boolean;

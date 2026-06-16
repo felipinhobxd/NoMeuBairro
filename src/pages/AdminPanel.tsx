@@ -5,6 +5,8 @@ import { useData } from '../contexts/DataContext';
 import {
   Shield, Users, AlertTriangle, CheckCircle2, XCircle, Trash2,
   Eye, Filter, Search, ChevronRight, MessageSquare, BarChart3, Clock,
+Para começar, selecione seu bairro ou digite seu CEP. Vamos conectar você com o que acontece ao seu redor. 🌿
+
   ArrowUpRight, AlertCircle, History, RefreshCw, Undo, Archive, UserCheck
 } from 'lucide-react';
 import { Card, Button, StatusBadge, timeAgo, useToast, Modal, Select, Textarea } from '../components/UI';
@@ -21,7 +23,7 @@ export default function AdminPanel() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
   // Redireciona se não for admin (ID específico trancado)
-  const ADMIN_ID = '9c90d435-bfe2-4936-98d1-2c6c1160db4b';
+  const ADMIN_ID = '88157980-94d3-49cb-84bf-e8841f1799f8';
 
   useEffect(() => {
     if (!user || user.id !== ADMIN_ID) {
