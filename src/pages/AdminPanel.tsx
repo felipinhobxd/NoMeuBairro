@@ -5,8 +5,6 @@ import { useData } from '../contexts/DataContext';
 import {
   Shield, Users, AlertTriangle, CheckCircle2, XCircle, Trash2,
   Eye, Filter, Search, ChevronRight, MessageSquare, BarChart3, Clock,
-Para começar, selecione seu bairro ou digite seu CEP. Vamos conectar você com o que acontece ao seu redor. 🌿
-
   ArrowUpRight, AlertCircle, History, RefreshCw, Undo, Archive, UserCheck
 } from 'lucide-react';
 import { Card, Button, StatusBadge, timeAgo, useToast, Modal, Select, Textarea } from '../components/UI';
@@ -23,7 +21,7 @@ export default function AdminPanel() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
   // Redireciona se não for admin (ID específico trancado)
-  const ADMIN_ID = '88157980-94d3-49cb-84bf-e8841f1799f8';
+  const ADMIN_ID = '88157980-94d3-4936-84bf-e8841f1799f8';
 
   useEffect(() => {
     if (!user || user.id !== ADMIN_ID) {
@@ -122,7 +120,7 @@ export default function AdminPanel() {
             <p className="text-xs font-bold text-slate-500 uppercase">Pendentes</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.pendingPosts}</p>
           </Card>
-          <Card className="!p-4 border-l-4 border-emerald-500">
+          <Card className="!p-4 border-l-4 border-emerald-50">
             <p className="text-xs font-bold text-slate-500 uppercase">Resolvidos</p>
             <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{stats.resolvedPosts}</p>
           </Card>
