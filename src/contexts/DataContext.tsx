@@ -126,7 +126,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           })));
         }
 
-        if (user.id === '9c90d435-bfe2-4936-98d1-2c6c1160db4b') {
+        if (user.id === '88157980-94d3-49cb-84bf-e8841f1799f8') {
           const { data: reportData } = await supabase
             .from('content_reports')
             .select('*, reporter:reporter_id(name), moderator:archived_by(name), post:post_id(title, description, image_url), comment:comment_id(content)')

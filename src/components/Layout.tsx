@@ -287,7 +287,7 @@ export default function Layout({ children }: LayoutProps) {
   const { currentNeighborhood, isNeighborhoodSelected, clearSelection } = useNeighborhood();
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = user?.id === '9c90d435-bfe2-4936-98d1-2c6c1160db4b';
+  const isAdmin = user?.id === '88157980-94d3-49cb-84bf-e8841f1799f8';
 
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);

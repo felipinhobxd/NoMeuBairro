@@ -21,7 +21,7 @@ export default function AdminPanel() {
   const [selectedReport, setSelectedReport] = useState<any>(null);
 
   // Redireciona se não for admin (ID específico trancado)
-  const ADMIN_ID = '88157980-94d3-4936-84bf-e8841f1799f8';
+  const ADMIN_ID = '88157980-94d3-49cb-84bf-e8841f1799f8';
 
   useEffect(() => {
     if (!user || user.id !== ADMIN_ID) {
