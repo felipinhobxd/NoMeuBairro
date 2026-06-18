@@ -1,4 +1,4 @@
-# 🏢 No Meu Bairro — Vitória Régia
+# 🏢 No Meu Bairro
 
 Plataforma comunitária interativa para moradores do bairro Vitória Régia registrarem problemas, acompanharem estatísticas locais, descobrirem comércios e fortalecerem a comunicação no bairro.
 
