@@ -12,7 +12,6 @@ import Mural from './pages/Mural';
 import Denuncias from './pages/Denuncias';
 import Mapa from './pages/Mapa';
 import Estatisticas from './pages/Estatisticas';
-import AdminPanel from './pages/AdminPanel';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
@@ -33,7 +32,6 @@ export default function App() {
                     <Route path="/denuncias" element={<Denuncias />} />
                     <Route path="/mapa" element={<Mapa />} />
                     <Route path="/estatisticas" element={<Estatisticas />} />
-                    <Route path="/admin" element={<AdminPanel />} />
                     <Route path="/login" element={<Login />} />
                     <Route path="/perfil" element={<Profile />} />
                     <Route path="/perfil/:userId" element={<PublicProfile />} />
