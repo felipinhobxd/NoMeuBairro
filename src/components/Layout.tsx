@@ -6,9 +6,9 @@ import { useData } from '../contexts/DataContext';
 import { useNeighborhood, curitibaNeighborhoods } from '../contexts/NeighborhoodContext';
 import { cn } from '../utils/cn';
 import {
-  MapPin, Sun, Moon, LogOut, LayoutGrid, Store,
+  MapPin, Sun, Moon, LogOut, LayoutGrid, Briefcase,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
-  BarChart3, ShieldCheck, Search, ChevronRight, Building2, Sparkles, MapPinned
+  BarChart3, Search, ChevronRight, Building2, Sparkles, MapPinned
 } from 'lucide-react';
 import { timeAgo, Button, Card, Input, useToast } from './UI';
 
@@ -16,7 +16,7 @@ const navItems = [
   { path: '/', label: 'Feed', icon: LayoutGrid },
   { path: '/mapa', label: 'Mapa', icon: MapIconIcon },
   { path: '/estatisticas', label: 'Dados', icon: BarChart3 },
-  { path: '/guia', label: 'Guia', icon: Store },
+  { path: '/empregos', label: 'Empregos', icon: Briefcase },
   { path: '/mural', label: 'Mural', icon: CalendarDays },
   { path: '/denuncias', label: 'Denúncias', icon: ShieldAlert },
   { path: '/perfil', label: 'Perfil', icon: UserCircle },
@@ -287,14 +287,12 @@ export default function Layout({ children }: LayoutProps) {
   const { currentNeighborhood, isNeighborhoodSelected, clearSelection } = useNeighborhood();
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = user?.id === '88157980-94d3-49cb-84bf-e8841f1799f8';
 
   const isActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Atualiza o título da aba do navegador dinamicamente
     if (currentNeighborhood) {
       document.title = `No Meu Bairro — ${currentNeighborhood.name}`;
     } else {
@@ -302,7 +300,6 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [location.pathname, currentNeighborhood]);
 
-  // Se o bairro NÃO foi selecionado, mostra APENAS o seletor de bairro
   if (!isNeighborhoodSelected) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
@@ -314,8 +311,6 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
-
-      {/* Header */}
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300" role="banner">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16 gap-4">
@@ -330,12 +325,7 @@ export default function Layout({ children }: LayoutProps) {
               </button>
 
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
-
-              <button
-                onClick={clearSelection}
-                className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all"
-                title="Mudar de bairro"
-              >
+              <button onClick={clearSelection} className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all" title="Mudar de bairro">
                 <div className="flex flex-col items-start">
                   <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro</span>
                   <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[80px] xl:max-w-none">{currentNeighborhood.name}</span>
@@ -358,31 +348,17 @@ export default function Layout({ children }: LayoutProps) {
                   </button>
                 );
               })}
-              {isAdmin && (
-                <button onClick={() => navigate('/admin')}
-                  className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-bold transition-all duration-200 shrink-0',
-                    location.pathname === '/admin' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-400'
-                      : 'bg-indigo-600/5 text-indigo-600 hover:bg-indigo-600/10 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20')}
-                >
-                  <ShieldCheck className="w-4 h-4" /><span className="hidden lg:inline">Painel Admin</span>
-                </button>
-              )}
             </nav>
 
             <div className="flex items-center gap-1 lg:gap-2 shrink-0">
-              <button onClick={toggle} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200"
-                aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>
+              <button onClick={toggle} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>
                 {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
               </button>
               <NotificationBell />
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5 lg:gap-2">
-                  <button onClick={() => navigate('/perfil')}
-                    className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors"
-                    aria-label={`Perfil de ${user.name}`}>
-                    {user.avatarUrl
-                      ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
-                      : user.name.charAt(0).toUpperCase()}
+                  <button onClick={() => navigate('/perfil')} className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors" aria-label={`Perfil de ${user.name}`}>
+                    {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
                   </button>
                   <button onClick={logout} className="hidden lg:flex p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200" aria-label="Sair" title="Sair">
                     <LogOut className="w-[18px] h-[18px]" />
@@ -398,96 +374,53 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 pb-24 md:pb-0" id="main-content" role="main">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
-
-        {/* Footer */}
         <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
             <div className="grid sm:grid-cols-3 gap-8">
-              {/* Brand */}
               <div>
                 <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center">
-                    <img src="/logo.png" alt="" className="w-full h-full object-cover" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p>
-                    <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{currentNeighborhood.name}</p>
-                  </div>
+                  <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
+                  <div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{currentNeighborhood.name}</p></div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">
-                  Plataforma comunitária criada para conectar moradores, resolver problemas e fortalecer o bairro {currentNeighborhood.name} em Curitiba.
-                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">Plataforma comunitária criada para conectar moradores, resolver problemas e fortalecer o bairro {currentNeighborhood.name} em Curitiba.</p>
               </div>
-              {/* Links */}
               <div>
                 <h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Navegação</h4>
-                <ul className="space-y-2">
-                  {navItems.map(item => (
-                    <li key={item.path}>
-                      <button onClick={() => navigate(item.path)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">
-                        {item.label}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <ul className="space-y-2">{navItems.map(item => <li key={item.path}><button onClick={() => navigate(item.path)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">{item.label}</button></li>)}</ul>
               </div>
-              {/* Info */}
               <div>
                 <h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Apoio</h4>
                 <ul className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
-                  <li className="flex items-center gap-2">
-                    <a href="tel:190" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Polícia Militar: 190</a>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <a href="tel:180" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Mulher: 180</a>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <a href="tel:192" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">SAMU: 192</a>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <a href="tel:100" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Direitos Humanos: 100</a>
-                  </li>
+                  <li><a href="tel:190" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Polícia Militar: 190</a></li>
+                  <li><a href="tel:180" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Mulher: 180</a></li>
+                  <li><a href="tel:192" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">SAMU: 192</a></li>
+                  <li><a href="tel:100" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Direitos Humanos: 100</a></li>
                 </ul>
               </div>
             </div>
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">
-                © {new Date().getFullYear()} No Meu Bairro — {currentNeighborhood.name}, Curitiba. Todos os direitos reservados.
-              </p>
-              <p className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
-                Feito com <Heart className="w-3 h-3 text-red-400 inline fill-current" /> pelo 2°DS
-              </p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} No Meu Bairro — {currentNeighborhood.name}, Curitiba. Todos os direitos reservados.</p>
+              <p className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">Feito com <Heart className="w-3 h-3 text-red-400 inline fill-current" /> pelo 2°DS</p>
             </div>
           </div>
         </footer>
       </main>
 
-      {/* Mobile Nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
         <div className="flex items-center justify-around h-[72px] px-2 w-full">
           {navItems.map((item) => {
             const Icon = item.icon; const active = isActive(item.path);
             return (
-              <button key={item.path} onClick={() => navigate(item.path)}
-                className={cn('flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-300 flex-1 relative active:scale-90',
-                  active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')}
-                aria-current={active ? 'page' : undefined}>
-                <div className={cn(
-                  "p-2 rounded-xl transition-all duration-300",
-                  active && "bg-emerald-50 dark:bg-emerald-500/10 scale-110 shadow-sm"
-                )}>
-                  <Icon className={cn('w-5 h-5 transition-transform duration-300')} strokeWidth={active ? 2.5 : 2} />
-                </div>
-                <span className={cn("text-[10px] font-bold tracking-tight transition-all", active ? "opacity-100 translate-y-0" : "opacity-80")}>{item.label}</span>
+              <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-300 flex-1 relative active:scale-90', active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')} aria-current={active ? 'page' : undefined}>
+                <div className={cn("p-2 rounded-xl transition-all duration-300", active && "bg-emerald-50 dark:bg-emerald-500/10 scale-110 shadow-sm")}><Icon className="w-5 h-5 transition-transform duration-300" strokeWidth={active ? 2.5 : 2} /></div>
+                <span className="text-[10px] font-bold tracking-tight transition-all">{item.label}</span>
               </button>
             );
           })}
         </div>
       </nav>
-
       <ScrollToTop />
     </div>
   );
