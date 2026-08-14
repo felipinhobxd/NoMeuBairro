@@ -1,0 +1,13 @@
+/* Shared contrast fixes for native form controls. */
+html { color-scheme: light; }
+html.dark { color-scheme: dark; }
+input, textarea, select { color: #0f172a; background-color: #ffffff; }
+input::placeholder, textarea::placeholder { color: #64748b; opacity: 1; }
+select option { color: #0f172a; background-color: #ffffff; }
+select option:checked { color: #0f172a; background-color: #dbeafe; }
+.dark input, .dark textarea, .dark select { color: #f8fafc; background-color: #0f172a; }
+.dark input::placeholder, .dark textarea::placeholder { color: #94a3b8; opacity: 1; }
+.dark select option { color: #f8fafc; background-color: #0f172a; }
+.dark select option:checked { color: #ffffff; background-color: #1e3a5f; }
+select { color-scheme: light; }
+.dark select { color-scheme: dark; }
