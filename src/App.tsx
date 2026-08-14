@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { NeighborhoodProvider } from './contexts/NeighborhoodContext';
 import { ToastProvider } from './components/UI';
+import BrazilWhatsappMask from './components/BrazilWhatsappMask';
 import Layout from './components/Layout';
 import { PanicButton, CookieConsent } from './components/Safety';
 import Feed from './pages/Feed';
@@ -18,7 +19,7 @@ import Empregos from './pages/Empregos';
 import CompanyDashboard from './pages/CompanyDashboard';
 
 export default function App() {
-  return <ThemeProvider><AuthProvider><NeighborhoodProvider><DataProvider><ToastProvider><HashRouter><Layout><Routes>
+  return <ThemeProvider><AuthProvider><NeighborhoodProvider><DataProvider><ToastProvider><HashRouter><BrazilWhatsappMask /><Layout><Routes>
     <Route path="/" element={<Feed />} />
     <Route path="/guia" element={<Empregos />} />
     <Route path="/empregos" element={<Empregos />} />
