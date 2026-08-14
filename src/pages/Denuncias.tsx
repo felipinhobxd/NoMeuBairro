@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldAlert, Eye, Lock, AlertCircle, Send, CheckCircle2, Info, ArrowRight, MapPin, Camera } from 'lucide-react';
+import { ShieldAlert, Eye, Lock, AlertCircle, Send, CheckCircle2, Info, ArrowRight } from 'lucide-react';
 import { Card, Textarea, Select, Button, Input, ImageUpload } from '../components/UI';
 import { EmergencyContacts } from '../components/Safety';
 import MapPicker from '../components/MapPicker';
@@ -27,6 +27,7 @@ export default function Denuncias() {
   const [localizacao, setLocalizacao] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
   const [fi, setFi] = useState('');
@@ -37,10 +38,7 @@ export default function Denuncias() {
       try {
         const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
         const data = await res.json();
-        if (!data.erro) {
-          // Pega apenas o nome da rua (logradouro)
-          setLocalizacao(data.logradouro);
-        }
+        if (!data.erro) setLocalizacao(data.logradouro);
       } catch {}
     }
   };
@@ -48,25 +46,35 @@ export default function Denuncias() {
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!tipo || !descricao.trim()) return;
-      setIsSubmitting(true);
+      setError('');
+      if (!tipo || !descricao.trim()) {
+        setError('Selecione o tipo e descreva a denúncia.');
+        return;
+      }
 
-      await addAnonymousPost({
+      setIsSubmitting(true);
+      const result = await addAnonymousPost({
         tipo,
         description: descricao,
         location: localizacao,
         imageUrl: fi || undefined,
         latitude: fLat,
-        longitude: fLng
+        longitude: fLng,
       });
-
       setIsSubmitting(false);
+
+      if (result.error) {
+        setError(result.error.message || 'Não foi possível enviar a denúncia. Tente novamente.');
+        return;
+      }
+
       setSubmitted(true);
       setTipo('');
       setDescricao('');
       setLocalizacao('');
       setFLat(undefined);
       setFLng(undefined);
+      setFi('');
     },
     [tipo, descricao, localizacao, fLat, fLng, fi, addAnonymousPost],
   );
@@ -80,7 +88,7 @@ export default function Denuncias() {
           </div>
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Denúncia enviada com sucesso</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md leading-relaxed">
-            Sua denúncia foi registrada de forma totalmente anônima e agora aparece no feed comunitário. Nenhum dado pessoal, IP ou metadado foi armazenado.
+            Sua denúncia foi publicada no feed sem associá-la ao seu perfil. Ela aparecerá como denúncia anônima.
           </p>
           <div className="flex gap-3 mt-8">
             <Button variant="secondary" onClick={() => setSubmitted(false)}>Enviar outra</Button>
@@ -102,72 +110,52 @@ export default function Denuncias() {
           </div>
           Denúncias Seguras
         </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Canal 100% anônimo e seguro para relatos sensíveis</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Canal para enviar relatos sensíveis sem vincular a publicação ao seu perfil.</p>
       </div>
 
-      {/* Security Notice */}
       <Card className="!p-4 border-red-200 dark:border-red-500/20 bg-red-50/50 dark:bg-red-500/5">
         <div className="flex gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="space-y-2">
-            <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Ambiente totalmente seguro e anônimo</h3>
+            <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Como funciona o anonimato</h3>
             <ul className="space-y-1.5 text-xs text-red-600 dark:text-red-400/80">
-              <li className="flex items-start gap-2"><Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>Criptografia de ponta a ponta (E2EE) com chaves assimétricas</span></li>
-              <li className="flex items-start gap-2"><Eye className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>Sem login, sem registro de IP ou metadados de navegação</span></li>
-              <li className="flex items-start gap-2"><ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>Sua denúncia aparece no feed de forma anônima, sem qualquer identificação</span></li>
+              <li className="flex items-start gap-2"><Lock className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>A publicação não é vinculada ao seu perfil no aplicativo</span></li>
+              <li className="flex items-start gap-2"><Eye className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>O feed mostra o relato como “Denúncia Anônima”</span></li>
+              <li className="flex items-start gap-2"><ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" /><span>O sistema não grava seu nome ou e-mail na publicação anônima</span></li>
             </ul>
-            <p className="text-[11px] text-red-500 dark:text-red-400/60 pt-1">
-              ⚡ Botão de saída rápida no canto superior direito. Pressione{' '}
-              <kbd className="px-1.5 py-0.5 bg-red-100 dark:bg-red-500/10 rounded text-[10px] font-mono">Esc</kbd> duas vezes para ativar.
-            </p>
           </div>
         </div>
       </Card>
 
+      {error && <div className="p-3 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 text-sm">{error}</div>}
+
       <div className="grid md:grid-cols-3 gap-6">
-        {/* Form */}
         <div className="md:col-span-2">
           <Card>
             <form onSubmit={handleSubmit} className="space-y-5">
               <Select label="Tipo de denúncia" options={denunciaTypes} value={tipo} onChange={e => setTipo(e.target.value)} required />
-              <Textarea label="Descrição (opcionalmente detalhada)"
-                placeholder="Descreva a situação com o nível de detalhe que se sentir confortável. Todo relato é importante e será tratado com máxima seriedade..."
-                value={descricao} onChange={e => setDescricao(e.target.value)} rows={6} required />
+              <Textarea label="Descrição" placeholder="Descreva a situação com o nível de detalhe que se sentir confortável. Todo relato é importante e será tratado com seriedade..." value={descricao} onChange={e => setDescricao(e.target.value)} rows={6} required />
 
               <div className="space-y-4">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Anexar imagem (Opcional)
-                </label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Anexar imagem (opcional)</label>
                 <ImageUpload value={fi} onChange={setFi} />
               </div>
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input
-                    label="Localização (Rua/Bairro)"
-                    placeholder="Ex: Rua das Flores, 123"
-                    value={localizacao}
-                    onChange={e => setLocalizacao(e.target.value)}
-                  />
-                  <Input
-                    label="Buscar por CEP"
-                    placeholder="Ex: 81460296"
-                    maxLength={8}
-                    onChange={e => handleCepSearch(e.target.value)}
-                  />
+                  <Input label="Localização (Rua/Bairro)" placeholder="Ex.: Rua das Flores, 123" value={localizacao} onChange={e => setLocalizacao(e.target.value)} />
+                  <Input label="Buscar por CEP" placeholder="Ex.: 81460296" maxLength={8} onChange={e => handleCepSearch(e.target.value)} />
                 </div>
-                <MapPicker
-                  onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }}
-                  address={localizacao}
-                />
+                <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={localizacao} />
               </div>
 
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-400">
                 <Lock className="w-3.5 h-3.5" />
-                <span>Conteúdo criptografado end-to-end antes do envio</span>
+                <span>O relato será publicado sem identificar seu perfil.</span>
               </div>
+
               <div className="flex items-center justify-between gap-4 pt-2">
-                <p className="text-[11px] text-slate-400 dark:text-slate-500">Nenhuma informação pessoal é coletada</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Nenhuma informação pessoal é adicionada à publicação.</p>
                 <Button type="submit" disabled={!tipo || !descricao.trim() || isSubmitting} className="min-w-[140px]">
                   {isSubmitting ? (
                     <span className="flex items-center gap-2">
@@ -181,7 +169,6 @@ export default function Denuncias() {
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-4">
           <Card><EmergencyContacts compact /></Card>
           <Card>
@@ -190,15 +177,14 @@ export default function Denuncias() {
               <div>
                 <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Como funciona?</h4>
                 <ol className="text-[11px] text-slate-500 dark:text-slate-400 space-y-1.5 list-decimal list-inside">
-                  <li>Preencha o formulário de forma anônima</li>
-                  <li>O conteúdo é criptografado E2EE</li>
+                  <li>Preencha o formulário</li>
+                  <li>O relato é publicado sem vínculo com seu perfil</li>
                   <li>A denúncia aparece no feed como anônima</li>
-                  <li>Autoridades competentes podem acessar</li>
+                  <li>Use os contatos de emergência quando houver risco imediato</li>
                 </ol>
               </div>
             </div>
           </Card>
-          <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">Protegido contra spam com Rate Limiting</p>
         </div>
       </div>
     </div>
