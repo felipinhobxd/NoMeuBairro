@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { Building2, Eye, EyeOff, KeyRound, MapPin, MailCheck, ArrowLeft } from 'lucide-react';
@@ -27,20 +26,17 @@ function getModeFromUrl(): 'login' | 'forgot' | 'reset' {
 
 export default function Login() {
   const nav = useNavigate();
-  const { login } = useAuth();
   const [companyMode, setCompanyMode] = useState(false), [register, setRegister] = useState(false);
   const [name, setName] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirmPassword, setConfirmPassword] = useState('');
   const [show, setShow] = useState(false), [error, setError] = useState(''), [success, setSuccess] = useState(''), [loading, setLoading] = useState(false), [resending, setResending] = useState(false);
   const [mode, setMode] = useState<'login' | 'forgot' | 'reset'>(() => getModeFromUrl());
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaKey, setCaptchaKey] = useState(0);
-  const captchaRef = useRef<HCaptcha>(null);
   const normalizedEmail = email.trim().toLowerCase();
 
   useEffect(() => setMode(getModeFromUrl()), []);
 
   const resetCaptcha = () => {
-    captchaRef.current?.resetCaptcha();
     setCaptchaToken('');
     setCaptchaKey((key) => key + 1);
   };
@@ -138,7 +134,7 @@ export default function Login() {
         {mode === 'reset' && <><div className="relative"><input required minLength={6} type={show?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Nova senha" autoComplete="new-password" className="w-full px-4 py-3 pr-12 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"/><button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{show?<EyeOff className="w-5 h-5"/>:<Eye className="w-5 h-5"/>}</button></div><input required minLength={6} type={show?'text':'password'} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Confirme a nova senha" autoComplete="new-password" className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"/>}
         {mode === 'login' && register && <input required value={name} onChange={e=>setName(e.target.value)} placeholder={companyMode?'Nome da empresa':'Nome completo'} className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"/>}
         {mode === 'login' && <><input required type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="seu@email.com" autoComplete="email" className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"/><div className="relative"><input required minLength={6} type={show?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Senha" autoComplete={register?'new-password':'current-password'} className="w-full px-4 py-3 pr-12 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"/><button type="button" onClick={()=>setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{show?<EyeOff className="w-5 h-5"/>:<Eye className="w-5 h-5"/>}</button></div></>}
-        {showCaptcha && <div className="flex justify-center py-1"><HCaptcha key={captchaKey} ref={captchaRef} sitekey={HCAPTCHA_SITEKEY} onVerify={setCaptchaToken} onExpire={()=>setCaptchaToken('')} onError={()=>setCaptchaToken('')} /></div>}
+        {showCaptcha && <div className="flex justify-center py-1"><HCaptcha key={captchaKey} sitekey={HCAPTCHA_SITEKEY} onVerify={setCaptchaToken} onExpire={()=>setCaptchaToken('')} onError={()=>setCaptchaToken('')} /></div>}
         {error && <p className="text-sm text-red-500 leading-relaxed">{error}</p>}{success && <p className="text-sm text-emerald-600 leading-relaxed">{success}</p>}
         <button disabled={loading} className="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold disabled:opacity-50">{loading?'Aguarde...':mode==='forgot'?'Enviar link de recuperação':mode==='reset'?'Alterar senha':register?'Criar conta':companyMode?'Entrar como empresa':'Entrar'}</button>
       </form>
