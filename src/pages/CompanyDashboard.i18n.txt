@@ -1,1 +1,0 @@
-Substituição de placeholders em português: Nome da empresa, E-mail, Telefone, WhatsApp, Site, Endereço, Bairro.
