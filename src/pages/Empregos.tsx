@@ -16,22 +16,22 @@ const mapJob = (r: any): JobPost => ({
   companyId: r.company_id,
   companyName: r.company_name || 'Empresa',
   companyLogoUrl: r.company_logo_url,
-  title: r.title,
-  description: r.description,
-  requirements: r.requirements,
-  benefits: r.benefits,
-  salaryMin: r.salary_min,
-  salaryMax: r.salary_max,
+  title: r.title || 'Oportunidade',
+  description: r.description || '',
+  requirements: r.requirements || undefined,
+  benefits: r.benefits || undefined,
+  salaryMin: r.salary_min == null ? undefined : Number(r.salary_min),
+  salaryMax: r.salary_max == null ? undefined : Number(r.salary_max),
   employmentType: r.employment_type,
   workModel: r.work_model,
-  location: r.location,
-  neighborhood: r.neighborhood,
-  contactEmail: r.contact_email,
-  contactWhatsapp: r.contact_whatsapp,
-  contactEmailEnabled: r.contact_email_enabled,
-  contactWhatsappEnabled: r.contact_whatsapp_enabled,
-  isActive: r.is_active,
-  expiresAt: r.expires_at,
+  location: r.location || undefined,
+  neighborhood: r.neighborhood || undefined,
+  contactEmail: r.contact_email || undefined,
+  contactWhatsapp: r.contact_whatsapp || undefined,
+  contactEmailEnabled: Boolean(r.contact_email_enabled),
+  contactWhatsappEnabled: Boolean(r.contact_whatsapp_enabled),
+  isActive: Boolean(r.is_active),
+  expiresAt: r.expires_at || undefined,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
@@ -42,27 +42,35 @@ export default function Empregos() {
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const isCompany = user?.accountType === 'company';
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      const { data, error } = await supabase
+    const loadJobs = async () => {
+      setLoading(true);
+      setError('');
+      const { data, error: queryError } = await supabase
         .from('public_job_posts')
         .select('*')
         .order('created_at', { ascending: false });
-      if (active) {
-        if (!error) setJobs((data || []).map(mapJob));
-        setLoading(false);
+      if (!active) return;
+      if (queryError) {
+        setJobs([]);
+        setError('Não foi possível carregar as oportunidades agora. Tente novamente em alguns instantes.');
+      } else {
+        setJobs((data || []).map(mapJob));
       }
-    })();
+      setLoading(false);
+    };
+    void loadJobs();
     return () => { active = false; };
   }, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     if (!q) return jobs;
-    return jobs.filter(j => `${j.title} ${j.companyName} ${j.neighborhood || ''} ${j.location || ''}`.toLowerCase().includes(q));
+    return jobs.filter((job) => `${job.title} ${job.companyName} ${job.neighborhood || ''} ${job.location || ''}`.toLowerCase().includes(q));
   }, [jobs, query]);
 
   return (
@@ -85,11 +93,17 @@ export default function Empregos() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
         <input
           value={query}
-          onChange={e => setQuery(e.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
           placeholder="Buscar vaga, empresa ou bairro..."
           className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-emerald-500"
         />
       </div>
+
+      {error && (
+        <div className="p-4 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 text-sm">
+          {error}
+        </div>
+      )}
 
       {isCompany && (
         <Card className="!p-4 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-500/5">
@@ -111,7 +125,7 @@ export default function Empregos() {
         <Card><EmptyState icon={Briefcase} title="Nenhuma vaga encontrada" description="As vagas publicadas por empresas aparecerão aqui." /></Card>
       ) : (
         <div className="grid gap-4">
-          {filtered.map(job => (
+          {filtered.map((job) => (
             <Card key={job.id}>
               <div className="flex gap-4">
                 <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 overflow-hidden">
@@ -122,8 +136,8 @@ export default function Empregos() {
                   <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">{job.companyName}</p>
                   <div className="flex flex-wrap gap-2 mt-2 text-xs text-slate-500">
                     {job.neighborhood && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{job.neighborhood}</span>}
-                    <span>{labels[job.employmentType]}</span>
-                    <span>{labels[job.workModel]}</span>
+                    {job.employmentType && <span>{labels[job.employmentType]}</span>}
+                    {job.workModel && <span>{labels[job.workModel]}</span>}
                     {typeof job.salaryMin === 'number' && <span>R$ {job.salaryMin.toLocaleString('pt-BR')}{typeof job.salaryMax === 'number' ? ` – ${job.salaryMax.toLocaleString('pt-BR')}` : ''}</span>}
                   </div>
                   <p className="text-sm text-slate-600 dark:text-slate-300 mt-4 whitespace-pre-line">{job.description}</p>
