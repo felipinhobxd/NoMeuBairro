@@ -26,23 +26,20 @@ export default function PublicProfile() {
   const [profileUser, setProfileUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Busca os dados do perfil diretamente do Supabase para garantir visibilidade pública
   useEffect(() => {
     async function loadProfile() {
       if (!userId) return;
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('users')
-          .select('*')
+          .from('public_user_profiles')
+          .select('id, name, avatar_url, reputation, created_at')
           .eq('id', userId)
-          .single();
+          .maybeSingle();
 
-        if (!error && data) {
-          setProfileUser(data);
-        }
+        if (!error && data) setProfileUser(data);
       } catch (err) {
-        console.error('Error loading public profile:', err);
+        console.error('Erro ao carregar perfil público:', err);
       } finally {
         setLoading(false);
       }
@@ -78,7 +75,7 @@ export default function PublicProfile() {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <Loader2 className="w-10 h-10 text-emerald-500 animate-spin mb-4" />
-        <p className="text-slate-500 font-medium">Carregando morador...</p>
+        <p className="text-slate-500 font-medium">Carregando perfil...</p>
       </div>
     );
   }
@@ -88,7 +85,7 @@ export default function PublicProfile() {
       <div className="max-w-2xl mx-auto py-12 text-center">
         <ShieldAlert className="w-12 h-12 text-slate-300 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Usuário não encontrado</h2>
-        <p className="text-sm text-slate-500 mt-2">Este perfil pode ser privado ou não existe.</p>
+        <p className="text-sm text-slate-500 mt-2">Este perfil não está disponível.</p>
         <Button variant="secondary" className="mt-6" onClick={() => navigate(-1)}>Voltar</Button>
       </div>
     );
@@ -100,7 +97,6 @@ export default function PublicProfile() {
         <ArrowLeft className="w-4 h-4" /> Voltar
       </button>
 
-      {/* Header */}
       <Card>
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
@@ -113,9 +109,7 @@ export default function PublicProfile() {
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{profileUser.name}</h2>
             <div className="flex items-center gap-3 mt-1">
-              <span className="text-xs text-slate-400">
-                Morador do bairro
-              </span>
+              <span className="text-xs text-slate-400">Morador do bairro</span>
               <span className="w-1 h-1 rounded-full bg-slate-300" />
               <span className="text-xs text-slate-400">
                 Ativo desde {new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
@@ -125,7 +119,6 @@ export default function PublicProfile() {
         </div>
       </Card>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { icon: MessageSquare, value: stats.count, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' },
@@ -143,7 +136,6 @@ export default function PublicProfile() {
         ))}
       </div>
 
-      {/* Badges */}
       <Card>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
           <Award className="w-4 h-4 text-amber-500" /> Conquistas de {profileUser.name.split(' ')[0]}
@@ -169,23 +161,17 @@ export default function PublicProfile() {
         </div>
       </Card>
 
-      {/* Public Posts */}
       <div className="space-y-4">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 px-1">
           <MessageSquare className="w-4 h-4 text-emerald-500" /> Relatos Públicos
         </h3>
         {stats.posts.length === 0 ? (
-          <Card className="text-center py-12">
-            <p className="text-sm text-slate-400 italic">Nenhum relato publicado ainda.</p>
-          </Card>
+          <Card className="text-center py-12"><p className="text-sm text-slate-400 italic">Nenhum relato publicado ainda.</p></Card>
         ) : (
           stats.posts.map(post => (
             <Card key={post.id} className="animate-card-enter">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <CategoryBadge category={post.category} />
-                  <span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span>
-                </div>
+                <div className="flex items-center gap-2"><CategoryBadge category={post.category} /><span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span></div>
                 <StatusBadge status={post.status} />
               </div>
               <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-1">{post.title}</h4>
