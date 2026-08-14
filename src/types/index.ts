@@ -1,10 +1,12 @@
 export type PostStatus = 'pending' | 'in_progress' | 'resolved';
 export type PostCategory = 'buraco' | 'iluminacao' | 'fios' | 'limpeza' | 'transporte' | 'seguranca' | 'outros';
+export type AccountType = 'resident' | 'company';
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  accountType?: AccountType;
   avatarUrl?: string;
   badges: Badge[];
   reputation: number;
@@ -78,7 +80,6 @@ export interface BusinessRating {
   comment?: string;
   createdAt: string;
 }
-
 
 export type BusinessCategory = 'alimentacao' | 'saude' | 'servicos' | 'educacao' | 'comercio' | 'beleza' | 'outros';
 
