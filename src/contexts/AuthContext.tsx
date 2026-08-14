@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
-import type { User } from '../types';
+import type { User, AccountType } from '../types';
 import { supabase } from '../utils/supabase';
 
 interface AuthContextType {
@@ -14,10 +14,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>(null!);
 
+function getAccountType(metadata: Record<string, any> | undefined): AccountType {
+  return metadata?.account_type === 'company' ? 'company' : 'resident';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  const fetchProfile = useCallback(async (id: string, email: string, metadataName?: string) => {
+  const fetchProfile = useCallback(async (id: string, email: string, metadata?: Record<string, any>) => {
     let attempts = 0;
     const maxAttempts = 3;
 
@@ -33,6 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: data.id,
           name: data.name,
           email,
+          accountType: getAccountType(metadata),
           avatarUrl: data.avatar_url,
           badges: [],
           reputation: data.reputation || 0,
@@ -51,8 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser({
       id,
-      name: metadataName || 'Morador',
+      name: metadata?.name || 'Morador',
       email,
+      accountType: getAccountType(metadata),
       badges: [],
       reputation: 0,
       postsCount: 0,
@@ -67,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(
           session.user.id,
           session.user.email || '',
-          session.user.user_metadata?.name
+          session.user.user_metadata
         );
       }
     });
@@ -77,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(
           session.user.id,
           session.user.email || '',
-          session.user.user_metadata?.name
+          session.user.user_metadata
         );
       } else {
         setUser(null);
@@ -91,14 +97,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name } }
+      options: { data: { name, account_type: 'resident' } }
     });
 
     if (error) return { ok: false, error: error.message };
 
     if (data.user) {
       if (data.session) {
-        await fetchProfile(data.user.id, email, name);
+        await fetchProfile(data.user.id, email, data.user.user_metadata);
         return { ok: true };
       }
       return { ok: true, pendingVerification: true };
@@ -112,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) return { ok: false, error: error.message };
     if (data.user) {
-      await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata?.name);
+      await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata);
       return { ok: true };
     }
     return { ok: false, error: 'Login falhou.' };
@@ -144,11 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const changePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> => {
     if (!user?.email) return { ok: false, error: 'Usuário não identificado.' };
 
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: currentPassword
-    });
-
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
     if (loginError) return { ok: false, error: 'A senha atual está incorreta.' };
 
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
