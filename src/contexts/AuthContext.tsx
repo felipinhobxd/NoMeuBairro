@@ -17,7 +17,6 @@ const AuthContext = createContext<AuthContextType>(null!);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
-  // ─── Fetch Profile Data from our public.users table ───
   const fetchProfile = useCallback(async (id: string, email: string, metadataName?: string) => {
     let attempts = 0;
     const maxAttempts = 3;
@@ -25,15 +24,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     while (attempts < maxAttempts) {
       const { data, error } = await supabase
         .from('users')
-        .select('*')
+        .select('id, name, avatar_url, reputation, created_at')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (data && !error) {
         setUser({
           id: data.id,
           name: data.name,
-          email: data.email,
+          email,
           avatarUrl: data.avatar_url,
           badges: [],
           reputation: data.reputation || 0,
@@ -41,17 +40,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           supportsReceived: 0,
           createdAt: data.created_at,
         });
-        return; // Sucesso!
+        return;
       }
 
-      // Se falhou, espera um pouco e tenta de novo (o trigger do Supabase pode ser lento)
       attempts++;
       if (attempts < maxAttempts) {
         await new Promise(res => setTimeout(res, 1000 * attempts));
       }
     }
 
-    // Fallback: Se após 3 tentativas não existir no DB, usa o que temos no metadata
     setUser({
       id,
       name: metadataName || 'Morador',
@@ -64,13 +61,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // ─── Initialize Session ───
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         fetchProfile(
           session.user.id,
-          session.user.email!,
+          session.user.email || '',
           session.user.user_metadata?.name
         );
       }
@@ -80,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchProfile(
           session.user.id,
-          session.user.email!,
+          session.user.email || '',
           session.user.user_metadata?.name
         );
       } else {
@@ -95,14 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { name } // This goes to raw_user_meta_data for the trigger
-      }
+      options: { data: { name } }
     });
 
     if (error) return { ok: false, error: error.message };
 
-    // If confirmation email is enabled, session might be null
     if (data.user) {
       if (data.session) {
         await fetchProfile(data.user.id, email, name);
@@ -119,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) return { ok: false, error: error.message };
     if (data.user) {
-      await fetchProfile(data.user.id, email, data.user.user_metadata?.name);
+      await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata?.name);
       return { ok: true };
     }
     return { ok: false, error: 'Login falhou.' };
@@ -133,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(async (data: { name?: string; avatarUrl?: string }): Promise<{ ok: boolean; error?: string }> => {
     if (!user) return { ok: false, error: 'Não autenticado.' };
 
-    const updates: any = {};
+    const updates: Record<string, string> = {};
     if (data.name) updates.name = data.name;
     if (data.avatarUrl) updates.avatar_url = data.avatarUrl;
 
@@ -151,19 +144,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const changePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> => {
     if (!user?.email) return { ok: false, error: 'Usuário não identificado.' };
 
-    // 1. Validar a senha atual tentando fazer um "re-login" silencioso
     const { error: loginError } = await supabase.auth.signInWithPassword({
       email: user.email,
       password: currentPassword
     });
 
-    if (loginError) {
-      return { ok: false, error: 'A senha atual está incorreta.' };
-    }
+    if (loginError) return { ok: false, error: 'A senha atual está incorreta.' };
 
-    // 2. Se a senha atual estiver certa, procede com a atualização
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-
     if (updateError) return { ok: false, error: updateError.message };
     return { ok: true };
   }, [user]);
