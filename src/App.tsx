@@ -17,6 +17,7 @@ import Profile from './pages/Profile';
 import PublicProfile from './pages/PublicProfile';
 import Empregos from './pages/Empregos';
 import CompanyDashboard from './pages/CompanyDashboard';
+import Notifications from './pages/Notifications';
 
 export default function App() {
   return <ThemeProvider><AuthProvider><NeighborhoodProvider><DataProvider><ToastProvider><HashRouter><BrazilWhatsappMask /><Layout><Routes>
@@ -31,5 +32,6 @@ export default function App() {
     <Route path="/perfil" element={<Profile />} />
     <Route path="/perfil/:userId" element={<PublicProfile />} />
     <Route path="/empresa" element={<CompanyDashboard />} />
+    <Route path="/notificacoes" element={<Notifications />} />
   </Routes></Layout><PanicButton /><CookieConsent /></HashRouter></ToastProvider></DataProvider></NeighborhoodProvider></AuthProvider></ThemeProvider>;
 }
