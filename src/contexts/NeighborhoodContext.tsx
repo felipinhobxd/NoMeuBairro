@@ -93,26 +93,21 @@ interface NeighborhoodContextType {
   setNeighborhood: (name: string) => void;
   setNeighborhoodByCep: (cep: string) => Promise<boolean>;
   clearSelection: () => void;
+  selectAllNeighborhoods: () => void;
 }
 
 const NeighborhoodContext = createContext<NeighborhoodContextType>(null!);
 
-// Bairro "Cidade Industrial" como padrão técnico, mas o usuário DEVE escolher no início
-const DEFAULT_NEIGHBORHOOD = curitibaNeighborhoods.find(n => n.name === 'Cidade Industrial') || curitibaNeighborhoods[0];
+const ALL_NEIGHBORHOODS: Neighborhood = {
+  name: '',
+  latitude: -25.4297,
+  longitude: -49.2711,
+  cepExample: '80020-000',
+};
 
 export function NeighborhoodProvider({ children }: { children: ReactNode }) {
-  const [currentNeighborhood, setCurrentNeighborhood] = useState<Neighborhood>(() => {
-    const saved = localStorage.getItem('selected-neighborhood');
-    if (saved) {
-      const found = curitibaNeighborhoods.find(n => n.name === saved);
-      if (found) return found;
-    }
-    return DEFAULT_NEIGHBORHOOD;
-  });
-
-  const [isNeighborhoodSelected, setIsNeighborhoodSelected] = useState<boolean>(() => {
-    return !!localStorage.getItem('selected-neighborhood');
-  });
+  const [currentNeighborhood, setCurrentNeighborhood] = useState<Neighborhood>(ALL_NEIGHBORHOODS);
+  const [isNeighborhoodSelected, setIsNeighborhoodSelected] = useState<boolean>(true);
 
   const setNeighborhood = (name: string) => {
     const found = curitibaNeighborhoods.find(n => n.name === name);
@@ -126,6 +121,12 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
   const clearSelection = () => {
     localStorage.removeItem('selected-neighborhood');
     setIsNeighborhoodSelected(false);
+  };
+
+  const selectAllNeighborhoods = () => {
+    localStorage.removeItem('selected-neighborhood');
+    setCurrentNeighborhood(ALL_NEIGHBORHOODS);
+    setIsNeighborhoodSelected(true);
   };
 
   const setNeighborhoodByCep = async (cep: string): Promise<boolean> => {
@@ -165,7 +166,7 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <NeighborhoodContext.Provider value={{ currentNeighborhood, isNeighborhoodSelected, setNeighborhood, setNeighborhoodByCep, clearSelection }}>
+    <NeighborhoodContext.Provider value={{ currentNeighborhood, isNeighborhoodSelected, setNeighborhood, setNeighborhoodByCep, clearSelection, selectAllNeighborhoods }}>
       {children}
     </NeighborhoodContext.Provider>
   );
