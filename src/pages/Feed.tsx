@@ -64,7 +64,7 @@ function CommentItem({ comment, replies, onReply, replyingTo, onDelete, onReport
               className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors">
               Denunciar
             </button>
-            {showDelete && (
+            {(isAuthor || isPostOwner) && (
               <button onClick={() => onDelete(comment.id)} className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors">
                 Excluir
               </button>
