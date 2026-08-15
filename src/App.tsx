@@ -5,6 +5,7 @@ import { DataProvider } from './contexts/DataContext';
 import { NeighborhoodProvider } from './contexts/NeighborhoodContext';
 import { ToastProvider } from './components/UI';
 import BrazilWhatsappMask from './components/BrazilWhatsappMask';
+import RecoveryRedirect from './components/RecoveryRedirect';
 import Layout from './components/Layout';
 import { PanicButton, CookieConsent } from './components/Safety';
 import Feed from './pages/Feed';
@@ -22,7 +23,7 @@ import TodosBairros from './pages/TodosBairros';
 import PostDetails from './pages/PostDetails';
 
 export default function App() {
-  return <ThemeProvider><AuthProvider><NeighborhoodProvider><DataProvider><ToastProvider><HashRouter><BrazilWhatsappMask /><Layout><Routes>
+  return <ThemeProvider><AuthProvider><NeighborhoodProvider><DataProvider><ToastProvider><RecoveryRedirect /><HashRouter><BrazilWhatsappMask /><Layout><Routes>
     <Route path="/" element={<Feed />} />
     <Route path="/guia" element={<Empregos />} />
     <Route path="/empregos" element={<Empregos />} />
