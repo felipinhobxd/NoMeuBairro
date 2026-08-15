@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, Link } from 'react-router-dom';
+import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
@@ -19,7 +19,6 @@ import PublicProfile from './pages/PublicProfile';
 import Empregos from './pages/Empregos';
 import CompanyDashboard from './pages/CompanyDashboard';
 import Notifications from './pages/Notifications';
-import TodosBairros from './pages/TodosBairros';
 import PostDetails from './pages/PostDetails';
 
 export default function App() {
@@ -36,7 +35,6 @@ export default function App() {
     <Route path="/perfil/:userId" element={<PublicProfile />} />
     <Route path="/empresa" element={<CompanyDashboard />} />
     <Route path="/notificacoes" element={<Notifications />} />
-    <Route path="/todos-bairros" element={<TodosBairros />} />
     <Route path="/post/:postId" element={<PostDetails />} />
-  </Routes></Layout><PanicButton /><CookieConsent /><Link to="/todos-bairros" className="fixed bottom-28 md:bottom-8 left-6 z-30 inline-flex items-center gap-2 px-4 py-3 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-sm font-semibold text-slate-700 dark:text-slate-200 shadow-lg hover:text-emerald-600 dark:hover:text-emerald-400 hover:ring-emerald-300 dark:hover:ring-emerald-500/30 transition-all">Todos os bairros</Link></HashRouter></ToastProvider></DataProvider></NeighborhoodProvider></AuthProvider></ThemeProvider>;
+  </Routes></Layout><PanicButton /><CookieConsent /></HashRouter></ToastProvider></DataProvider></NeighborhoodProvider></AuthProvider></ThemeProvider>;
 }
