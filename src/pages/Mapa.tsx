@@ -3,45 +3,63 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useData } from '../contexts/DataContext';
 import { useNeighborhood } from '../contexts/NeighborhoodContext';
-import { Card, Badge } from '../components/UI';
-import { Map as MapIcon, Filter, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { Card } from '../components/UI';
+import { Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { PostCategory } from '../types';
 import { useNavigate } from 'react-router-dom';
 
-// Fix para ícones do Leaflet
-import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-let DefaultIcon = L.icon({
-  iconUrl: icon,
-  shadowUrl: iconShadow,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-L.Marker.prototype.options.icon = DefaultIcon;
+const categoryIcons: Record<PostCategory, { emoji: string; label: string }> = {
+  buraco: { emoji: '🕳️', label: 'Buraco' },
+  iluminacao: { emoji: '💡', label: 'Iluminação' },
+  seguranca: { emoji: '🛡️', label: 'Segurança' },
+  limpeza: { emoji: '🗑️', label: 'Limpeza' },
+  transporte: { emoji: '🚌', label: 'Transporte' },
+  fios: { emoji: '⚡', label: 'Fios' },
+  outros: { emoji: '❓', label: 'Outros' },
+};
 
-const categoryIcons: Record<PostCategory, any> = {
-  buraco: AlertTriangle,
+const categoryColors: Record<PostCategory, string> = {
+  buraco: '#f59e0b',
+  iluminacao: '#eab308',
+  seguranca: '#ef4444',
+  limpeza: '#10b981',
+  transporte: '#3b82f6',
+  fios: '#f97316',
+  outros: '#64748b',
+};
+
+const lucideCategories: Record<PostCategory, typeof AlertTriangle> = {
+  buraco: CircleDot,
   iluminacao: Lightbulb,
   seguranca: Shield,
   limpeza: Trash2,
   transporte: Bus,
-  fios: AlertTriangle,
+  fios: Zap,
   outros: HelpCircle,
 };
 
-const categoryColors: Record<PostCategory, string> = {
-  buraco: 'bg-amber-500',
-  iluminacao: 'bg-yellow-400',
-  seguranca: 'bg-red-500',
-  limpeza: 'bg-emerald-500',
-  transporte: 'bg-blue-500',
-  fios: 'bg-orange-500',
-  outros: 'bg-slate-500',
-};
+function createCategoryIcon(category: PostCategory) {
+  const cfg = categoryIcons[category] ?? categoryIcons.outros;
+  const color = categoryColors[category] ?? categoryColors.outros;
+  const Icon = lucideCategories[category] ?? HelpCircle;
 
-// Componente para ajustar o zoom e centro baseado nos marcadores
+  // Mantemos um SVG simples para o mapa não depender do DOM do React dentro do Leaflet.
+  const iconSvg = Icon === CircleDot
+    ? '<circle cx="12" cy="12" r="6" fill="none" stroke="white" stroke-width="2.2"/><circle cx="12" cy="12" r="2.2" fill="white"/>'
+    : '<path d="M12 3v18M5.5 8.5 12 3l6.5 5.5M7.5 14.5h9L15 21H9l-1.5-6.5Z" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+
+  return L.divIcon({
+    className: 'category-map-marker',
+    html: `<div title="${cfg.label}" style="width:42px;height:42px;border-radius:14px;background:${color};border:3px solid white;box-shadow:0 4px 14px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;position:relative;font-size:21px;line-height:1;transform:translateY(-2px)"><span aria-hidden="true">${cfg.emoji}</span><span style="display:none">${iconSvg}</span></div><div style="width:10px;height:10px;background:${color};border:2px solid white;transform:rotate(45deg);position:absolute;left:16px;top:34px;box-shadow:2px 2px 4px rgba(0,0,0,.16)"></div>`,
+    iconSize: [42, 50],
+    iconAnchor: [21, 45],
+    popupAnchor: [0, -42],
+  });
+}
+
 function RecenterButton({ points }: { points: [number, number][] }) {
   const map = useMap();
 
@@ -71,7 +89,7 @@ export default function Mapa() {
 
   const filteredPosts = useMemo(() => {
     return posts.filter(p => {
-      const hasCoords = p.latitude && p.longitude;
+      const hasCoords = p.latitude !== undefined && p.latitude !== null && p.longitude !== undefined && p.longitude !== null;
       const matchesFilter = filter === 'all' || p.category === filter;
       return hasCoords && matchesFilter;
     });
@@ -81,7 +99,6 @@ export default function Mapa() {
     filteredPosts.map(p => [Number(p.latitude), Number(p.longitude)] as [number, number]),
   [filteredPosts]);
 
-  // Centro inicial dinâmico baseado no bairro selecionado
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
 
   return (
@@ -94,7 +111,7 @@ export default function Mapa() {
             </div>
             Mapa Comunitário
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Visualize todos os relatos do bairro geograficamente</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Clique em um marcador para ver o relato e abrir seus detalhes.</p>
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
@@ -108,19 +125,23 @@ export default function Mapa() {
           >
             Todos
           </button>
-          {(Object.keys(categoryIcons) as PostCategory[]).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`px-4 py-2 rounded-full text-xs font-bold transition-all shrink-0 capitalize ${
-                filter === cat
-                  ? 'bg-emerald-600 text-white'
-                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+          {(Object.keys(categoryIcons) as PostCategory[]).map(cat => {
+            const Icon = lucideCategories[cat];
+            return (
+              <button
+                key={cat}
+                onClick={() => setFilter(cat)}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${
+                  filter === cat
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {categoryIcons[cat].label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -137,25 +158,58 @@ export default function Mapa() {
           />
 
           {filteredPosts.map(post => {
-            const Icon = categoryIcons[post.category] || HelpCircle;
+            const anonymous = post.authorId === 'anonymous';
+            const authorName = anonymous ? 'Denúncia Anônima' : (post.authorName || 'Morador');
             return (
               <Marker
                 key={post.id}
                 position={[Number(post.latitude), Number(post.longitude)]}
+                icon={createCategoryIcon(post.category)}
               >
-                <Popup minWidth={200} className="custom-popup">
-                  <div className="p-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className={`w-2 h-2 rounded-full ${categoryColors[post.category]}`} />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{post.category}</span>
+                <Popup minWidth={280} maxWidth={320} className="custom-popup">
+                  <div className="p-1.5">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0"
+                          style={{ background: `${categoryColors[post.category]}20` }}
+                        >
+                          {categoryIcons[post.category]?.emoji ?? '❓'}
+                        </span>
+                        <div className="min-w-0">
+                          <span className="block text-[9px] font-black uppercase tracking-wider" style={{ color: categoryColors[post.category] }}>
+                            {categoryIcons[post.category]?.label ?? 'Outros'}
+                          </span>
+                          <span className="block text-[10px] text-slate-400 truncate">{post.location}</span>
+                        </div>
+                      </div>
                     </div>
+
                     <h3 className="font-bold text-slate-900 mb-1 leading-tight">{post.title}</h3>
-                    <p className="text-xs text-slate-500 line-clamp-2 mb-3">{post.description}</p>
+
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-7 h-7 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center text-[10px] font-bold text-emerald-600 shrink-0">
+                        {anonymous ? 'D' : post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : authorName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className={anonymous ? 'text-xs font-semibold text-red-600' : 'text-xs font-semibold text-slate-700'}>{authorName}</span>
+                    </div>
+
+                    {post.imageUrl && (
+                      <img
+                        src={post.imageUrl}
+                        alt="Imagem do relato"
+                        className="w-full h-28 object-cover rounded-lg mb-2"
+                        loading="lazy"
+                      />
+                    )}
+
+                    <p className="text-xs text-slate-500 line-clamp-3 mb-3">{post.description}</p>
+
                     <button
-                      onClick={() => navigate('/')} // No feed, o post será focado se o ID for passado (idealmente)
-                      className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors"
+                      onClick={() => navigate(`/post/${post.id}`)}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold rounded-lg transition-colors"
                     >
-                      Ver Detalhes no Feed
+                      Ver detalhes no post
                     </button>
                   </div>
                 </Popup>
@@ -166,7 +220,6 @@ export default function Mapa() {
           <RecenterButton points={points} />
         </MapContainer>
 
-        {/* Legend Overlay */}
         <div className="absolute top-4 right-4 z-[1000] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-slate-200/50 dark:border-slate-700/50 hidden md:block">
           <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
             <Info className="w-3 h-3" /> Legenda
@@ -175,13 +228,15 @@ export default function Mapa() {
             {filteredPosts.length === 0 && (
               <p className="text-[10px] text-slate-500 italic">Nenhum relato nesta categoria.</p>
             )}
-            {Object.entries(categoryColors).map(([cat, color]) => {
-              const count = posts.filter(p => p.category === cat && p.latitude).length;
+            {(Object.keys(categoryIcons) as PostCategory[]).map(cat => {
+              const count = posts.filter(p => p.category === cat && p.latitude !== undefined && p.longitude !== undefined).length;
               if (count === 0) return null;
               return (
                 <div key={cat} className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${color}`} />
-                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 capitalize">{cat}</span>
+                  <span className="w-6 h-6 rounded-md flex items-center justify-center text-sm" style={{ background: `${categoryColors[cat]}20` }}>
+                    {categoryIcons[cat].emoji}
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">{categoryIcons[cat].label}</span>
                   <span className="text-[10px] font-bold text-slate-400 ml-auto">{count}</span>
                 </div>
               );
@@ -197,7 +252,7 @@ export default function Mapa() {
           <span>Relatos visualizados</span>
         </div>
         <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
-        <p className="hidden sm:block">Clique nos marcadores para ver os detalhes de cada ocorrência.</p>
+        <p className="hidden sm:block">Clique nos marcadores para ver o autor, a imagem e abrir o post exato.</p>
       </div>
     </div>
   );
