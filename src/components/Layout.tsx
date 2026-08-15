@@ -163,7 +163,7 @@ function NotificationBell() {
 }
 
 function NeighborhoodPicker() {
-  const { setNeighborhood, setNeighborhoodByCep } = useNeighborhood();
+  const { setNeighborhood, setNeighborhoodByCep, selectAllNeighborhoods } = useNeighborhood();
   const { posts } = useData();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -208,10 +208,10 @@ function NeighborhoodPicker() {
           <div className="relative z-10">
             <h2 className="text-xl sm:text-3xl font-black tracking-tight mb-2 flex items-center gap-2 sm:gap-3">
               <MapPinned className="w-6 h-6 sm:w-8 sm:h-8" />
-              Bem-vindo ao No Meu Bairro
+              Escolher bairro
             </h2>
             <p className="text-emerald-50/90 text-xs sm:text-base font-medium max-w-xl leading-relaxed">
-              Para começar, selecione seu bairro ou digite seu CEP. Vamos conectar você com o que acontece ao seu redor. 🌿
+              Escolha um bairro somente quando quiser filtrar o feed e ver apenas os relatos daquela região. 🌿
             </p>
           </div>
           <Sparkles className="absolute -right-4 -top-4 w-24 h-24 sm:w-32 sm:h-32 text-white/10 rotate-12" />
@@ -243,6 +243,19 @@ function NeighborhoodPicker() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-8 no-scrollbar bg-white dark:bg-slate-900">
+          <button
+            onClick={selectAllNeighborhoods}
+            className="w-full mb-3 group p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/20 text-left transition-all"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <span className="block text-sm font-black text-emerald-700 dark:text-emerald-400">Ver todos os bairros</span>
+                <span className="block text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Voltar ao feed completo de Curitiba</span>
+              </div>
+              <ChevronRight className="w-4 h-4 text-emerald-500" />
+            </div>
+          </button>
+
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
             {filteredNeighborhoods.map((n) => {
               const count = neighborhoodCounts[n.name] || 0;
@@ -293,20 +306,20 @@ export default function Layout({ children }: LayoutProps) {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (currentNeighborhood) {
-      document.title = `No Meu Bairro — ${currentNeighborhood.name}`;
-    } else {
-      document.title = "No Meu Bairro";
-    }
+    document.title = currentNeighborhood.name
+      ? `No Meu Bairro — ${currentNeighborhood.name}`
+      : 'No Meu Bairro — Todos os bairros';
   }, [location.pathname, currentNeighborhood]);
 
   if (!isNeighborhoodSelected) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-         <NeighborhoodPicker />
+        <NeighborhoodPicker />
       </div>
     );
   }
+
+  const displayNeighborhood = currentNeighborhood.name || 'Todos os bairros';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -325,10 +338,10 @@ export default function Layout({ children }: LayoutProps) {
               </button>
 
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
-              <button onClick={clearSelection} className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all" title="Mudar de bairro">
+              <button onClick={clearSelection} className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all" title="Escolher bairro para filtrar">
                 <div className="flex flex-col items-start">
-                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Bairro</span>
-                  <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[80px] xl:max-w-none">{currentNeighborhood.name}</span>
+                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Filtro</span>
+                  <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[140px] xl:max-w-none">{displayNeighborhood}</span>
                 </div>
                 <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
               </button>
@@ -382,9 +395,9 @@ export default function Layout({ children }: LayoutProps) {
               <div>
                 <div className="flex items-center gap-2.5 mb-3">
                   <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
-                  <div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{currentNeighborhood.name}</p></div>
+                  <div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{displayNeighborhood}</p></div>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">Plataforma comunitária criada para conectar moradores, resolver problemas e fortalecer o bairro {currentNeighborhood.name} em Curitiba.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">Plataforma comunitária criada para conectar moradores, resolver problemas e fortalecer os bairros de Curitiba{currentNeighborhood.name ? ` — filtro: ${currentNeighborhood.name}` : ''}.</p>
               </div>
               <div>
                 <h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Navegação</h4>
@@ -401,7 +414,7 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
             <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} No Meu Bairro — {currentNeighborhood.name}, Curitiba. Todos os direitos reservados.</p>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} No Meu Bairro — Curitiba. Todos os direitos reservados.</p>
               <p className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">Feito com <Heart className="w-3 h-3 text-red-400 inline fill-current" /> pelo 2°DS</p>
             </div>
           </div>
