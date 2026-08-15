@@ -12,8 +12,12 @@ import { useNavigate } from 'react-router-dom';
 const categoryIcons: Record<PostCategory, { emoji: string; label: string }> = {
   buraco: { emoji: '🕳️', label: 'Buraco' }, iluminacao: { emoji: '💡', label: 'Iluminação' }, seguranca: { emoji: '🛡️', label: 'Segurança' }, limpeza: { emoji: '🗑️', label: 'Limpeza' }, transporte: { emoji: '🚌', label: 'Transporte' }, fios: { emoji: '⚡', label: 'Fios' }, outros: { emoji: '❓', label: 'Outros' },
 };
-const categoryColors: Record<PostCategory, string> = { buraco: '#f59e0b', iluminacao: '#eab308', seguranca: '#ef4444', limpeza: '#10b981', transporte: '#3b82f6', fios: '#f97316', outros: '#64748b' };
-const lucideCategories: Record<PostCategory, typeof AlertTriangle> = { buraco: CircleDot, iluminacao: Lightbulb, seguranca: Shield, limpeza: Trash2, transporte: Bus, fios: Zap, outros: HelpCircle };
+const categoryColors: Record<PostCategory, string> = {
+  buraco: '#f59e0b', iluminacao: '#eab308', seguranca: '#ef4444', limpeza: '#10b981', transporte: '#3b82f6', fios: '#f97316', outros: '#64748b'
+};
+const lucideCategories: Record<PostCategory, typeof AlertTriangle> = {
+  buraco: CircleDot, iluminacao: Lightbulb, seguranca: Shield, limpeza: Trash2, transporte: Bus, fios: Zap, outros: HelpCircle
+};
 
 function createCategoryIcon(category: PostCategory) {
   const cfg = categoryIcons[category] ?? categoryIcons.outros;
@@ -37,15 +41,15 @@ function SelectedPostOverlay({ post, onClose }: { post: Post; onClose: () => voi
     const update = () => {
       const point = map.latLngToContainerPoint([Number(post.latitude), Number(post.longitude)]);
       const rect = map.getContainer().getBoundingClientRect();
-      const cardHalf = Math.min(190, Math.max(150, rect.width / 2 - 16));
-      const left = Math.min(Math.max(point.x, cardHalf + 8), rect.width - cardHalf - 8);
+      const half = Math.min(190, Math.max(145, rect.width / 2 - 12));
+      const left = Math.min(Math.max(point.x, half + 8), rect.width - half - 8);
       const below = point.y < 220;
-      const top = Math.min(Math.max(point.y, 24), rect.height - 24);
+      const top = Math.min(Math.max(point.y, 20), rect.height - 20);
       setPosition({ left, top, below });
     };
     update();
     map.on('move zoom resize', update);
-    return () => { map.off('move zoom resize', update); };
+    return () => map.off('move zoom resize', update);
   }, [map, post]);
 
   const anonymous = post.authorId === 'anonymous';
@@ -53,36 +57,22 @@ function SelectedPostOverlay({ post, onClose }: { post: Post; onClose: () => voi
   const color = categoryColors[post.category] ?? categoryColors.outros;
   const category = categoryIcons[post.category] ?? categoryIcons.outros;
 
-  return (
-    <div
-      className="absolute z-[2000] w-[min(380px,calc(100%-20px))] pointer-events-auto"
-      style={{ left: position.left, top: position.top, transform: position.below ? 'translate(-50%, 18px)' : 'translate(-50%, calc(-100% - 18px))' }}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="rounded-2xl bg-slate-950 text-white shadow-2xl border border-slate-700 overflow-hidden">
-        <div className="p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: `${color}22`, border: `1px solid ${color}66` }}>{category.emoji}</div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-black uppercase tracking-wider" style={{ color }}>{category.label}</div>
-              <h3 className="font-bold text-base leading-tight mt-1">{post.title}</h3>
-              <div className="text-[11px] text-slate-400 mt-1 truncate">📍 {post.location}</div>
-            </div>
-            <button onClick={onClose} type="button" aria-label="Fechar" className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"><X className="w-4 h-4" /></button>
-          </div>
-          <div className="flex items-center gap-2 mt-4">
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-800 flex items-center justify-center text-[11px] font-bold text-emerald-400 shrink-0">{anonymous ? 'D' : post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : authorName.charAt(0).toUpperCase()}</div>
-            <span className={anonymous ? 'text-xs font-semibold text-red-400' : 'text-xs font-semibold text-slate-200'}>{authorName}</span>
-          </div>
-          {post.imageUrl && <img src={post.imageUrl} alt="Imagem do relato" className="w-full h-32 object-cover rounded-xl mt-4" loading="lazy" />}
-          <p className="text-xs text-slate-300 leading-relaxed line-clamp-3 mt-3">{post.description}</p>
-          <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="mt-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors">Ver detalhes do post <ExternalLink className="w-3.5 h-3.5" /></button>
+  return <div className="absolute z-[2000] w-[min(380px,calc(100%-20px))] pointer-events-auto" style={{ left: position.left, top: position.top, transform: position.below ? 'translate(-50%, 18px)' : 'translate(-50%, calc(-100% - 18px))' }} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+    <div className="rounded-2xl bg-slate-950 text-white shadow-2xl border border-slate-700 overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center text-xl shrink-0" style={{ background: `${color}22`, border: `1px solid ${color}66` }}>{category.emoji}</div>
+          <div className="min-w-0 flex-1"><div className="text-[10px] font-black uppercase tracking-wider" style={{ color }}>{category.label}</div><h3 className="font-bold text-base leading-tight mt-1">{post.title}</h3><div className="text-[11px] text-slate-400 mt-1 truncate">📍 {post.location}</div></div>
+          <button onClick={onClose} type="button" aria-label="Fechar" className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"><X className="w-4 h-4" /></button>
         </div>
+        <div className="flex items-center gap-2 mt-4"><div className="w-8 h-8 rounded-lg overflow-hidden bg-slate-800 flex items-center justify-center text-[11px] font-bold text-emerald-400 shrink-0">{anonymous ? 'D' : post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : authorName.charAt(0).toUpperCase()}</div><span className={anonymous ? 'text-xs font-semibold text-red-400' : 'text-xs font-semibold text-slate-200'}>{authorName}</span></div>
+        {post.imageUrl && <img src={post.imageUrl} alt="Imagem do relato" className="w-full h-32 object-cover rounded-xl mt-4" loading="lazy" />}
+        <p className="text-xs text-slate-300 leading-relaxed line-clamp-3 mt-3">{post.description}</p>
+        <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="mt-4 w-full inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors">Ver detalhes do post <ExternalLink className="w-3.5 h-3.5" /></button>
       </div>
-      <div className={`absolute left-1/2 -translate-x-1/2 w-4 h-4 bg-slate-950 border-r border-b border-slate-700 rotate-45 ${position.below ? 'top-[-8px]' : 'bottom-[-8px]'}`} />
     </div>
-  );
+    <div className={`absolute left-1/2 -translate-x-1/2 w-4 h-4 bg-slate-950 border-r border-b border-slate-700 rotate-45 ${position.below ? 'top-[-8px]' : 'bottom-[-8px]'}`} />
+  </div>;
 }
 
 export default function Mapa() {
@@ -90,10 +80,10 @@ export default function Mapa() {
   const { currentNeighborhood } = useNeighborhood();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const selectedPost = selectedPostId ? posts.find(p => p.id === selectedPostId) ?? null : null;
 
   const filteredPosts = useMemo(() => posts.filter(p => p.latitude != null && p.longitude != null && (filter === 'all' || p.category === filter)), [posts, filter]);
   const points = useMemo(() => filteredPosts.map(p => [Number(p.latitude), Number(p.longitude)] as [number, number]), [filteredPosts]);
-  const selectedPost = selectedPostId ? posts.find(p => p.id === selectedPostId) ?? null : null;
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
 
   useEffect(() => {
