@@ -11,7 +11,7 @@
 }
 
 html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
-body { font-family: var(--font-sans); background-color: #f8fafc; color: #0f172a; transition: background-color 0.4s var(--ease-smooth), color 0.3s var(--ease-smooth); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body { font-family: var(--font-sans); background-color: #ffffff; color: #0f172a; transition: background-color 0.4s var(--ease-smooth), color 0.3s var(--ease-smooth); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 .dark body { background-color: #020617; color: #f8fafc; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -51,6 +51,16 @@ body { font-family: var(--font-sans); background-color: #f8fafc; color: #0f172a;
 .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .drop-zone-active { border-color: #10b981 !important; background-color: rgba(16, 185, 129, 0.05) !important; }
+
+/* Navegação principal: nomes sempre visíveis no desktop e com contraste alto no tema claro. */
+nav[aria-label="Navegação principal"] button { color: #334155; font-weight: 600; }
+nav[aria-label="Navegação principal"] button:hover { color: #0f172a; background-color: #f1f5f9; }
+nav[aria-label="Navegação principal"] button[aria-current="page"] { color: #047857; background-color: #ecfdf5; font-weight: 700; }
+nav[aria-label="Navegação principal"] button > span { display: inline !important; }
+nav[aria-label="Navegação principal"] button > svg { color: currentColor; flex-shrink: 0; }
+.dark nav[aria-label="Navegação principal"] button { color: #cbd5e1; }
+.dark nav[aria-label="Navegação principal"] button:hover { color: #f8fafc; background-color: #1e293b; }
+.dark nav[aria-label="Navegação principal"] button[aria-current="page"] { color: #34d399; background-color: rgba(16,185,129,0.1); }
 
 /* O item antigo /guia agora representa a área pública de Empregos. */
 a[href="#/guia"] { font-size: 0; }
