@@ -6,10 +6,10 @@ import { curitibaNeighborhoods, useNeighborhood } from '../contexts/Neighborhood
 import { Card } from '../components/UI';
 import {
   Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot,
-  CalendarDays, Briefcase, Store, Layers3, MapPin, ExternalLink, Loader2,
+  Layers3, MapPin, ExternalLink, Loader2,
 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
-import type { PostCategory, CommunityEvent, Business } from '../types';
+import type { PostCategory, CommunityEvent } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 
@@ -40,14 +40,7 @@ const eventLabels: Record<string, { emoji: string; label: string }> = {
   outros: { emoji: '📅', label: 'Evento' },
 };
 
-const businessLabels: Record<string, { emoji: string; label: string }> = {
-  alimentacao: { emoji: '🍽️', label: 'Alimentação' }, saude: { emoji: '💊', label: 'Saúde' },
-  servicos: { emoji: '🛠️', label: 'Serviços' }, educacao: { emoji: '📚', label: 'Educação' },
-  comercio: { emoji: '🛍️', label: 'Comércio' }, beleza: { emoji: '✂️', label: 'Beleza' },
-  outros: { emoji: '🏪', label: 'Comércio' },
-};
-
-type LayerKey = 'reports' | 'events' | 'jobs' | 'businesses';
+type LayerKey = 'reports' | 'events' | 'jobs';
 
 type MapJob = {
   id: string;
@@ -69,7 +62,6 @@ const layerMeta: Record<LayerKey, { label: string; emoji: string; color: string 
   reports: { label: 'Relatos', emoji: '📍', color: '#ea580c' },
   events: { label: 'Eventos', emoji: '📅', color: '#7c3aed' },
   jobs: { label: 'Empregos', emoji: '💼', color: '#2563eb' },
-  businesses: { label: 'Comércios', emoji: '🏪', color: '#0f766e' },
 };
 
 const normalizeText = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -137,20 +129,13 @@ function eventPosition(event: CommunityEvent): Positioned<CommunityEvent> | null
   return fallback ? { item: event, ...fallback } : null;
 }
 
-function businessPosition(business: Business): Positioned<Business> | null {
-  if (business.latitude != null && business.longitude != null) return { item: business, lat: Number(business.latitude), lng: Number(business.longitude), approximate: false };
-  const text = `${business.address || ''} ${(business as Business & { neighborhood?: string }).neighborhood || ''}`.trim();
-  const fallback = approximatePosition(text, business.id);
-  return fallback ? { item: business, ...fallback } : null;
-}
-
 function jobPosition(job: MapJob): Positioned<MapJob> | null {
   const fallback = approximatePosition(`${job.location || ''} ${job.neighborhood || ''}`, job.id);
   return fallback ? { item: job, ...fallback } : null;
 }
 
 export default function Mapa() {
-  const { posts, events, businesses } = useData();
+  const { posts, events } = useData();
   const { currentNeighborhood } = useNeighborhood();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
@@ -170,7 +155,6 @@ export default function Mapa() {
   }), [posts, filter]);
 
   const eventPositions = useMemo(() => events.map(eventPosition).filter(Boolean) as Positioned<CommunityEvent>[], [events]);
-  const businessPositions = useMemo(() => businesses.map(businessPosition).filter(Boolean) as Positioned<Business>[], [businesses]);
   const jobPositions = useMemo(() => jobs.map(jobPosition).filter(Boolean) as Positioned<MapJob>[], [jobs]);
 
   const focusedPost = useMemo(() => focusedPostId ? reportPositions.find((entry) => entry.item.id === focusedPostId) ?? null : null, [reportPositions, focusedPostId]);
@@ -182,7 +166,6 @@ export default function Mapa() {
   }, []);
   const eventIcon = useMemo(() => createEmojiIcon('📅', layerMeta.events.color), []);
   const jobIcon = useMemo(() => createEmojiIcon('💼', layerMeta.jobs.color), []);
-  const businessIcon = useMemo(() => createEmojiIcon('🏪', layerMeta.businesses.color), []);
 
   useEffect(() => {
     if (!focusedPostId) return;
@@ -231,23 +214,21 @@ export default function Mapa() {
     return next;
   });
 
-  const showAllLayers = () => setLayers(new Set<LayerKey>(['reports', 'events', 'jobs', 'businesses']));
-  const allLayersActive = layers.size === 4;
+  const showAllLayers = () => setLayers(new Set<LayerKey>(['reports', 'events', 'jobs']));
+  const allLayersActive = layers.size === 3;
 
   const visiblePoints = useMemo(() => {
     const result: [number, number][] = [];
     if (layers.has('reports')) result.push(...reportPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
     if (layers.has('events')) result.push(...eventPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
     if (layers.has('jobs')) result.push(...jobPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
-    if (layers.has('businesses')) result.push(...businessPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
     return result;
-  }, [layers, reportPositions, eventPositions, jobPositions, businessPositions]);
+  }, [layers, reportPositions, eventPositions, jobPositions]);
 
   const layerCounts: Record<LayerKey, number> = {
     reports: reportPositions.length,
     events: eventPositions.length,
     jobs: jobPositions.length,
-    businesses: businessPositions.length,
   };
 
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
@@ -271,7 +252,7 @@ export default function Mapa() {
               <span className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center"><MapIcon className="w-5 h-5 text-orange-700 dark:text-orange-300" /></span>
               Mapa Comunitário
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Combine relatos, eventos, vagas e comércios no mesmo mapa.</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Combine relatos, eventos e vagas no mesmo mapa.</p>
           </div>
           <button
             type="button"
@@ -286,7 +267,7 @@ export default function Mapa() {
           {(Object.keys(layerMeta) as LayerKey[]).map((layer) => {
             const active = layers.has(layer);
             const meta = layerMeta[layer];
-            const loading = layer === 'jobs' && jobsLoading;
+            const layerLoading = layer === 'jobs' && jobsLoading;
             return (
               <button
                 key={layer}
@@ -295,9 +276,9 @@ export default function Mapa() {
                 onClick={() => toggleLayer(layer)}
                 className={`min-h-11 shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-bold transition-all ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border-slate-300 dark:border-slate-600' : 'bg-slate-100/80 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-transparent'}`}
               >
-                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-base" style={{ backgroundColor: `${meta.color}18`, color: meta.color }}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.emoji}</span>
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-base" style={{ backgroundColor: `${meta.color}18`, color: meta.color }}>{layerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.emoji}</span>
                 {meta.label}
-                {active && !loading && <span className="text-xs font-black text-slate-500 dark:text-slate-300">{layerCounts[layer]}</span>}
+                {active && !layerLoading && <span className="text-xs font-black text-slate-500 dark:text-slate-300">{layerCounts[layer]}</span>}
               </button>
             );
           })}
@@ -374,28 +355,6 @@ export default function Mapa() {
               </Popup>
             </Marker>
           ))}
-
-          {layers.has('businesses') && businessPositions.map(({ item: business, lat, lng, approximate }) => {
-            const meta = businessLabels[business.category] ?? businessLabels.outros;
-            return (
-              <Marker key={`business-${business.id}`} position={[lat, lng]} icon={businessIcon} riseOnHover zIndexOffset={380}>
-                <Popup minWidth={260} className="custom-popup">
-                  <div className="p-1">
-                    <div className="flex items-center gap-2 mb-2"><span className="text-lg">{meta.emoji}</span><span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">{meta.label}</span></div>
-                    <h3 className="font-bold text-slate-900 mb-1">{business.name}</h3>
-                    <p className="text-xs text-slate-600 line-clamp-3 mb-2">{business.description}</p>
-                    {business.imageUrl && <img src={business.imageUrl} alt={business.name} className="w-full h-32 object-cover rounded-xl mb-2" loading="lazy" decoding="async" />}
-                    {business.avgRating != null && <p className="text-xs font-semibold text-amber-700 mb-2">★ {business.avgRating.toFixed(1)} {business.totalRatings ? `(${business.totalRatings})` : ''}</p>}
-                    <p className="text-xs text-slate-500 mb-2">📍 {business.address || (business as Business & { neighborhood?: string }).neighborhood || 'Localização cadastrada'}{approximate ? ' · posição aproximada' : ''}</p>
-                    <div className="flex gap-2">
-                      {business.whatsapp && <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex-1 text-center py-2 rounded-lg bg-teal-700 text-white text-xs font-bold">WhatsApp</a>}
-                      {business.phone && <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} className="flex-1 text-center py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">Ligar</a>}
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
 
           <RecenterButton points={visiblePoints} />
         </MapContainer>
