@@ -11,9 +11,10 @@ export default function PostDetails() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
-  const { supportPost, addComment, commentsByPost, fetchData, deleteComment } = useData();
+  const { supportPost, addComment, commentsByPost, loadComments, deleteComment } = useData();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [commentsLoading, setCommentsLoading] = useState(true);
   const [supported, setSupported] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -22,13 +23,27 @@ export default function PostDetails() {
   useEffect(() => {
     let mounted = true;
     const load = async () => {
-      if (!postId) return;
-      const { data } = await supabase
+      if (!postId) {
+        if (mounted) setLoading(false);
+        return;
+      }
+      setLoading(true);
+      setCommentsLoading(true);
+
+      const postPromise = supabase
         .from('posts')
-        .select('*, users(name, avatar_url), post_supports(count)')
+        .select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,users(name,avatar_url),post_supports(count)')
         .eq('id', postId)
         .maybeSingle();
+      const commentsPromise = loadComments(postId);
+      const supportPromise = user?.id
+        ? supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle()
+        : Promise.resolve({ data: null } as any);
+
+      const [postResult, , supportResult] = await Promise.all([postPromise, commentsPromise, supportPromise]);
       if (!mounted) return;
+
+      const data = postResult.data;
       if (data) {
         setPost({
           id: data.id,
@@ -39,33 +54,34 @@ export default function PostDetails() {
           status: data.status,
           title: data.title,
           description: data.description,
-          imageUrl: data.image_url,
-          location: data.location,
-          latitude: data.latitude,
-          longitude: data.longitude,
+          imageUrl: data.image_url || undefined,
+          location: data.location || '',
+          neighborhood: data.neighborhood || undefined,
+          locality: data.locality || undefined,
+          locationPrecision: data.location_precision || undefined,
+          latitude: data.latitude == null ? undefined : Number(data.latitude),
+          longitude: data.longitude == null ? undefined : Number(data.longitude),
           supports: data.post_supports?.[0]?.count ?? 0,
           commentsCount: data.comments_count ?? 0,
           createdAt: data.created_at,
           updatedAt: data.updated_at,
         });
-      }
+      } else setPost(null);
+      setSupported(Boolean(supportResult?.data));
+      setCommentsLoading(false);
       setLoading(false);
-      await fetchData();
-      if (user && postId) {
-        const { data: mine } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle();
-        if (mounted) setSupported(!!mine);
-      }
     };
     void load();
     return () => { mounted = false; };
-  }, [postId, user, fetchData]);
+  }, [postId, user?.id, loadComments]);
 
   const handleSupport = async () => {
     if (!postId) return;
     if (!isAuthenticated) { navigate('/login'); return; }
+    const wasSupported = supported;
     await supportPost(postId);
-    setSupported(v => !v);
-    setPost(prev => prev ? { ...prev, supports: Math.max(0, prev.supports + (supported ? -1 : 1)) } : prev);
+    setSupported(!wasSupported);
+    setPost(prev => prev ? { ...prev, supports: Math.max(0, prev.supports + (wasSupported ? -1 : 1)) } : prev);
   };
 
   const handleComment = async () => {
@@ -73,8 +89,8 @@ export default function PostDetails() {
     if (!postId || !text) return;
     if (!isAuthenticated) { navigate('/login'); return; }
     await addComment(postId, text);
+    setPost(prev => prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : prev);
     setCommentText('');
-    await fetchData();
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -84,7 +100,7 @@ export default function PostDetails() {
     setDeletingComment(commentId);
     try {
       await deleteComment(commentId);
-      await fetchData();
+      setPost(prev => prev ? { ...prev, commentsCount: Math.max(0, prev.commentsCount - 1) } : prev);
     } finally {
       setDeletingComment(null);
     }
@@ -94,12 +110,13 @@ export default function PostDetails() {
   if (!post) return (
     <div className="max-w-2xl mx-auto space-y-4">
       <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-emerald-600"><ArrowLeft className="w-4 h-4" /> Voltar</button>
-      <Card><EmptyState title="Post não encontrado" description="Esse post pode ter sido excluído ou não está mais disponível." /></Card>
+      <Card><EmptyState icon={MessageSquare} title="Post não encontrado" description="Esse post pode ter sido excluído ou não está mais disponível." /></Card>
     </div>
   );
 
   const anonymous = post.authorId === 'anonymous';
   const postComments = commentsByPost[post.id] ?? [];
+  const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -107,7 +124,7 @@ export default function PostDetails() {
       <Card>
         <div className="flex items-start gap-3">
           <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 overflow-hidden">
-            {anonymous ? <ShieldAlert className="w-5 h-5 text-red-500" /> : post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt="" className="w-full h-full object-cover" /> : <span className="font-bold text-emerald-600">{post.authorName.charAt(0).toUpperCase()}</span>}
+            {anonymous ? <ShieldAlert className="w-5 h-5 text-red-500" /> : post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt="" className="w-full h-full object-cover" decoding="async" /> : <span className="font-bold text-emerald-600">{post.authorName.charAt(0).toUpperCase()}</span>}
           </div>
           <div className="min-w-0 flex-1">
             <p className={anonymous ? 'text-sm font-semibold text-red-600 dark:text-red-400' : 'text-sm font-semibold text-slate-900 dark:text-white'}>{post.authorName}</p>
@@ -119,7 +136,7 @@ export default function PostDetails() {
         <p className="text-sm text-slate-600 dark:text-slate-300 mt-3 whitespace-pre-line leading-relaxed">{post.description}</p>
         {post.imageUrl && (
           <button type="button" onClick={() => setSelectedImage(post.imageUrl || null)} className="group relative mt-4 block w-full overflow-hidden rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <img src={post.imageUrl} alt="Imagem do relato" className="block w-full max-h-[620px] object-contain bg-slate-100 dark:bg-slate-800" />
+            <img src={post.imageUrl} alt="Imagem do relato" className="block w-full max-h-[620px] object-contain bg-slate-100 dark:bg-slate-800" loading="lazy" decoding="async" />
             <span className="absolute bottom-3 right-3 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-black/65 text-white text-xs font-semibold opacity-90 group-hover:opacity-100">
               <Maximize2 className="w-4 h-4" /> Ampliar imagem
             </span>
@@ -127,7 +144,8 @@ export default function PostDetails() {
         )}
         <div className="flex flex-wrap items-center gap-2 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
           <CategoryBadge category={post.category} />
-          <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" /> {post.location}</span>
+          {area && <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 dark:text-orange-300"><MapPin className="w-3 h-3" /> {area}</span>}
+          {post.location && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" /> {post.location}</span>}
         </div>
 
         <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
@@ -135,7 +153,7 @@ export default function PostDetails() {
             <Heart className={supported ? 'w-5 h-5 fill-current' : 'w-5 h-5'} /> Apoiar {post.supports > 0 ? `(${post.supports})` : ''}
           </button>
           <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-sm font-bold transition-all">
-            <MessageSquare className="w-5 h-5" /> Comentar {postComments.length > 0 ? `(${postComments.length})` : ''}
+            <MessageSquare className="w-5 h-5" /> Comentar {post.commentsCount > 0 ? `(${post.commentsCount})` : ''}
           </button>
         </div>
       </Card>
@@ -143,7 +161,7 @@ export default function PostDetails() {
       <Card id="post-comments" className="scroll-mt-24">
         <div className="flex items-center gap-2 mb-4"><MessageSquare className="w-5 h-5 text-emerald-600" /><h2 className="text-lg font-bold text-slate-900 dark:text-white">Comentários</h2></div>
         <div className="space-y-3">
-          {postComments.length === 0 ? <p className="text-sm text-slate-400">Nenhum comentário ainda.</p> : postComments.map(comment => {
+          {commentsLoading ? <p className="text-sm text-slate-400">Carregando comentários...</p> : postComments.length === 0 ? <p className="text-sm text-slate-400">Nenhum comentário ainda.</p> : postComments.map(comment => {
             const canDelete = user?.id === comment.authorId || user?.id === post.authorId;
             return (
               <div key={comment.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70">
@@ -171,7 +189,7 @@ export default function PostDetails() {
       {selectedImage && (
         <div className="fixed inset-0 z-[120] bg-black/90 p-4 sm:p-8 flex items-center justify-center" onClick={() => setSelectedImage(null)}>
           <button type="button" onClick={() => setSelectedImage(null)} className="absolute top-4 right-4 p-3 rounded-xl bg-white/10 hover:bg-white/20 text-white" aria-label="Fechar imagem"><X className="w-6 h-6" /></button>
-          <img src={selectedImage} alt="Imagem ampliada do relato" className="max-w-full max-h-full object-contain rounded-xl" onClick={e => e.stopPropagation()} />
+          <img src={selectedImage} alt="Imagem ampliada do relato" className="max-w-full max-h-full object-contain rounded-xl" decoding="async" onClick={e => e.stopPropagation()} />
         </div>
       )}
     </div>
