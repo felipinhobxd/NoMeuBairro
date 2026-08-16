@@ -8,7 +8,7 @@ import { ToastProvider } from './components/UI';
 import BrazilWhatsappMask from './components/BrazilWhatsappMask';
 import RecoveryRedirect from './components/RecoveryRedirect';
 import InteractionGuard from './components/InteractionGuard';
-import LocationRepairBridge from './components/LocationRepairBridge';
+import DataRouteLoader from './components/DataRouteLoader';
 import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import { PanicButton, CookieConsent } from './components/Safety';
@@ -86,9 +86,9 @@ export default function App() {
           <NeighborhoodProvider>
             <DataProvider>
               <ToastProvider>
-                <LocationRepairBridge />
                 <RecoveryRedirect />
                 <HashRouter>
+                  <DataRouteLoader />
                   <BrazilWhatsappMask />
                   <InteractionGuard />
                   <Layout>
