@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
 import {
   MessageSquare, Heart, Award, CheckCircle2,
-  Store, CalendarDays, ArrowLeft, ShieldAlert,
+  CalendarDays, ArrowLeft, ShieldAlert,
   MapPin, Loader2
 } from 'lucide-react';
 import { Card, Button, StatusBadge, CategoryBadge, timeAgo } from '../components/UI';
@@ -21,14 +21,20 @@ const allBadges = [
 export default function PublicProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { posts, businesses, events } = useData();
+  const { posts, events } = useData();
 
   const [profileUser, setProfileUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+
     async function loadProfile() {
-      if (!userId) return;
+      if (!userId) {
+        if (active) setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
         const { data, error } = await supabase
@@ -37,22 +43,26 @@ export default function PublicProfile() {
           .eq('id', userId)
           .maybeSingle();
 
+        if (!active) return;
         if (!error && data) setProfileUser(data);
+        else setProfileUser(null);
       } catch (err) {
         console.error('Erro ao carregar perfil público:', err);
+        if (active) setProfileUser(null);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
-    loadProfile();
+
+    void loadProfile();
+    return () => { active = false; };
   }, [userId]);
 
   const stats = useMemo(() => {
-    const userPosts = posts.filter(p => p.authorId === userId);
-    const userBiz = businesses.filter(b => b.createdBy === userId);
-    const userEvents = events.filter(e => e.createdBy === userId);
-    const supportsReceived = userPosts.reduce((sum, p) => sum + p.supports, 0);
-    const totalComments = userPosts.reduce((sum, p) => sum + p.commentsCount, 0);
+    const userPosts = (posts || []).filter(p => p.authorId === userId);
+    const userEvents = (events || []).filter(e => e.createdBy === userId);
+    const supportsReceived = userPosts.reduce((sum, p) => sum + (p.supports || 0), 0);
+    const totalComments = userPosts.reduce((sum, p) => sum + (p.commentsCount || 0), 0);
 
     const earned: string[] = [];
     if (userPosts.length >= 10) earned.push('vizinho_engajado');
@@ -64,12 +74,11 @@ export default function PublicProfile() {
     return {
       posts: userPosts,
       count: userPosts.length,
-      bizCount: userBiz.length,
       evCount: userEvents.length,
       supportsReceived,
       earnedBadges: earned
     };
-  }, [userId, posts, businesses, events]);
+  }, [userId, posts, events]);
 
   if (loading) {
     return (
@@ -91,6 +100,10 @@ export default function PublicProfile() {
     );
   }
 
+  const displayName = typeof profileUser.name === 'string' && profileUser.name.trim()
+    ? profileUser.name.trim()
+    : 'Morador';
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-emerald-600 transition-colors">
@@ -101,29 +114,28 @@ export default function PublicProfile() {
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
             {profileUser.avatar_url ? (
-              <img src={profileUser.avatar_url} alt={profileUser.name} className="w-full h-full object-cover" />
+              <img src={profileUser.avatar_url} alt={displayName} className="w-full h-full object-cover" />
             ) : (
-              profileUser.name.charAt(0).toUpperCase()
+              displayName.charAt(0).toUpperCase()
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{profileUser.name}</h2>
-            <div className="flex items-center gap-3 mt-1">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{displayName}</h2>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
               <span className="text-xs text-slate-400">Morador do bairro</span>
               <span className="w-1 h-1 rounded-full bg-slate-300" />
               <span className="text-xs text-slate-400">
-                Ativo desde {new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' })}
+                Ativo desde {profileUser.created_at ? new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : 'recentemente'}
               </span>
             </div>
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
           { icon: MessageSquare, value: stats.count, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' },
           { icon: Heart, value: stats.supportsReceived, label: 'Apoios', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' },
-          { icon: Store, value: stats.bizCount, label: 'Negócios', iconCls: 'text-violet-600 dark:text-violet-400', bgCls: 'bg-violet-50 dark:bg-violet-500/10' },
           { icon: CalendarDays, value: stats.evCount, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' },
         ].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
           <Card key={label} className="text-center !p-4">
@@ -138,7 +150,7 @@ export default function PublicProfile() {
 
       <Card>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-amber-500" /> Conquistas de {profileUser.name.split(' ')[0]}
+          <Award className="w-4 h-4 text-amber-500" /> Conquistas de {displayName.split(' ')[0]}
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {allBadges.map(badge => {
@@ -169,16 +181,16 @@ export default function PublicProfile() {
           <Card className="text-center py-12"><p className="text-sm text-slate-400 italic">Nenhum relato publicado ainda.</p></Card>
         ) : (
           stats.posts.map(post => (
-            <Card key={post.id} className="animate-card-enter">
+            <Card key={post.id} className="animate-card-enter cursor-pointer" onClick={() => navigate(`/post/${post.id}`)}>
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="flex items-center gap-2"><CategoryBadge category={post.category} /><span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span></div>
                 <StatusBadge status={post.status} />
               </div>
               <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-1">{post.title}</h4>
               <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-3 mb-3">{post.description}</p>
-              <div className="flex items-center gap-4 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{post.location}</span>
-                <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-rose-500 fill-rose-500" />{post.supports} apoios</span>
+              <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+                {post.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{post.location}</span>}
+                <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-rose-500 fill-rose-500" />{post.supports || 0} apoios</span>
               </div>
             </Card>
           ))
