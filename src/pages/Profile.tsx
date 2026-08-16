@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useData } from '../contexts/DataContext';
 import { useNavigate } from 'react-router-dom';
 import {
   UserCircle, LogOut, Award, Camera, Pencil,
@@ -9,9 +8,11 @@ import {
 import { Card, Button, Modal, Input, useToast } from '../components/UI';
 import { cn } from '../utils/cn';
 import { communityBadges, getEarnedCommunityBadges } from '../utils/communityBadges';
+import { supabase } from '../utils/supabase';
 
 type Point = { x: number; y: number };
 type SourceImage = { src: string; width: number; height: number };
+type ProfileStats = { myPosts: number; myEvents: number; supportsReceived: number; earnedBadges: string[] };
 
 function loadImage(file: File): Promise<SourceImage> {
   return new Promise((resolve, reject) => {
@@ -48,7 +49,7 @@ async function makeSquareCrop(source: SourceImage, zoom: number, offset: Point) 
   ctx.fillRect(0, 0, output, output);
   ctx.drawImage(img, x, y, drawW, drawH);
   URL.revokeObjectURL(source.src);
-  return canvas.toDataURL('image/jpeg', 0.82);
+  return canvas.toDataURL('image/jpeg', 0.8);
 }
 
 function AvatarCropper({ value, onChange, onEditingChange }: { value: string; onChange: (value: string) => void; onEditingChange?: (editing: boolean) => void }) {
@@ -118,6 +119,7 @@ function AvatarCropper({ value, onChange, onEditingChange }: { value: string; on
             src={source.src}
             alt="Recorte da foto de perfil"
             draggable={false}
+            decoding="async"
             className="absolute left-1/2 top-1/2 max-w-none pointer-events-none select-none"
             style={{
               width: `${source.width}px`,
@@ -127,9 +129,7 @@ function AvatarCropper({ value, onChange, onEditingChange }: { value: string; on
           />
           <div className="absolute inset-0 pointer-events-none bg-black/20" />
           <div className="absolute inset-6 rounded-full ring-2 ring-white shadow-[0_0_0_9999px_rgba(0,0,0,0.38)] pointer-events-none" />
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm whitespace-nowrap">
-            Arraste a foto para escolher o enquadramento
-          </div>
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1.5 text-[11px] font-semibold text-white backdrop-blur-sm whitespace-nowrap">Arraste a foto para escolher o enquadramento</div>
         </div>
 
         <div className="space-y-2">
@@ -137,9 +137,7 @@ function AvatarCropper({ value, onChange, onEditingChange }: { value: string; on
           <input aria-label="Zoom da foto" type="range" min="1" max="3" step="0.01" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full accent-emerald-600" />
         </div>
 
-        <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-200">
-          Para salvar esta nova foto, primeiro toque em <strong>Usar foto</strong>.
-        </div>
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-200">Para salvar esta nova foto, primeiro toque em <strong>Usar foto</strong>.</div>
 
         <div className="flex flex-col sm:flex-row gap-2">
           <Button type="button" variant="secondary" className="sm:flex-1 h-11" onClick={resetCrop}><RotateCcw className="w-4 h-4" /> Recentrar</Button>
@@ -154,32 +152,15 @@ function AvatarCropper({ value, onChange, onEditingChange }: { value: string; on
     <div className="space-y-3">
       {value ? (
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-200 dark:ring-slate-700 shrink-0">
-            <img src={value} alt="Foto de perfil" className="w-full h-full object-cover" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-800 dark:text-white">Foto pronta para salvar</p>
-            <button type="button" onClick={() => inputRef.current?.click()} className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Trocar e recortar novamente</button>
-          </div>
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 ring-2 ring-slate-200 dark:ring-slate-700 shrink-0"><img src={value} alt="Foto de perfil" className="w-full h-full object-cover" decoding="async" /></div>
+          <div><p className="text-sm font-semibold text-slate-800 dark:text-white">Foto pronta para salvar</p><button type="button" onClick={() => inputRef.current?.click()} className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Trocar e recortar novamente</button></div>
         </div>
       ) : (
         <button type="button" onClick={() => inputRef.current?.click()} className="w-full border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl p-5 hover:border-emerald-400 dark:hover:border-emerald-500/50 transition-colors text-center">
-          <ImageIcon className="w-8 h-8 mx-auto mb-2 text-slate-400" />
-          <span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Escolher foto</span>
-          <span className="block text-xs text-slate-400 mt-1">Você poderá escolher exatamente qual parte aparecerá no perfil.</span>
+          <ImageIcon className="w-8 h-8 mx-auto mb-2 text-slate-400" /><span className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Escolher foto</span><span className="block text-xs text-slate-400 mt-1">Você poderá escolher exatamente qual parte aparecerá no perfil.</span>
         </button>
       )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
-        className="hidden"
-        onChange={e => {
-          const f = e.target.files?.[0];
-          if (f) void chooseFile(f);
-          e.currentTarget.value = '';
-        }}
-      />
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void chooseFile(f); e.currentTarget.value = ''; }} />
     </div>
   );
 }
@@ -188,8 +169,8 @@ export default function Profile() {
   const { user, isAuthenticated, logout, updateProfile, changePassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { posts, events } = useData();
 
+  const [stats, setStats] = useState<ProfileStats>({ myPosts: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] });
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [editName, setEditName] = useState('');
@@ -203,14 +184,25 @@ export default function Profile() {
   const [pwdError, setPwdError] = useState('');
   const [savingPwd, setSavingPwd] = useState(false);
 
-  const stats = useMemo(() => {
-    if (!user) return { myPosts: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] as string[] };
-    const myPosts = (posts || []).filter(p => p.authorId === user.id);
-    const myEvents = (events || []).filter(e => e.createdBy === user.id);
-    const supportsReceived = myPosts.reduce((sum, p) => sum + p.supports, 0);
-    const earnedBadges = getEarnedCommunityBadges({ posts: myPosts, supportsReceived, eventsCount: myEvents.length });
-    return { myPosts: myPosts.length, myEvents: myEvents.length, supportsReceived, earnedBadges };
-  }, [user, posts, events]);
+  useEffect(() => {
+    let active = true;
+    if (!user?.id) {
+      setStats({ myPosts: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] });
+      return () => { active = false; };
+    }
+
+    void supabase.rpc('get_community_profile_summary', { p_user_id: user.id }).maybeSingle().then(({ data, error }) => {
+      if (!active || error || !data) return;
+      const myPosts = Number(data.posts_count || 0);
+      const myEvents = Number(data.events_count || 0);
+      const supportsReceived = Number(data.supports_received || 0);
+      const badgePosts = Array.from({ length: myPosts }, (_, index) => ({ status: index === 0 && data.has_resolved ? 'resolved' : 'pending' }));
+      const earnedBadges = getEarnedCommunityBadges({ posts: badgePosts, supportsReceived, eventsCount: myEvents });
+      setStats({ myPosts, myEvents, supportsReceived, earnedBadges });
+    });
+
+    return () => { active = false; };
+  }, [user?.id]);
 
   const openEditProfile = () => {
     if (!user) return;
@@ -221,22 +213,13 @@ export default function Profile() {
     setShowEditProfile(true);
   };
 
-  const closeEditProfile = () => {
-    setAvatarCropPending(false);
-    setShowEditProfile(false);
-  };
+  const closeEditProfile = () => { setAvatarCropPending(false); setShowEditProfile(false); };
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) return;
-    if (avatarCropPending) {
-      toast('Finalize o recorte tocando em “Usar foto” antes de salvar.', 'error');
-      return;
-    }
+    if (avatarCropPending) { toast('Finalize o recorte tocando em “Usar foto” antes de salvar.', 'error'); return; }
     setSavingProfile(true);
-    const result = await updateProfile({
-      name: editName.trim(),
-      ...(avatarChanged ? { avatarUrl: editAvatar } : {}),
-    });
+    const result = await updateProfile({ name: editName.trim(), ...(avatarChanged ? { avatarUrl: editAvatar } : {}) });
     setSavingProfile(false);
     if (result.ok) {
       setAvatarChanged(false);
@@ -256,6 +239,7 @@ export default function Profile() {
     if (result.ok) { setShowChangePassword(false); setCurrentPwd(''); setNewPwd(''); setConfirmPwd(''); toast('Senha alterada com sucesso!'); }
     else setPwdError(result.error ?? 'Erro ao alterar senha.');
   };
+
   const handleLogout = () => { logout(); toast('Até logo! 👋', 'info'); navigate('/'); };
 
   if (!isAuthenticated || !user) {
@@ -285,7 +269,7 @@ export default function Profile() {
         <div className="flex items-start gap-4">
           <div className="relative group shrink-0">
             <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
-              {user.avatarUrl ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
+              {user.avatarUrl ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" decoding="async" /> : user.name.charAt(0).toUpperCase()}
             </div>
             <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:ring-emerald-300 dark:hover:text-emerald-400 dark:hover:ring-emerald-500/30 transition-all shadow-sm" aria-label="Editar foto de perfil"><Camera className="w-4 h-4" /></button>
           </div>
@@ -318,18 +302,12 @@ export default function Profile() {
 
       <Modal open={showEditProfile} onClose={closeEditProfile} title="Editar perfil">
         <div className="space-y-5 pb-8 sm:pb-0">
-          <div className="flex flex-col items-center gap-3"><div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-1 ring-slate-200 dark:ring-slate-700">{editAvatar ? <img src={editAvatar} alt="Preview" className="w-full h-full object-cover" /> : editName.charAt(0).toUpperCase() || '?'}</div></div>
+          <div className="flex flex-col items-center gap-3"><div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-1 ring-slate-200 dark:ring-slate-700">{editAvatar ? <img src={editAvatar} alt="Preview" className="w-full h-full object-cover" decoding="async" /> : editName.charAt(0).toUpperCase() || '?'}</div></div>
           <Input label="Nome" placeholder="Seu nome" value={editName} onChange={e => setEditName(e.target.value)} required />
-          <AvatarCropper
-            value={editAvatar}
-            onEditingChange={setAvatarCropPending}
-            onChange={(value) => { setEditAvatar(value); setAvatarChanged(true); }}
-          />
+          <AvatarCropper value={editAvatar} onEditingChange={setAvatarCropPending} onChange={(value) => { setEditAvatar(value); setAvatarChanged(true); }} />
           <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0">
             <Button type="button" variant="secondary" className="flex-1 h-11" onClick={closeEditProfile}>Cancelar</Button>
-            <Button className="flex-1 h-11" disabled={!editName.trim() || savingProfile || avatarCropPending} onClick={handleSaveProfile}>
-              {savingProfile ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : avatarCropPending ? 'Finalize o recorte acima' : 'Salvar'}
-            </Button>
+            <Button className="flex-1 h-11" disabled={!editName.trim() || savingProfile || avatarCropPending} onClick={handleSaveProfile}>{savingProfile ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : avatarCropPending ? 'Finalize o recorte acima' : 'Salvar'}</Button>
           </div>
         </div>
       </Modal>
