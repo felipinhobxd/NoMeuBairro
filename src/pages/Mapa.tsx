@@ -143,6 +143,7 @@ export default function Mapa() {
   const [jobs, setJobs] = useState<MapJob[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsError, setJobsError] = useState(false);
   const [focusedPostId] = useState<string | null>(() => {
     try { return sessionStorage.getItem('anb-map-focus-post'); } catch { return null; }
   });
@@ -176,8 +177,8 @@ export default function Mapa() {
 
   useEffect(() => {
     if (!layers.has('jobs') || jobsLoaded || jobsLoading) return;
-    let active = true;
     setJobsLoading(true);
+    setJobsError(false);
     void supabase
       .from('public_job_posts')
       .select('id,company_name,company_logo_url,title,description,employment_type,work_model,location,neighborhood,salary_min,salary_max,is_active,expires_at')
@@ -185,28 +186,30 @@ export default function Mapa() {
       .order('created_at', { ascending: false })
       .limit(100)
       .then(({ data, error }) => {
-        if (!active) return;
-        if (!error) {
-          const today = new Date().toISOString().slice(0, 10);
-          setJobs((data || []).filter((row: any) => !row.expires_at || row.expires_at >= today).map((row: any) => ({
-            id: row.id,
-            companyName: row.company_name || 'Empresa',
-            companyLogoUrl: row.company_logo_url || undefined,
-            title: row.title || 'Oportunidade',
-            description: row.description || '',
-            employmentType: row.employment_type || undefined,
-            workModel: row.work_model || undefined,
-            location: row.location || undefined,
-            neighborhood: row.neighborhood || undefined,
-            salaryMin: row.salary_min == null ? undefined : Number(row.salary_min),
-            salaryMax: row.salary_max == null ? undefined : Number(row.salary_max),
-          })));
+        if (error) {
+          console.error('Erro ao carregar vagas no mapa:', error);
+          setJobsError(true);
+          setJobsLoading(false);
+          return;
         }
+        const today = new Date().toISOString().slice(0, 10);
+        setJobs((data || []).filter((row: any) => !row.expires_at || row.expires_at >= today).map((row: any) => ({
+          id: row.id,
+          companyName: row.company_name || 'Empresa',
+          companyLogoUrl: row.company_logo_url || undefined,
+          title: row.title || 'Oportunidade',
+          description: row.description || '',
+          employmentType: row.employment_type || undefined,
+          workModel: row.work_model || undefined,
+          location: row.location || undefined,
+          neighborhood: row.neighborhood || undefined,
+          salaryMin: row.salary_min == null ? undefined : Number(row.salary_min),
+          salaryMax: row.salary_max == null ? undefined : Number(row.salary_max),
+        })));
         setJobsLoaded(true);
         setJobsLoading(false);
       });
-    return () => { active = false; };
-  }, [layers, jobsLoaded, jobsLoading]);
+  }, [layers, jobsLoaded]);
 
   const toggleLayer = (layer: LayerKey) => setLayers((previous) => {
     const next = new Set(previous);
@@ -278,7 +281,7 @@ export default function Mapa() {
               >
                 <span className="w-7 h-7 rounded-lg flex items-center justify-center text-base" style={{ backgroundColor: `${meta.color}18`, color: meta.color }}>{layerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.emoji}</span>
                 {meta.label}
-                {active && !layerLoading && <span className="text-xs font-black text-slate-500 dark:text-slate-300">{layerCounts[layer]}</span>}
+                {layer === 'jobs' && jobsError ? <span className="text-[10px] font-black text-red-600">ERRO</span> : active && !layerLoading && <span className="text-xs font-black text-slate-500 dark:text-slate-300">{layerCounts[layer]}</span>}
               </button>
             );
           })}
@@ -371,6 +374,7 @@ export default function Mapa() {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
         <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-600" /><strong className="text-slate-900 dark:text-white">{visiblePoints.length}</strong><span>itens visíveis</span></div>
         {jobsLoading && <div className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando vagas...</div>}
+        {jobsError && <p className="font-semibold text-red-600 dark:text-red-400">Não foi possível carregar as vagas. Desative e ative Empregos para tentar novamente.</p>}
         <p className="hidden sm:block">Você pode combinar várias camadas. Marcadores aproximados são identificados no detalhe.</p>
       </div>
     </div>
