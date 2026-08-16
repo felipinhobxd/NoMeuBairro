@@ -41,3 +41,8 @@ main[role="main"] div.flex.items-center.gap-2.mt-3.flex-wrap>span{display:none!i
 /* Statuses: somente "Resolvido" permanece verde para não confundir com outras ações da marca. */
 main[role="main"] span[class*="bg-emerald-50"][class*="text-emerald-700"][class*="tracking-wider"]{background-color:#ecfdf5!important;color:#047857!important;}
 .dark main[role="main"] span[class*="dark\\:bg-emerald-500"][class*="dark\\:text-emerald-400"][class*="tracking-wider"]{background-color:rgba(16,185,129,.1)!important;color:#34d399!important;}
+
+/* O botão de ação "Resolvido" do card também deve permanecer verde. */
+main[role="main"] div.flex.items-center.gap-1\.5.ml-auto.overflow-x-auto.no-scrollbar.pb-1 > button[class*="bg-emerald-50"]{background-color:#ecfdf5!important;color:#047857!important;--tw-ring-color:#a7f3d0!important;border-color:#a7f3d0!important;}
+main[role="main"] div.flex.items-center.gap-1\.5.ml-auto.overflow-x-auto.no-scrollbar.pb-1 > button[class*="bg-emerald-50"]:hover{background-color:#d1fae5!important;color:#065f46!important;}
+.dark main[role="main"] div.flex.items-center.gap-1\.5.ml-auto.overflow-x-auto.no-scrollbar.pb-1 > button[class*="bg-emerald-50"]{background-color:rgba(16,185,129,.12)!important;color:#34d399!important;--tw-ring-color:rgba(52,211,153,.35)!important;border-color:rgba(52,211,153,.35)!important;}
