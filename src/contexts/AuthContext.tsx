@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { User, AccountType } from '../types';
 import { supabase } from '../utils/supabase';
 
@@ -34,8 +34,14 @@ function dataUrlToBlob(dataUrl: string): Blob | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const profileInFlightRef = useRef<string | null>(null);
+  const lastProfileIdentityRef = useRef<string | null>(null);
 
-  const fetchProfile = useCallback(async (id: string, email: string, metadata?: Record<string, any>) => {
+  const fetchProfile = useCallback(async (id: string, email: string, metadata?: Record<string, any>, force = false) => {
+    const identity = `${id}|${email}|${metadata?.account_type || 'resident'}|${metadata?.name || ''}`;
+    if (!force && (profileInFlightRef.current === identity || lastProfileIdentityRef.current === identity)) return;
+    profileInFlightRef.current = identity;
+
     let attempts = 0;
     const maxAttempts = 3;
 
@@ -47,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (data && !error) {
+        lastProfileIdentityRef.current = identity;
+        profileInFlightRef.current = null;
         setUser({
           id: data.id,
           name: data.name,
@@ -62,10 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      attempts++;
-      if (attempts < maxAttempts) await new Promise(res => setTimeout(res, 1000 * attempts));
+      attempts += 1;
+      if (attempts < maxAttempts) await new Promise((res) => setTimeout(res, 600 * attempts));
     }
 
+    lastProfileIdentityRef.current = identity;
+    profileInFlightRef.current = null;
     setUser({
       id,
       name: metadata?.name || 'Morador',
@@ -80,16 +90,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
+    let active = true;
+
+    const loadInitial = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!active || !session?.user) return;
+      await fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
+    };
+    void loadInitial();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (!session?.user) {
+        if (event === 'SIGNED_OUT') {
+          lastProfileIdentityRef.current = null;
+          profileInFlightRef.current = null;
+        }
+        setUser(null);
+        return;
+      }
+
+      // Token refreshes must not refetch the public profile and cascade into the
+      // app's data queries. Password recovery also does not need the whole app loaded.
+      if (event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY') return;
+      void fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
-      else setUser(null);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, [fetchProfile]);
 
   const register = useCallback(async (name: string, email: string, password: string): Promise<{ ok: boolean; error?: string; pendingVerification?: boolean }> => {
@@ -102,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { ok: false, error: error.message };
     if (data.user) {
       if (data.session) {
-        await fetchProfile(data.user.id, email, data.user.user_metadata);
+        await fetchProfile(data.user.id, email, data.user.user_metadata, true);
         return { ok: true };
       }
       return { ok: true, pendingVerification: true };
@@ -114,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: error.message };
     if (data.user) {
-      await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata);
+      await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata, true);
       return { ok: true };
     }
     return { ok: false, error: 'Login falhou.' };
@@ -122,6 +152,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
+    lastProfileIdentityRef.current = null;
+    profileInFlightRef.current = null;
     setUser(null);
   }, []);
 
@@ -133,11 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.avatarUrl !== undefined) {
       if (!data.avatarUrl) {
         storedAvatarUrl = null;
-        try {
-          await supabase.storage.from('avatars').remove([`${user.id}/avatar.jpg`]);
-        } catch {
-          // A remoção do arquivo não impede a limpeza da URL no perfil.
-        }
+        try { await supabase.storage.from('avatars').remove([`${user.id}/avatar.jpg`]); } catch {}
       } else if (data.avatarUrl.startsWith('data:image/')) {
         const blob = dataUrlToBlob(data.avatarUrl);
         if (!blob) return { ok: false, error: 'Não foi possível processar a foto recortada.' };
@@ -160,12 +188,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const updates: { name?: string; avatar_url?: string | null; updated_at: string } = {
-      updated_at: new Date().toISOString(),
-    };
+    const updates: { name?: string; avatar_url?: string | null; updated_at: string } = { updated_at: new Date().toISOString() };
     if (data.name !== undefined) updates.name = data.name;
     if (storedAvatarUrl !== undefined) updates.avatar_url = storedAvatarUrl;
-
     if (Object.keys(updates).length === 1) return { ok: false, error: 'Nenhuma alteração para salvar.' };
 
     const { data: saved, error } = await supabase
@@ -177,7 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error || !saved) return { ok: false, error: error?.message || 'Não foi possível salvar o perfil.' };
 
-    setUser(prev => prev ? {
+    setUser((prev) => prev ? {
       ...prev,
       name: saved.name,
       avatarUrl: saved.avatar_url,
