@@ -18,6 +18,20 @@ function getAccountType(metadata: Record<string, any> | undefined): AccountType 
   return metadata?.account_type === 'company' ? 'company' : 'resident';
 }
 
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  const match = dataUrl.match(/^data:([^;,]+)?;base64,(.+)$/);
+  if (!match) return null;
+  try {
+    const mime = match[1] || 'image/jpeg';
+    const binary = atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
@@ -49,9 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       attempts++;
-      if (attempts < maxAttempts) {
-        await new Promise(res => setTimeout(res, 1000 * attempts));
-      }
+      if (attempts < maxAttempts) await new Promise(res => setTimeout(res, 1000 * attempts));
     }
 
     setUser({
@@ -63,23 +75,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       reputation: 0,
       postsCount: 0,
       supportsReceived: 0,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     });
   }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
-      }
+      if (session?.user) fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
-      } else {
-        setUser(null);
-      }
+      if (session?.user) fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
+      else setUser(null);
     });
 
     return () => subscription.unsubscribe();
@@ -89,11 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, account_type: 'resident' } }
+      options: { data: { name, account_type: 'resident' } },
     });
 
     if (error) return { ok: false, error: error.message };
-
     if (data.user) {
       if (data.session) {
         await fetchProfile(data.user.id, email, data.user.user_metadata);
@@ -101,13 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: true, pendingVerification: true };
     }
-
     return { ok: false, error: 'Erro ao criar conta.' };
   }, [fetchProfile]);
 
   const login = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string }> => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
     if (error) return { ok: false, error: error.message };
     if (data.user) {
       await fetchProfile(data.user.id, data.user.email || email, data.user.user_metadata);
@@ -124,33 +128,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(async (data: { name?: string; avatarUrl?: string }): Promise<{ ok: boolean; error?: string }> => {
     if (!user) return { ok: false, error: 'Não autenticado.' };
 
-    const updates: { name?: string; avatar_url?: string | null; updated_at?: string } = {};
-    if (data.name !== undefined) updates.name = data.name;
-    if (data.avatarUrl !== undefined) updates.avatar_url = data.avatarUrl || null;
-    updates.updated_at = new Date().toISOString();
+    let storedAvatarUrl: string | null | undefined;
 
-    if (Object.keys(updates).length === 1) {
-      return { ok: false, error: 'Nenhuma alteração para salvar.' };
+    if (data.avatarUrl !== undefined) {
+      if (!data.avatarUrl) {
+        storedAvatarUrl = null;
+        try {
+          await supabase.storage.from('avatars').remove([`${user.id}/avatar.jpg`]);
+        } catch {
+          // A remoção do arquivo não impede a limpeza da URL no perfil.
+        }
+      } else if (data.avatarUrl.startsWith('data:image/')) {
+        const blob = dataUrlToBlob(data.avatarUrl);
+        if (!blob) return { ok: false, error: 'Não foi possível processar a foto recortada.' };
+
+        const path = `${user.id}/avatar.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(path, blob, {
+            contentType: 'image/jpeg',
+            upsert: true,
+            cacheControl: '31536000',
+          });
+
+        if (uploadError) return { ok: false, error: `Não foi possível salvar a foto: ${uploadError.message}` };
+
+        const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(path);
+        storedAvatarUrl = `${publicData.publicUrl}?v=${Date.now()}`;
+      } else {
+        storedAvatarUrl = data.avatarUrl;
+      }
     }
 
-    const { error } = await supabase
+    const updates: { name?: string; avatar_url?: string | null; updated_at: string } = {
+      updated_at: new Date().toISOString(),
+    };
+    if (data.name !== undefined) updates.name = data.name;
+    if (storedAvatarUrl !== undefined) updates.avatar_url = storedAvatarUrl;
+
+    if (Object.keys(updates).length === 1) return { ok: false, error: 'Nenhuma alteração para salvar.' };
+
+    const { data: saved, error } = await supabase
       .from('users')
       .update(updates)
       .eq('id', user.id)
       .select('id, name, avatar_url, reputation, created_at')
       .single();
 
-    if (error) return { ok: false, error: error.message };
-
-    const { data: saved, error: verifyError } = await supabase
-      .from('users')
-      .select('id, name, avatar_url, reputation, created_at')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (verifyError || !saved) {
-      return { ok: false, error: 'Perfil atualizado, mas não foi possível confirmar a gravação. Tente recarregar a página.' };
-    }
+    if (error || !saved) return { ok: false, error: error?.message || 'Não foi possível salvar o perfil.' };
 
     setUser(prev => prev ? {
       ...prev,
@@ -165,10 +190,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const changePassword = useCallback(async (currentPassword: string, newPassword: string): Promise<{ ok: boolean; error?: string }> => {
     if (!user?.email) return { ok: false, error: 'Usuário não identificado.' };
-
     const { error: loginError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
     if (loginError) return { ok: false, error: 'A senha atual está incorreta.' };
-
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
     if (updateError) return { ok: false, error: updateError.message };
     return { ok: true };
