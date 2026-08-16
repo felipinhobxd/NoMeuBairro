@@ -51,38 +51,6 @@ export interface Comment {
   createdAt: string;
 }
 
-export interface Business {
-  id: string;
-  name: string;
-  description: string;
-  category: BusinessCategory;
-  phone?: string;
-  whatsapp?: string;
-  address?: string;
-  latitude?: number;
-  longitude?: number;
-  imageUrl?: string;
-  createdBy: string;
-  createdByName?: string;
-  createdByAvatarUrl?: string;
-  createdAt: string;
-  avgRating?: number;
-  totalRatings?: number;
-}
-
-export interface BusinessRating {
-  id: string;
-  businessId: string;
-  userId: string;
-  userName?: string;
-  userAvatarUrl?: string;
-  stars: number;
-  comment?: string;
-  createdAt: string;
-}
-
-export type BusinessCategory = 'alimentacao' | 'saude' | 'servicos' | 'educacao' | 'comercio' | 'beleza' | 'outros';
-
 export interface CommunityEvent {
   id: string;
   title: string;
