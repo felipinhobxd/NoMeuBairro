@@ -6,7 +6,7 @@ import { curitibaNeighborhoods, useNeighborhood } from '../contexts/Neighborhood
 import { Card } from '../components/UI';
 import {
   Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot,
-  Layers3, MapPin, ExternalLink, Loader2,
+  Layers3, MapPin, ExternalLink, Loader2, LocateFixed,
 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import type { PostCategory, CommunityEvent } from '../types';
@@ -41,6 +41,7 @@ const eventLabels: Record<string, { emoji: string; label: string }> = {
 };
 
 type LayerKey = 'reports' | 'events' | 'jobs';
+type UserPoint = { lat: number; lng: number };
 
 type MapJob = {
   id: string;
@@ -54,6 +55,9 @@ type MapJob = {
   neighborhood?: string;
   salaryMin?: number;
   salaryMax?: number;
+  latitude?: number;
+  longitude?: number;
+  locationPrecision?: 'exact' | 'neighborhood';
 };
 
 type Positioned<T> = { item: T; lat: number; lng: number; approximate: boolean };
@@ -87,6 +91,16 @@ function approximatePosition(text: string | undefined, id: string) {
   return { lat: neighborhood.latitude + offset.lat, lng: neighborhood.longitude + offset.lng, approximate: true };
 }
 
+function distanceKm(a: UserPoint, b: UserPoint) {
+  const R = 6371;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const lat1 = a.lat * Math.PI / 180;
+  const lat2 = b.lat * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
 function createEmojiIcon(emoji: string, color: string, size = 50) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="15" fill="${color}" stroke="white" stroke-width="4"/><text x="${size / 2}" y="${Math.round(size * 0.65)}" text-anchor="middle" font-size="${Math.round(size * 0.47)}" font-family="Apple Color Emoji, Segoe UI Emoji, sans-serif">${emoji}</text></svg>`;
   return L.icon({
@@ -101,9 +115,9 @@ function createCategoryIcon(category: PostCategory) {
   return createEmojiIcon(cfg.emoji, categoryColors[category] ?? categoryColors.outros, 56);
 }
 
-function FocusPoint({ lat, lng }: { lat: number; lng: number }) {
+function FocusPoint({ lat, lng, zoom = 18 }: { lat: number; lng: number; zoom?: number }) {
   const map = useMap();
-  useEffect(() => { map.setView([lat, lng], 18, { animate: false }); }, [map, lat, lng]);
+  useEffect(() => { map.setView([lat, lng], zoom, { animate: false }); }, [map, lat, lng, zoom]);
   return null;
 }
 
@@ -130,6 +144,14 @@ function eventPosition(event: CommunityEvent): Positioned<CommunityEvent> | null
 }
 
 function jobPosition(job: MapJob): Positioned<MapJob> | null {
+  if (job.latitude != null && job.longitude != null && Number.isFinite(job.latitude) && Number.isFinite(job.longitude)) {
+    return {
+      item: job,
+      lat: Number(job.latitude),
+      lng: Number(job.longitude),
+      approximate: job.locationPrecision !== 'exact',
+    };
+  }
   const fallback = approximatePosition(`${job.location || ''} ${job.neighborhood || ''}`, job.id);
   return fallback ? { item: job, ...fallback } : null;
 }
@@ -144,19 +166,28 @@ export default function Mapa() {
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState(false);
+  const [userPosition, setUserPosition] = useState<UserPoint | null>(null);
+  const [nearMe, setNearMe] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [focusedPostId] = useState<string | null>(() => {
     try { return sessionStorage.getItem('anb-map-focus-post'); } catch { return null; }
   });
 
-  const reportPositions = useMemo(() => posts.flatMap((post) => {
+  const reportPositions = useMemo(() => (posts || []).flatMap((post) => {
     if (filter !== 'all' && post.category !== filter) return [];
     if (post.latitude != null && post.longitude != null) return [{ item: post, lat: Number(post.latitude), lng: Number(post.longitude), approximate: false }];
     const fallback = approximatePosition(post.location, post.id);
     return fallback ? [{ item: post, ...fallback }] : [];
   }), [posts, filter]);
 
-  const eventPositions = useMemo(() => events.map(eventPosition).filter(Boolean) as Positioned<CommunityEvent>[], [events]);
+  const eventPositions = useMemo(() => (events || []).map(eventPosition).filter(Boolean) as Positioned<CommunityEvent>[], [events]);
   const jobPositions = useMemo(() => jobs.map(jobPosition).filter(Boolean) as Positioned<MapJob>[], [jobs]);
+
+  const withinNearbyRadius = (position: { lat: number; lng: number }) => !nearMe || !userPosition || distanceKm(userPosition, position) <= 3;
+  const visibleReportPositions = useMemo(() => reportPositions.filter(withinNearbyRadius), [reportPositions, nearMe, userPosition]);
+  const visibleEventPositions = useMemo(() => eventPositions.filter(withinNearbyRadius), [eventPositions, nearMe, userPosition]);
+  const visibleJobPositions = useMemo(() => jobPositions.filter(withinNearbyRadius), [jobPositions, nearMe, userPosition]);
 
   const focusedPost = useMemo(() => focusedPostId ? reportPositions.find((entry) => entry.item.id === focusedPostId) ?? null : null, [reportPositions, focusedPostId]);
 
@@ -167,11 +198,13 @@ export default function Mapa() {
   }, []);
   const eventIcon = useMemo(() => createEmojiIcon('📅', layerMeta.events.color), []);
   const jobIcon = useMemo(() => createEmojiIcon('💼', layerMeta.jobs.color), []);
+  const userIcon = useMemo(() => createEmojiIcon('●', '#0f766e', 42), []);
 
   useEffect(() => {
     if (!focusedPostId) return;
     setLayers((previous) => new Set(previous).add('reports'));
     setFilter('all');
+    setNearMe(false);
     try { sessionStorage.removeItem('anb-map-focus-post'); } catch {}
   }, [focusedPostId]);
 
@@ -181,7 +214,7 @@ export default function Mapa() {
     setJobsError(false);
     void supabase
       .from('public_job_posts')
-      .select('id,company_name,company_logo_url,title,description,employment_type,work_model,location,neighborhood,salary_min,salary_max,is_active,expires_at')
+      .select('id,company_name,company_logo_url,title,description,employment_type,work_model,location,neighborhood,salary_min,salary_max,latitude,longitude,location_precision,is_active,expires_at')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(100)
@@ -205,11 +238,14 @@ export default function Mapa() {
           neighborhood: row.neighborhood || undefined,
           salaryMin: row.salary_min == null ? undefined : Number(row.salary_min),
           salaryMax: row.salary_max == null ? undefined : Number(row.salary_max),
+          latitude: row.latitude == null ? undefined : Number(row.latitude),
+          longitude: row.longitude == null ? undefined : Number(row.longitude),
+          locationPrecision: row.location_precision === 'exact' ? 'exact' : row.location_precision === 'neighborhood' ? 'neighborhood' : undefined,
         })));
         setJobsLoaded(true);
         setJobsLoading(false);
       });
-  }, [layers, jobsLoaded]);
+  }, [layers, jobsLoaded, jobsLoading]);
 
   const toggleLayer = (layer: LayerKey) => setLayers((previous) => {
     const next = new Set(previous);
@@ -220,18 +256,46 @@ export default function Mapa() {
   const showAllLayers = () => setLayers(new Set<LayerKey>(['reports', 'events', 'jobs']));
   const allLayersActive = layers.size === 3;
 
+  const toggleNearMe = () => {
+    if (nearMe) {
+      setNearMe(false);
+      setLocationError('');
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationError('Seu navegador não oferece localização.');
+      return;
+    }
+    setLocationLoading(true);
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserPosition({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setNearMe(true);
+        setLocationLoading(false);
+        setLayers((previous) => new Set(previous).add('reports').add('events'));
+      },
+      (error) => {
+        setLocationLoading(false);
+        setLocationError(error.code === error.PERMISSION_DENIED ? 'Permita o acesso à localização para usar “Perto de mim”.' : 'Não foi possível obter sua localização agora.');
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    );
+  };
+
   const visiblePoints = useMemo(() => {
     const result: [number, number][] = [];
-    if (layers.has('reports')) result.push(...reportPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
-    if (layers.has('events')) result.push(...eventPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
-    if (layers.has('jobs')) result.push(...jobPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('reports')) result.push(...visibleReportPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('events')) result.push(...visibleEventPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('jobs')) result.push(...visibleJobPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (nearMe && userPosition) result.push([userPosition.lat, userPosition.lng]);
     return result;
-  }, [layers, reportPositions, eventPositions, jobPositions]);
+  }, [layers, visibleReportPositions, visibleEventPositions, visibleJobPositions, nearMe, userPosition]);
 
   const layerCounts: Record<LayerKey, number> = {
-    reports: reportPositions.length,
-    events: eventPositions.length,
-    jobs: jobPositions.length,
+    reports: visibleReportPositions.length,
+    events: visibleEventPositions.length,
+    jobs: visibleJobPositions.length,
   };
 
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
@@ -257,13 +321,24 @@ export default function Mapa() {
             </h1>
             <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Combine relatos, eventos e vagas no mesmo mapa.</p>
           </div>
-          <button
-            type="button"
-            onClick={showAllLayers}
-            className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'}`}
-          >
-            <Layers3 className="w-4 h-4" /> Mostrar tudo
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={toggleNearMe}
+              disabled={locationLoading}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all disabled:opacity-60 ${nearMe ? 'bg-teal-700 text-white border-teal-700' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'}`}
+            >
+              {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
+              {nearMe ? 'Perto de mim: 3 km' : 'Perto de mim'}
+            </button>
+            <button
+              type="button"
+              onClick={showAllLayers}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'}`}
+            >
+              <Layers3 className="w-4 h-4" /> Mostrar tudo
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1" aria-label="Camadas do mapa">
@@ -296,14 +371,21 @@ export default function Mapa() {
             })}
           </div>
         )}
+        {locationError && <p className="text-xs font-semibold text-red-600 dark:text-red-400">{locationError}</p>}
       </div>
 
       <Card className="flex-1 min-h-[360px] !p-0 overflow-hidden relative border-slate-200 dark:border-slate-800 shadow-xl">
         <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {focusedPost && <FocusPoint lat={focusedPost.lat} lng={focusedPost.lng} />}
+          {!focusedPost && nearMe && userPosition && <FocusPoint lat={userPosition.lat} lng={userPosition.lng} zoom={14} />}
+          {nearMe && userPosition && (
+            <Marker position={[userPosition.lat, userPosition.lng]} icon={userIcon} zIndexOffset={1200}>
+              <Popup><div className="text-sm font-bold text-slate-900">Você está aproximadamente aqui</div><p className="text-xs text-slate-500 mt-1">Sua localização é usada apenas nesta tela e não é salva.</p></Popup>
+            </Marker>
+          )}
 
-          {layers.has('reports') && reportPositions.map(({ item: post, lat, lng, approximate }) => (
+          {layers.has('reports') && visibleReportPositions.map(({ item: post, lat, lng, approximate }) => (
             <Marker key={`post-${post.id}`} position={[lat, lng]} icon={categoryMarkerIcons[post.category] ?? categoryMarkerIcons.outros} riseOnHover zIndexOffset={focusedPost?.item.id === post.id ? 1000 : 500}>
               <Popup minWidth={270} className="custom-popup">
                 <div className="p-1">
@@ -319,7 +401,7 @@ export default function Mapa() {
             </Marker>
           ))}
 
-          {layers.has('events') && eventPositions.map(({ item: event, lat, lng, approximate }) => {
+          {layers.has('events') && visibleEventPositions.map(({ item: event, lat, lng, approximate }) => {
             const meta = eventLabels[event.type] ?? eventLabels.outros;
             return (
               <Marker key={`event-${event.id}`} position={[lat, lng]} icon={eventIcon} riseOnHover zIndexOffset={420}>
@@ -337,7 +419,7 @@ export default function Mapa() {
             );
           })}
 
-          {layers.has('jobs') && jobPositions.map(({ item: job, lat, lng, approximate }) => (
+          {layers.has('jobs') && visibleJobPositions.map(({ item: job, lat, lng, approximate }) => (
             <Marker key={`job-${job.id}`} position={[lat, lng]} icon={jobIcon} riseOnHover zIndexOffset={400}>
               <Popup minWidth={270} className="custom-popup">
                 <div className="p-1">
@@ -352,7 +434,7 @@ export default function Mapa() {
                     {job.workModel && <span className="px-2 py-1 rounded-md bg-slate-100">{job.workModel}</span>}
                   </div>
                   {typeof job.salaryMin === 'number' && <p className="text-xs font-bold text-blue-700 mb-2">R$ {job.salaryMin.toLocaleString('pt-BR')}{typeof job.salaryMax === 'number' ? ` – R$ ${job.salaryMax.toLocaleString('pt-BR')}` : ''}</p>}
-                  <p className="text-xs text-slate-500 mb-3">📍 {job.location || job.neighborhood || 'Localização não informada'}{approximate ? ' · posição aproximada pelo bairro' : ''}</p>
+                  <p className="text-xs text-slate-500 mb-3">📍 {job.location || job.neighborhood || 'Localização não informada'}{approximate ? ' · posição aproximada pelo bairro' : ' · posição no endereço informado'}</p>
                   <button onClick={() => openJob(job.id)} type="button" className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg transition-colors">Ver vaga <ExternalLink className="w-3.5 h-3.5 inline ml-1" /></button>
                 </div>
               </Popup>
@@ -366,13 +448,15 @@ export default function Mapa() {
           <h4 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2"><Info className="w-3.5 h-3.5" /> Visível no mapa</h4>
           <div className="space-y-2">
             {(Object.keys(layerMeta) as LayerKey[]).filter((layer) => layers.has(layer)).map((layer) => <div key={layer} className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${layerMeta[layer].color}18` }}>{layerMeta[layer].emoji}</span><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{layerMeta[layer].label}</span><span className="text-xs font-black text-slate-500 ml-auto">{layerCounts[layer]}</span></div>)}
+            {nearMe && <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 pt-1">Filtrando em até 3 km de você.</p>}
             {layers.size === 0 && <p className="text-xs text-slate-500">Ative uma camada acima.</p>}
           </div>
         </div>
       </Card>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
-        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-600" /><strong className="text-slate-900 dark:text-white">{visiblePoints.length}</strong><span>itens visíveis</span></div>
+        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-600" /><strong className="text-slate-900 dark:text-white">{visiblePoints.length - (nearMe && userPosition ? 1 : 0)}</strong><span>itens visíveis</span></div>
+        {nearMe && <span className="font-semibold text-teal-700 dark:text-teal-300">Perto de mim ativo · sua posição não é armazenada</span>}
         {jobsLoading && <div className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando vagas...</div>}
         {jobsError && <p className="font-semibold text-red-600 dark:text-red-400">Não foi possível carregar as vagas. Desative e ative Empregos para tentar novamente.</p>}
         <p className="hidden sm:block">Você pode combinar várias camadas. Marcadores aproximados são identificados no detalhe.</p>
