@@ -1,22 +1,43 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
 import {
   MessageSquare, Heart, Award, CheckCircle2,
   CalendarDays, ArrowLeft, ShieldAlert,
-  MapPin, Loader2
+  MapPin, Loader2,
 } from 'lucide-react';
 import { Card, Button, StatusBadge, CategoryBadge, timeAgo } from '../components/UI';
 import { cn } from '../utils/cn';
 import { communityBadges, getEarnedCommunityBadges } from '../utils/communityBadges';
 
+type PublicPost = {
+  id: string;
+  category: string;
+  status: string;
+  title: string;
+  description: string;
+  location: string;
+  neighborhood?: string;
+  locality?: string;
+  supports: number;
+  createdAt: string;
+};
+
+type PublicStats = {
+  count: number;
+  evCount: number;
+  supportsReceived: number;
+  earnedBadges: string[];
+  posts: PublicPost[];
+};
+
+const EMPTY_STATS: PublicStats = { count: 0, evCount: 0, supportsReceived: 0, earnedBadges: [], posts: [] };
+
 export default function PublicProfile() {
   const { userId } = useParams();
   const navigate = useNavigate();
-  const { posts, events } = useData();
-
   const [profileUser, setProfileUser] = useState<any>(null);
+  const [stats, setStats] = useState<PublicStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,18 +51,51 @@ export default function PublicProfile() {
 
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('public_user_profiles')
-          .select('id, name, avatar_url, reputation, created_at')
-          .eq('id', userId)
-          .maybeSingle();
+        const [profileResult, summaryResult, postsResult] = await Promise.all([
+          supabase.from('public_user_profiles').select('id,name,avatar_url,reputation,created_at').eq('id', userId).maybeSingle(),
+          supabase.rpc('get_community_profile_summary', { p_user_id: userId }).maybeSingle(),
+          supabase
+            .from('posts')
+            .select('id,category,status,title,description,location,neighborhood,locality,created_at,post_supports(count)')
+            .eq('author_id', userId)
+            .eq('is_anonymous', false)
+            .order('created_at', { ascending: false })
+            .limit(30),
+        ]);
 
         if (!active) return;
-        if (!error && data) setProfileUser(data);
-        else setProfileUser(null);
+        if (profileResult.error || !profileResult.data) {
+          setProfileUser(null);
+          setStats(EMPTY_STATS);
+          return;
+        }
+
+        setProfileUser(profileResult.data);
+        const summary = summaryResult.data;
+        const count = Number(summary?.posts_count || 0);
+        const evCount = Number(summary?.events_count || 0);
+        const supportsReceived = Number(summary?.supports_received || 0);
+        const badgePosts = Array.from({ length: count }, (_, index) => ({ status: index === 0 && summary?.has_resolved ? 'resolved' : 'pending' }));
+        const earnedBadges = getEarnedCommunityBadges({ posts: badgePosts, supportsReceived, eventsCount: evCount });
+        const posts: PublicPost[] = (postsResult.data || []).map((post: any) => ({
+          id: post.id,
+          category: post.category,
+          status: post.status,
+          title: post.title,
+          description: post.description,
+          location: post.location || '',
+          neighborhood: post.neighborhood || undefined,
+          locality: post.locality || undefined,
+          supports: post.post_supports?.[0]?.count ?? 0,
+          createdAt: post.created_at,
+        }));
+        setStats({ count, evCount, supportsReceived, earnedBadges, posts });
       } catch (err) {
         console.error('Erro ao carregar perfil público:', err);
-        if (active) setProfileUser(null);
+        if (active) {
+          setProfileUser(null);
+          setStats(EMPTY_STATS);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -50,21 +104,6 @@ export default function PublicProfile() {
     void loadProfile();
     return () => { active = false; };
   }, [userId]);
-
-  const stats = useMemo(() => {
-    const userPosts = (posts || []).filter(p => p.authorId === userId);
-    const userEvents = (events || []).filter(e => e.createdBy === userId);
-    const supportsReceived = userPosts.reduce((sum, p) => sum + (p.supports || 0), 0);
-    const earnedBadges = getEarnedCommunityBadges({ posts: userPosts, supportsReceived, eventsCount: userEvents.length });
-
-    return {
-      posts: userPosts,
-      count: userPosts.length,
-      evCount: userEvents.length,
-      supportsReceived,
-      earnedBadges,
-    };
-  }, [userId, posts, events]);
 
   if (loading) {
     return (
@@ -86,33 +125,22 @@ export default function PublicProfile() {
     );
   }
 
-  const displayName = typeof profileUser.name === 'string' && profileUser.name.trim()
-    ? profileUser.name.trim()
-    : 'Morador';
+  const displayName = typeof profileUser.name === 'string' && profileUser.name.trim() ? profileUser.name.trim() : 'Morador';
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-emerald-600 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Voltar
-      </button>
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-emerald-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar</button>
 
       <Card>
         <div className="flex items-center gap-4">
           <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
-            {profileUser.avatar_url ? (
-              <img src={profileUser.avatar_url} alt={displayName} className="w-full h-full object-cover" />
-            ) : (
-              displayName.charAt(0).toUpperCase()
-            )}
+            {profileUser.avatar_url ? <img src={profileUser.avatar_url} alt={displayName} className="w-full h-full object-cover" decoding="async" /> : displayName.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{displayName}</h2>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
-              <span className="text-xs text-slate-400">Morador do bairro</span>
-              <span className="w-1 h-1 rounded-full bg-slate-300" />
-              <span className="text-xs text-slate-400">
-                Ativo desde {profileUser.created_at ? new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : 'recentemente'}
-              </span>
+              <span className="text-xs text-slate-400">Morador do bairro</span><span className="w-1 h-1 rounded-full bg-slate-300" />
+              <span className="text-xs text-slate-400">Ativo desde {profileUser.created_at ? new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : 'recentemente'}</span>
             </div>
           </div>
         </div>
@@ -124,63 +152,39 @@ export default function PublicProfile() {
           { icon: Heart, value: stats.supportsReceived, label: 'Apoios', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' },
           { icon: CalendarDays, value: stats.evCount, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' },
         ].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
-          <Card key={label} className="text-center !p-4">
-            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}>
-              <Icon className={cn('w-5 h-5', iconCls)} />
-            </div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
-            <p className="text-[11px] text-slate-500 font-medium">{label}</p>
-          </Card>
+          <Card key={label} className="text-center !p-4"><div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}><Icon className={cn('w-5 h-5', iconCls)} /></div><p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="text-[11px] text-slate-500 font-medium">{label}</p></Card>
         ))}
       </div>
 
       <Card>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <Award className="w-4 h-4 text-amber-500" /> Conquistas de {displayName.split(' ')[0]}
-        </h3>
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Conquistas de {displayName.split(' ')[0]}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {communityBadges.map(badge => {
             const earned = stats.earnedBadges.includes(badge.key);
             if (!earned) return null;
-            return (
-              <div key={badge.key} className="flex flex-col items-center gap-2 p-3 rounded-xl text-center bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20">
-                <span className="text-2xl">{badge.emoji}</span>
-                <div>
-                  <p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p>
-                  <p className="text-[10px] text-slate-500">{badge.desc}</p>
-                </div>
-                <CheckCircle2 className="w-4 h-4 text-amber-500" />
-              </div>
-            );
+            return <div key={badge.key} className="flex flex-col items-center gap-2 p-3 rounded-xl text-center bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20"><span className="text-2xl">{badge.emoji}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500">{badge.desc}</p></div><CheckCircle2 className="w-4 h-4 text-amber-500" /></div>;
           })}
-          {stats.earnedBadges.length === 0 && (
-            <p className="col-span-full text-xs text-slate-400 text-center py-4 italic">Ainda não possui selos públicos.</p>
-          )}
+          {stats.earnedBadges.length === 0 && <p className="col-span-full text-xs text-slate-400 text-center py-4 italic">Ainda não possui selos públicos.</p>}
         </div>
       </Card>
 
       <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 px-1">
-          <MessageSquare className="w-4 h-4 text-emerald-500" /> Relatos Públicos
-        </h3>
-        {stats.posts.length === 0 ? (
-          <Card className="text-center py-12"><p className="text-sm text-slate-400 italic">Nenhum relato publicado ainda.</p></Card>
-        ) : (
-          stats.posts.map(post => (
+        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 px-1"><MessageSquare className="w-4 h-4 text-emerald-500" /> Relatos Públicos</h3>
+        {stats.posts.length === 0 ? <Card className="text-center py-12"><p className="text-sm text-slate-400 italic">Nenhum relato publicado ainda.</p></Card> : stats.posts.map(post => {
+          const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
+          return (
             <Card key={post.id} className="animate-card-enter cursor-pointer" onClick={() => navigate(`/post/${post.id}`)}>
-              <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-2"><CategoryBadge category={post.category} /><span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span></div>
-                <StatusBadge status={post.status} />
-              </div>
+              <div className="flex items-center justify-between gap-3 mb-3"><div className="flex items-center gap-2"><CategoryBadge category={post.category} /><span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span></div><StatusBadge status={post.status} /></div>
               <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-1">{post.title}</h4>
               <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-3 mb-3">{post.description}</p>
               <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+                {area && <span className="flex items-center gap-1 font-semibold text-orange-700 dark:text-orange-300"><MapPin className="w-3 h-3" />{area}</span>}
                 {post.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{post.location}</span>}
-                <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-rose-500 fill-rose-500" />{post.supports || 0} apoios</span>
+                <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-rose-500 fill-rose-500" />{post.supports} apoios</span>
               </div>
             </Card>
-          ))
-        )}
+          );
+        })}
       </div>
     </div>
   );
