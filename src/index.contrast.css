@@ -1,6 +1,6 @@
 /* Acessibilidade visual e contraste global.
-   Este arquivo usa !important apenas onde precisamos impedir que utilitarios
-   de cor deixem textos com baixo contraste nos temas claro/escuro. */
+   Regras complementares para tornar os temas claro e escuro confortaveis
+   para pessoas idosas, baixa visao e uso em telas pequenas. */
 
 /* Controles nativos: leitura confortavel e sem texto claro sobre fundo claro. */
 select,
@@ -10,6 +10,7 @@ textarea {
   color: #0f172a !important;
   background-color: #ffffff;
   font-size: 16px;
+  line-height: 1.45;
 }
 
 select option {
@@ -21,12 +22,12 @@ select option {
 .dark select option,
 .dark input,
 .dark textarea {
-  color: #f8fafc !important;
+  color: #fff7ed !important;
   background-color: #211a16;
 }
 
 .dark select option {
-  color: #f8fafc !important;
+  color: #fff7ed !important;
   background-color: #211a16 !important;
 }
 
@@ -38,7 +39,7 @@ textarea::placeholder {
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: #b6c2d1 !important;
+  color: #c4b5aa !important;
   opacity: 1;
 }
 
@@ -49,19 +50,52 @@ textarea:disabled {
   cursor: not-allowed;
 }
 
-/* Tema claro: cinzas muito suaves ficam escuros o suficiente para leitura. */
-html:not(.dark) .text-slate-400 { color: #64748b !important; }
-html:not(.dark) .text-slate-500 { color: #475569 !important; }
-html:not(.dark) .text-slate-600 { color: #334155 !important; }
-html:not(.dark) .text-slate-700 { color: #1e293b !important; }
-html:not(.dark) .text-slate-800 { color: #172033 !important; }
-html:not(.dark) .text-slate-900 { color: #0f172a !important; }
+/* Tema claro: quase todo texto deve ser grafite/preto, nao cinza apagado. */
+html:not(.dark) .text-slate-400 { color: #526071 !important; }
+html:not(.dark) .text-slate-500 { color: #3f4b5c !important; }
+html:not(.dark) .text-slate-600 { color: #273548 !important; }
+html:not(.dark) .text-slate-700 { color: #172033 !important; }
+html:not(.dark) .text-slate-800 { color: #111827 !important; }
+html:not(.dark) .text-slate-900 { color: #0b1220 !important; }
 
-/* Tema escuro: secundarios continuam secundarios, mas nao somem no fundo. */
-.dark .text-slate-500 { color: #a8b4c5 !important; }
-.dark .text-slate-400 { color: #c0cad8 !important; }
-.dark .text-slate-300 { color: #d8dee8 !important; }
-.dark .text-slate-200 { color: #eef2f7 !important; }
+/* Links/acoes laranja usam terracota mais escuro no fundo branco. */
+html:not(.dark) main[role="main"] .text-emerald-500,
+html:not(.dark) main[role="main"] .text-emerald-600,
+html:not(.dark) main[role="main"] .text-emerald-700 {
+  color: #b9380b !important;
+}
+
+/* Botoes principais: branco sobre terracota com contraste mais forte. */
+html:not(.dark) button[class*="bg-emerald-600"],
+html:not(.dark) a[class*="bg-emerald-600"],
+html:not(.dark) button[class*="bg-emerald-700"],
+html:not(.dark) a[class*="bg-emerald-700"] {
+  background-color: #c2410c !important;
+  color: #ffffff !important;
+  font-weight: 700;
+}
+html:not(.dark) button[class*="bg-emerald-600"]:hover,
+html:not(.dark) a[class*="bg-emerald-600"]:hover,
+html:not(.dark) button[class*="bg-emerald-700"]:hover,
+html:not(.dark) a[class*="bg-emerald-700"]:hover {
+  background-color: #9a3412 !important;
+}
+
+/* Tema escuro: secundarios continuam secundarios, mas nunca desaparecem. */
+.dark .text-slate-500 { color: #c1b5ac !important; }
+.dark .text-slate-400 { color: #d2c7bf !important; }
+.dark .text-slate-300 { color: #e7ddd5 !important; }
+.dark .text-slate-200 { color: #f5ede7 !important; }
+.dark .text-slate-900 { color: #fff7ed !important; }
+
+/* Cards escuros mais quentes e claramente separados do fundo. */
+.dark main[role="main"] .card-hover {
+  background-color: #211a16 !important;
+  box-shadow: 0 0 0 1px #49372d, 0 10px 28px -22px rgba(0,0,0,.9);
+}
+.dark main[role="main"] [class*="dark:bg-slate-800"] {
+  border-color: #554035;
+}
 
 /* Salvaguarda para componentes que acabem combinando fundo claro e text-white. */
 html:not(.dark) [class*="bg-white"][class*="text-white"],
@@ -70,8 +104,7 @@ html:not(.dark) [class*="bg-slate-100"][class*="text-white"] {
   color: #0f172a !important;
 }
 
-/* O cabecalho do seletor de bairros precisa ter fundo real: o gradiente de
-   utilitarios podia desaparecer e deixar texto branco sobre branco. */
+/* Cabecalho do seletor de bairros: fundo real e alto contraste. */
 [class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] {
   background-color: #c2410c !important;
   background-image: linear-gradient(135deg, #ea580c 0%, #c2410c 55%, #7c2d12 100%) !important;
@@ -85,12 +118,65 @@ html:not(.dark) [class*="bg-slate-100"][class*="text-white"] {
   color: #ffffff !important;
 }
 
-/* Conteudo principal: pequenos metadados deixam de usar 9/10px. */
-main[role="main"] .text-\[9px\] { font-size: 0.72rem !important; line-height: 1rem !important; }
-main[role="main"] .text-\[10px\] { font-size: 0.75rem !important; line-height: 1rem !important; }
-main[role="main"] .text-\[11px\] { font-size: 0.8125rem !important; line-height: 1.15rem !important; }
-main[role="main"] .text-xs { font-size: 0.8125rem !important; line-height: 1.2rem !important; }
-main[role="main"] p { line-height: 1.55; }
+/* Pagina clara continua branca, mas cards ganham contorno suficiente para serem vistos. */
+html:not(.dark) main[role="main"] .card-hover {
+  border-color: #d6dbe3 !important;
+  box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 8px 22px -18px rgba(15,23,42,.35);
+}
+html:not(.dark) main[role="main"] [class*="ring-slate-200"] {
+  --tw-ring-color: #d5dbe4 !important;
+}
+html:not(.dark) main[role="main"] [class*="border-slate-200"] {
+  border-color: #cfd6e0 !important;
+}
+
+/* Campos: borda perceptivel mesmo para quem tem menor sensibilidade de contraste. */
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  border-color: #b8c2cf !important;
+  color: #111827 !important;
+}
+html:not(.dark) input:hover,
+html:not(.dark) select:hover,
+html:not(.dark) textarea:hover {
+  border-color: #8794a5 !important;
+}
+html:not(.dark) input:focus,
+html:not(.dark) select:focus,
+html:not(.dark) textarea:focus {
+  border-color: #c2410c !important;
+  box-shadow: 0 0 0 3px rgba(194,65,12,.13) !important;
+}
+
+/* Labels e textos de formulario nao devem parecer placeholders. */
+label {
+  font-weight: 650 !important;
+}
+html:not(.dark) label { color: #1f2937 !important; }
+.dark label { color: #f1e7df !important; }
+
+/* Hierarquia tipografica mais evidente. */
+main[role="main"] h1 {
+  font-weight: 800 !important;
+  letter-spacing: -0.025em;
+}
+main[role="main"] h2,
+main[role="main"] h3 {
+  font-weight: 750 !important;
+}
+main[role="main"] p { line-height: 1.6; }
+
+/* Pequenos metadados deixam de usar 9/10px no conteudo principal. */
+main[role="main"] .text-\[9px\] { font-size: 0.75rem !important; line-height: 1.05rem !important; }
+main[role="main"] .text-\[10px\] { font-size: 0.78rem !important; line-height: 1.08rem !important; }
+main[role="main"] .text-\[11px\] { font-size: 0.82rem !important; line-height: 1.18rem !important; }
+main[role="main"] .text-xs { font-size: 0.84rem !important; line-height: 1.22rem !important; }
+
+/* Acoes comuns ficam mais faceis de reconhecer. */
+main[role="main"] button:not([aria-label]) {
+  font-weight: 650;
+}
 
 /* Botoes e campos ficam mais faceis de acertar, sobretudo no celular. */
 button,
@@ -110,7 +196,10 @@ textarea {
     min-height: 44px;
   }
 
-  /* A barra inferior precisa continuar cabendo em telas estreitas. */
+  main[role="main"] h1 { font-size: 1.55rem !important; line-height: 1.9rem !important; }
+  main[role="main"] h2 { font-size: 1.22rem; }
+
+  /* Barra inferior precisa continuar cabendo em telas estreitas. */
   nav[aria-label="Navegação mobile"] .text-\[10px\] {
     font-size: 10px !important;
     line-height: 12px !important;
@@ -123,7 +212,7 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #ea580c !important;
+  outline: 3px solid #c2410c !important;
   outline-offset: 2px !important;
 }
 .dark button:focus-visible,
@@ -132,6 +221,17 @@ textarea:focus-visible {
 .dark select:focus-visible,
 .dark textarea:focus-visible {
   outline-color: #fb923c !important;
+}
+
+/* Resolvido continua SEMPRE verde; a identidade terracota nao altera status. */
+main[role="main"] span[class*="tracking-wider"][class*="bg-emerald-50"] {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+}
+.dark main[role="main"] span[class*="tracking-wider"][class*="dark:bg-emerald-500"] {
+  background-color: rgba(16,185,129,.12) !important;
+  color: #6ee7b7 !important;
 }
 
 /* Respeita usuarios que preferem menos animacao. */
