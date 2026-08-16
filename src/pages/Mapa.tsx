@@ -2,11 +2,14 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useData } from '../contexts/DataContext';
-import { useNeighborhood } from '../contexts/NeighborhoodContext';
+import { curitibaNeighborhoods, useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card } from '../components/UI';
-import { Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot } from 'lucide-react';
-import { useMemo, useState, useCallback, useEffect } from 'react';
-import type { PostCategory } from '../types';
+import {
+  Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot,
+  CalendarDays, Briefcase, Store, Layers3, MapPin, ExternalLink, Loader2,
+} from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import type { PostCategory, CommunityEvent, Business } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 
@@ -21,148 +24,396 @@ const categoryIcons: Record<PostCategory, { emoji: string; label: string }> = {
 };
 
 const categoryColors: Record<PostCategory, string> = {
-  buraco: '#f59e0b',
-  iluminacao: '#eab308',
-  seguranca: '#ef4444',
-  limpeza: '#10b981',
-  transporte: '#3b82f6',
-  fios: '#f97316',
-  outros: '#64748b',
+  buraco: '#f59e0b', iluminacao: '#eab308', seguranca: '#ef4444', limpeza: '#10b981',
+  transporte: '#3b82f6', fios: '#f97316', outros: '#64748b',
 };
 
 const lucideCategories: Record<PostCategory, typeof AlertTriangle> = {
-  buraco: CircleDot,
-  iluminacao: Lightbulb,
-  seguranca: Shield,
-  limpeza: Trash2,
-  transporte: Bus,
-  fios: Zap,
-  outros: HelpCircle,
+  buraco: CircleDot, iluminacao: Lightbulb, seguranca: Shield, limpeza: Trash2,
+  transporte: Bus, fios: Zap, outros: HelpCircle,
 };
 
-function createCategoryIcon(category: PostCategory) {
-  const cfg = categoryIcons[category] ?? categoryIcons.outros;
-  const color = categoryColors[category] ?? categoryColors.outros;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 58 58"><rect x="3" y="3" width="52" height="52" rx="16" fill="${color}" stroke="white" stroke-width="4"/><text x="29" y="37" text-anchor="middle" font-size="27" font-family="Apple Color Emoji, Segoe UI Emoji, sans-serif">${cfg.emoji}</text></svg>`;
+const eventLabels: Record<string, { emoji: string; label: string }> = {
+  feira: { emoji: '🛍️', label: 'Feira' }, saude: { emoji: '❤️', label: 'Saúde' },
+  reuniao: { emoji: '👥', label: 'Reunião' }, cultura: { emoji: '🎭', label: 'Cultura' },
+  esporte: { emoji: '⚽', label: 'Esporte' }, campanha: { emoji: '📢', label: 'Campanha' },
+  outros: { emoji: '📅', label: 'Evento' },
+};
+
+const businessLabels: Record<string, { emoji: string; label: string }> = {
+  alimentacao: { emoji: '🍽️', label: 'Alimentação' }, saude: { emoji: '💊', label: 'Saúde' },
+  servicos: { emoji: '🛠️', label: 'Serviços' }, educacao: { emoji: '📚', label: 'Educação' },
+  comercio: { emoji: '🛍️', label: 'Comércio' }, beleza: { emoji: '✂️', label: 'Beleza' },
+  outros: { emoji: '🏪', label: 'Comércio' },
+};
+
+type LayerKey = 'reports' | 'events' | 'jobs' | 'businesses';
+
+type MapJob = {
+  id: string;
+  companyName: string;
+  companyLogoUrl?: string;
+  title: string;
+  description: string;
+  employmentType?: string;
+  workModel?: string;
+  location?: string;
+  neighborhood?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+};
+
+type Positioned<T> = { item: T; lat: number; lng: number; approximate: boolean };
+
+const layerMeta: Record<LayerKey, { label: string; emoji: string; color: string }> = {
+  reports: { label: 'Relatos', emoji: '📍', color: '#ea580c' },
+  events: { label: 'Eventos', emoji: '📅', color: '#7c3aed' },
+  jobs: { label: 'Empregos', emoji: '💼', color: '#2563eb' },
+  businesses: { label: 'Comércios', emoji: '🏪', color: '#0f766e' },
+};
+
+const normalizeText = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+function neighborhoodFromText(value?: string | null) {
+  if (!value?.trim()) return null;
+  const normalized = normalizeText(value);
+  return curitibaNeighborhoods.find((neighborhood) => normalized.includes(normalizeText(neighborhood.name))) || null;
+}
+
+function smallOffset(id: string) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0;
+  const angle = (Math.abs(hash) % 360) * Math.PI / 180;
+  const radius = 0.00025 + (Math.abs(hash >> 8) % 4) * 0.00007;
+  return { lat: Math.sin(angle) * radius, lng: Math.cos(angle) * radius };
+}
+
+function approximatePosition(text: string | undefined, id: string) {
+  const neighborhood = neighborhoodFromText(text);
+  if (!neighborhood) return null;
+  const offset = smallOffset(id);
+  return { lat: neighborhood.latitude + offset.lat, lng: neighborhood.longitude + offset.lng, approximate: true };
+}
+
+function createEmojiIcon(emoji: string, color: string, size = 50) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="3" y="3" width="${size - 6}" height="${size - 6}" rx="15" fill="${color}" stroke="white" stroke-width="4"/><text x="${size / 2}" y="${Math.round(size * 0.65)}" text-anchor="middle" font-size="${Math.round(size * 0.47)}" font-family="Apple Color Emoji, Segoe UI Emoji, sans-serif">${emoji}</text></svg>`;
   return L.icon({
     iconUrl: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    iconSize: [58, 58],
-    iconAnchor: [29, 29],
-    popupAnchor: [0, -30],
+    iconSize: [size, size], iconAnchor: [size / 2, size / 2], popupAnchor: [0, -(size / 2 + 2)],
     className: 'category-map-marker-image',
   });
 }
 
-function FocusPostOnMap({ lat, lng }: { lat: number; lng: number }) {
+function createCategoryIcon(category: PostCategory) {
+  const cfg = categoryIcons[category] ?? categoryIcons.outros;
+  return createEmojiIcon(cfg.emoji, categoryColors[category] ?? categoryColors.outros, 56);
+}
+
+function FocusPoint({ lat, lng }: { lat: number; lng: number }) {
   const map = useMap();
-
-  useEffect(() => {
-    map.setView([lat, lng], 18, { animate: false });
-  }, [map, lat, lng]);
-
+  useEffect(() => { map.setView([lat, lng], 18, { animate: false }); }, [map, lat, lng]);
   return null;
 }
 
 function RecenterButton({ points }: { points: [number, number][] }) {
   const map = useMap();
   if (points.length === 0) return null;
-  const handleRecenter = () => map.fitBounds(L.latLngBounds(points), { padding: [50, 50], animate: false });
-  return <button onClick={handleRecenter} type="button" className="absolute bottom-20 right-4 z-[1000] bg-white dark:bg-slate-800 p-2 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-emerald-600 transition-colors" title="Centralizar em todos os relatos"><MapIcon className="w-5 h-5" /></button>;
+  return (
+    <button
+      onClick={() => map.fitBounds(L.latLngBounds(points), { padding: [60, 60], animate: false, maxZoom: 16 })}
+      type="button"
+      className="absolute bottom-5 right-4 z-[1000] bg-white dark:bg-slate-800 p-3 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-orange-700 transition-colors"
+      title="Enquadrar itens visíveis"
+      aria-label="Enquadrar itens visíveis"
+    >
+      <MapIcon className="w-5 h-5" />
+    </button>
+  );
+}
+
+function eventPosition(event: CommunityEvent): Positioned<CommunityEvent> | null {
+  if (event.latitude != null && event.longitude != null) return { item: event, lat: Number(event.latitude), lng: Number(event.longitude), approximate: false };
+  const fallback = approximatePosition(event.location, event.id);
+  return fallback ? { item: event, ...fallback } : null;
+}
+
+function businessPosition(business: Business): Positioned<Business> | null {
+  if (business.latitude != null && business.longitude != null) return { item: business, lat: Number(business.latitude), lng: Number(business.longitude), approximate: false };
+  const text = `${business.address || ''} ${(business as Business & { neighborhood?: string }).neighborhood || ''}`.trim();
+  const fallback = approximatePosition(text, business.id);
+  return fallback ? { item: business, ...fallback } : null;
+}
+
+function jobPosition(job: MapJob): Positioned<MapJob> | null {
+  const fallback = approximatePosition(`${job.location || ''} ${job.neighborhood || ''}`, job.id);
+  return fallback ? { item: job, ...fallback } : null;
 }
 
 export default function Mapa() {
-  const { posts } = useData();
+  const { posts, events, businesses } = useData();
   const { currentNeighborhood } = useNeighborhood();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
-  const [imageByPost, setImageByPost] = useState<Record<string, string | null>>({});
-  const [loadingImage, setLoadingImage] = useState<Set<string>>(new Set());
+  const [layers, setLayers] = useState<Set<LayerKey>>(() => new Set(['reports']));
+  const [jobs, setJobs] = useState<MapJob[]>([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
+  const [jobsLoading, setJobsLoading] = useState(false);
   const [focusedPostId] = useState<string | null>(() => {
-    try { return sessionStorage.getItem('anb-map-focus-post'); }
-    catch { return null; }
+    try { return sessionStorage.getItem('anb-map-focus-post'); } catch { return null; }
   });
 
-  const filteredPosts = useMemo(() => posts.filter(p => p.latitude != null && p.longitude != null && (filter === 'all' || p.category === filter)), [posts, filter]);
-  const focusedPost = useMemo(() => focusedPostId ? posts.find(p => p.id === focusedPostId && p.latitude != null && p.longitude != null) ?? null : null, [posts, focusedPostId]);
-  const points = useMemo(() => filteredPosts.map(p => [Number(p.latitude), Number(p.longitude)] as [number, number]), [filteredPosts]);
-  const icons = useMemo(() => {
+  const reportPositions = useMemo(() => posts.flatMap((post) => {
+    if (filter !== 'all' && post.category !== filter) return [];
+    if (post.latitude != null && post.longitude != null) return [{ item: post, lat: Number(post.latitude), lng: Number(post.longitude), approximate: false }];
+    const fallback = approximatePosition(post.location, post.id);
+    return fallback ? [{ item: post, ...fallback }] : [];
+  }), [posts, filter]);
+
+  const eventPositions = useMemo(() => events.map(eventPosition).filter(Boolean) as Positioned<CommunityEvent>[], [events]);
+  const businessPositions = useMemo(() => businesses.map(businessPosition).filter(Boolean) as Positioned<Business>[], [businesses]);
+  const jobPositions = useMemo(() => jobs.map(jobPosition).filter(Boolean) as Positioned<MapJob>[], [jobs]);
+
+  const focusedPost = useMemo(() => focusedPostId ? reportPositions.find((entry) => entry.item.id === focusedPostId) ?? null : null, [reportPositions, focusedPostId]);
+
+  const categoryMarkerIcons = useMemo(() => {
     const out = {} as Record<PostCategory, L.Icon>;
-    (Object.keys(categoryIcons) as PostCategory[]).forEach(cat => { out[cat] = createCategoryIcon(cat); });
+    (Object.keys(categoryIcons) as PostCategory[]).forEach((category) => { out[category] = createCategoryIcon(category); });
     return out;
   }, []);
-  const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
-
-  const loadPostImage = useCallback(async (postId: string) => {
-    if (Object.prototype.hasOwnProperty.call(imageByPost, postId) || loadingImage.has(postId)) return;
-    setLoadingImage(prev => new Set(prev).add(postId));
-    const { data, error } = await supabase.from('posts').select('image_url').eq('id', postId).maybeSingle();
-    setImageByPost(prev => ({ ...prev, [postId]: error ? null : (data?.image_url ?? null) }));
-    setLoadingImage(prev => { const next = new Set(prev); next.delete(postId); return next; });
-  }, [imageByPost, loadingImage]);
+  const eventIcon = useMemo(() => createEmojiIcon('📅', layerMeta.events.color), []);
+  const jobIcon = useMemo(() => createEmojiIcon('💼', layerMeta.jobs.color), []);
+  const businessIcon = useMemo(() => createEmojiIcon('🏪', layerMeta.businesses.color), []);
 
   useEffect(() => {
-    if (!focusedPost) return;
+    if (!focusedPostId) return;
+    setLayers((previous) => new Set(previous).add('reports'));
     setFilter('all');
-    void loadPostImage(focusedPost.id);
     try { sessionStorage.removeItem('anb-map-focus-post'); } catch {}
-  }, [focusedPost, loadPostImage]);
+  }, [focusedPostId]);
 
-  return <div className="h-[calc(100vh-160px)] flex flex-col gap-4">
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center"><MapIcon className="w-5 h-5 text-emerald-600" /></div>Mapa Comunitário</h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Visualize todos os relatos do bairro geograficamente</p>
-      </div>
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
-        <button onClick={() => setFilter('all')} type="button" className={`px-4 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${filter === 'all' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}>Todos</button>
-        {(Object.keys(categoryIcons) as PostCategory[]).map(cat => { const Icon = lucideCategories[cat]; return <button key={cat} onClick={() => setFilter(cat)} type="button" className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${filter === cat ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'}`}><Icon className="w-3.5 h-3.5" />{categoryIcons[cat].label}</button>; })}
-      </div>
-    </div>
+  useEffect(() => {
+    if (!layers.has('jobs') || jobsLoaded || jobsLoading) return;
+    let active = true;
+    setJobsLoading(true);
+    void supabase
+      .from('public_job_posts')
+      .select('id,company_name,company_logo_url,title,description,employment_type,work_model,location,neighborhood,salary_min,salary_max,is_active,expires_at')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (!error) {
+          const today = new Date().toISOString().slice(0, 10);
+          setJobs((data || []).filter((row: any) => !row.expires_at || row.expires_at >= today).map((row: any) => ({
+            id: row.id,
+            companyName: row.company_name || 'Empresa',
+            companyLogoUrl: row.company_logo_url || undefined,
+            title: row.title || 'Oportunidade',
+            description: row.description || '',
+            employmentType: row.employment_type || undefined,
+            workModel: row.work_model || undefined,
+            location: row.location || undefined,
+            neighborhood: row.neighborhood || undefined,
+            salaryMin: row.salary_min == null ? undefined : Number(row.salary_min),
+            salaryMax: row.salary_max == null ? undefined : Number(row.salary_max),
+          })));
+        }
+        setJobsLoaded(true);
+        setJobsLoading(false);
+      });
+    return () => { active = false; };
+  }, [layers, jobsLoaded, jobsLoading]);
 
-    <Card className="flex-1 !p-0 overflow-hidden relative border-slate-200 dark:border-slate-800 shadow-xl">
-      <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
-        <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {focusedPost && <FocusPostOnMap lat={Number(focusedPost.latitude)} lng={Number(focusedPost.longitude)} />}
-        {filteredPosts.map(post => <Marker key={post.id} position={[Number(post.latitude), Number(post.longitude)]} icon={icons[post.category] ?? icons.outros} riseOnHover zIndexOffset={focusedPost?.id === post.id ? 1000 : 500} eventHandlers={{ click: () => { void loadPostImage(post.id); } }}>
-          <Popup minWidth={260} className="custom-popup">
-            <div className="p-1">
-              <div className="flex items-center gap-2 mb-2"><span className="text-lg">{categoryIcons[post.category]?.emoji ?? '📍'}</span><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: categoryColors[post.category] }}>{categoryIcons[post.category]?.label ?? 'Outros'}</span></div>
-              <h3 className="font-bold text-slate-900 mb-1 leading-tight">{post.title}</h3>
-              <p className="text-xs text-slate-500 line-clamp-3 mb-3">{post.description}</p>
-              <p className="text-[10px] text-slate-400 mb-3">📍 {post.location}</p>
-              {loadingImage.has(post.id) && <div className="w-full h-36 rounded-xl bg-slate-100 animate-pulse mb-3" />}
-              {imageByPost[post.id] && <img src={imageByPost[post.id] || undefined} alt="Imagem do post" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" />}
-              <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors">Ver detalhes no post</button>
-            </div>
-          </Popup>
-        </Marker>)}
-        {focusedPost && <Popup position={[Number(focusedPost.latitude), Number(focusedPost.longitude)]} minWidth={280} className="custom-popup">
-          <div className="p-1">
-            <div className="flex items-center gap-2 mb-2"><span className="text-lg">{categoryIcons[focusedPost.category]?.emoji ?? '📍'}</span><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: categoryColors[focusedPost.category] }}>{categoryIcons[focusedPost.category]?.label ?? 'Outros'}</span></div>
-            <h3 className="font-bold text-slate-900 mb-1 leading-tight">{focusedPost.title}</h3>
-            <p className="text-xs text-slate-500 line-clamp-3 mb-3">{focusedPost.description}</p>
-            <p className="text-[10px] text-slate-400 mb-3">📍 {focusedPost.location}</p>
-            {loadingImage.has(focusedPost.id) && <div className="w-full h-36 rounded-xl bg-slate-100 animate-pulse mb-3" />}
-            {imageByPost[focusedPost.id] && <img src={imageByPost[focusedPost.id] || undefined} alt="Imagem do post" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" />}
-            <button onClick={() => navigate(`/post/${focusedPost.id}`)} type="button" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors">Ver detalhes no post</button>
+  const toggleLayer = (layer: LayerKey) => setLayers((previous) => {
+    const next = new Set(previous);
+    if (next.has(layer)) next.delete(layer); else next.add(layer);
+    return next;
+  });
+
+  const showAllLayers = () => setLayers(new Set<LayerKey>(['reports', 'events', 'jobs', 'businesses']));
+  const allLayersActive = layers.size === 4;
+
+  const visiblePoints = useMemo(() => {
+    const result: [number, number][] = [];
+    if (layers.has('reports')) result.push(...reportPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('events')) result.push(...eventPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('jobs')) result.push(...jobPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('businesses')) result.push(...businessPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    return result;
+  }, [layers, reportPositions, eventPositions, jobPositions, businessPositions]);
+
+  const layerCounts: Record<LayerKey, number> = {
+    reports: reportPositions.length,
+    events: eventPositions.length,
+    jobs: jobPositions.length,
+    businesses: businessPositions.length,
+  };
+
+  const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
+
+  const openJob = (jobId: string) => {
+    try { sessionStorage.setItem('anb-job-focus', jobId); } catch {}
+    navigate('/empregos');
+  };
+
+  const openEvent = (eventId: string) => {
+    try { sessionStorage.setItem('anb-mural-focus-event', eventId); } catch {}
+    navigate('/mural');
+  };
+
+  return (
+    <div className="min-h-[620px] h-[calc(100dvh-140px)] flex flex-col gap-3 sm:gap-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center"><MapIcon className="w-5 h-5 text-orange-700 dark:text-orange-300" /></span>
+              Mapa Comunitário
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Combine relatos, eventos, vagas e comércios no mesmo mapa.</p>
           </div>
-        </Popup>}
-        <RecenterButton points={points} />
-      </MapContainer>
+          <button
+            type="button"
+            onClick={showAllLayers}
+            className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'}`}
+          >
+            <Layers3 className="w-4 h-4" /> Mostrar tudo
+          </button>
+        </div>
 
-      <div className="absolute top-4 right-4 z-[1000] bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-3 rounded-2xl shadow-2xl border border-slate-200/50 dark:border-slate-700/50 hidden md:block">
-        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Info className="w-3 h-3" /> Legenda</h4>
-        <div className="space-y-2">
-          {filteredPosts.length === 0 && <p className="text-[10px] text-slate-500 italic">Nenhum relato nesta categoria.</p>}
-          {(Object.keys(categoryIcons) as PostCategory[]).map(cat => {
-            const count = posts.filter(p => p.category === cat && p.latitude != null && p.longitude != null).length;
-            if (!count) return null;
-            return <div key={cat} className="flex items-center gap-2"><span className="w-6 h-6 rounded-md flex items-center justify-center text-sm" style={{ background: `${categoryColors[cat]}20` }}>{categoryIcons[cat].emoji}</span><span className="text-[11px] font-medium text-slate-600 dark:text-slate-300">{categoryIcons[cat].label}</span><span className="text-[10px] font-bold text-slate-400 ml-auto">{count}</span></div>;
+        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1" aria-label="Camadas do mapa">
+          {(Object.keys(layerMeta) as LayerKey[]).map((layer) => {
+            const active = layers.has(layer);
+            const meta = layerMeta[layer];
+            const loading = layer === 'jobs' && jobsLoading;
+            return (
+              <button
+                key={layer}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleLayer(layer)}
+                className={`min-h-11 shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-bold transition-all ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border-slate-300 dark:border-slate-600' : 'bg-slate-100/80 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-transparent'}`}
+              >
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-base" style={{ backgroundColor: `${meta.color}18`, color: meta.color }}>{loading ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.emoji}</span>
+                {meta.label}
+                {active && !loading && <span className="text-xs font-black text-slate-500 dark:text-slate-300">{layerCounts[layer]}</span>}
+              </button>
+            );
           })}
         </div>
-      </div>
-    </Card>
 
-    <div className="flex items-center gap-4 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400"><div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /><span className="font-bold text-slate-700 dark:text-slate-300">{filteredPosts.length}</span><span>Relatos visualizados</span></div><div className="h-4 w-px bg-slate-200 dark:bg-slate-800" /><p className="hidden sm:block">Clique nos marcadores para ver os detalhes de cada ocorrência.</p></div>
-  </div>;
+        {layers.has('reports') && (
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1" aria-label="Categorias dos relatos">
+            <button onClick={() => setFilter('all')} type="button" className={`px-3.5 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${filter === 'all' ? 'bg-orange-700 text-white' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}>Todos os relatos</button>
+            {(Object.keys(categoryIcons) as PostCategory[]).map((category) => {
+              const Icon = lucideCategories[category];
+              return <button key={category} onClick={() => setFilter(category)} type="button" className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${filter === category ? 'bg-orange-700 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}><Icon className="w-3.5 h-3.5" />{categoryIcons[category].label}</button>;
+            })}
+          </div>
+        )}
+      </div>
+
+      <Card className="flex-1 min-h-[360px] !p-0 overflow-hidden relative border-slate-200 dark:border-slate-800 shadow-xl">
+        <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
+          <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {focusedPost && <FocusPoint lat={focusedPost.lat} lng={focusedPost.lng} />}
+
+          {layers.has('reports') && reportPositions.map(({ item: post, lat, lng, approximate }) => (
+            <Marker key={`post-${post.id}`} position={[lat, lng]} icon={categoryMarkerIcons[post.category] ?? categoryMarkerIcons.outros} riseOnHover zIndexOffset={focusedPost?.item.id === post.id ? 1000 : 500}>
+              <Popup minWidth={270} className="custom-popup">
+                <div className="p-1">
+                  <div className="flex items-center gap-2 mb-2"><span className="text-lg">{categoryIcons[post.category]?.emoji ?? '📍'}</span><span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: categoryColors[post.category] }}>{categoryIcons[post.category]?.label ?? 'Outros'}</span></div>
+                  <h3 className="font-bold text-slate-900 mb-1 leading-tight">{post.title}</h3>
+                  <p className="text-xs font-semibold text-slate-600 mb-2">Por {post.authorName}</p>
+                  <p className="text-xs text-slate-600 line-clamp-3 mb-3">{post.description}</p>
+                  <p className="text-xs text-slate-500 mb-3 flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />{post.location}{approximate ? ' · posição aproximada' : ''}</p>
+                  {post.imageUrl && <img src={post.imageUrl} alt="Imagem do relato" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" decoding="async" />}
+                  <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="w-full py-2.5 bg-orange-700 hover:bg-orange-800 text-white text-xs font-bold rounded-lg transition-colors">Ver detalhes no post</button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+          {layers.has('events') && eventPositions.map(({ item: event, lat, lng, approximate }) => {
+            const meta = eventLabels[event.type] ?? eventLabels.outros;
+            return (
+              <Marker key={`event-${event.id}`} position={[lat, lng]} icon={eventIcon} riseOnHover zIndexOffset={420}>
+                <Popup minWidth={260} className="custom-popup">
+                  <div className="p-1">
+                    <div className="flex items-center gap-2 mb-2"><span className="text-lg">{meta.emoji}</span><span className="text-[11px] font-bold uppercase tracking-wider text-violet-700">{meta.label}</span></div>
+                    <h3 className="font-bold text-slate-900 mb-1">{event.title}</h3>
+                    <p className="text-xs text-slate-600 line-clamp-3 mb-2">{event.description}</p>
+                    <p className="text-xs font-semibold text-slate-600 mb-2">📅 {new Date(`${event.date}T12:00:00`).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-xs text-slate-500 mb-3">📍 {event.location}{approximate ? ' · posição aproximada' : ''}</p>
+                    <button onClick={() => openEvent(event.id)} type="button" className="w-full py-2.5 bg-violet-700 hover:bg-violet-800 text-white text-xs font-bold rounded-lg transition-colors">Ver no Mural <ExternalLink className="w-3.5 h-3.5 inline ml-1" /></button>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
+          {layers.has('jobs') && jobPositions.map(({ item: job, lat, lng, approximate }) => (
+            <Marker key={`job-${job.id}`} position={[lat, lng]} icon={jobIcon} riseOnHover zIndexOffset={400}>
+              <Popup minWidth={270} className="custom-popup">
+                <div className="p-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    {job.companyLogoUrl ? <img src={job.companyLogoUrl} alt="" className="w-8 h-8 rounded-lg object-cover" loading="lazy" /> : <span className="text-xl">💼</span>}
+                    <div><span className="block text-[11px] font-bold uppercase tracking-wider text-blue-700">Emprego</span><span className="text-xs font-semibold text-slate-600">{job.companyName}</span></div>
+                  </div>
+                  <h3 className="font-bold text-slate-900 mb-1">{job.title}</h3>
+                  <p className="text-xs text-slate-600 line-clamp-3 mb-2">{job.description}</p>
+                  <div className="flex flex-wrap gap-1.5 mb-2 text-[11px] font-semibold text-slate-600">
+                    {job.employmentType && <span className="px-2 py-1 rounded-md bg-slate-100">{job.employmentType.toUpperCase()}</span>}
+                    {job.workModel && <span className="px-2 py-1 rounded-md bg-slate-100">{job.workModel}</span>}
+                  </div>
+                  {typeof job.salaryMin === 'number' && <p className="text-xs font-bold text-blue-700 mb-2">R$ {job.salaryMin.toLocaleString('pt-BR')}{typeof job.salaryMax === 'number' ? ` – R$ ${job.salaryMax.toLocaleString('pt-BR')}` : ''}</p>}
+                  <p className="text-xs text-slate-500 mb-3">📍 {job.location || job.neighborhood || 'Localização não informada'}{approximate ? ' · posição aproximada pelo bairro' : ''}</p>
+                  <button onClick={() => openJob(job.id)} type="button" className="w-full py-2.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg transition-colors">Ver vaga <ExternalLink className="w-3.5 h-3.5 inline ml-1" /></button>
+                </div>
+              </Popup>
+            </Marker>
+          ))}
+
+          {layers.has('businesses') && businessPositions.map(({ item: business, lat, lng, approximate }) => {
+            const meta = businessLabels[business.category] ?? businessLabels.outros;
+            return (
+              <Marker key={`business-${business.id}`} position={[lat, lng]} icon={businessIcon} riseOnHover zIndexOffset={380}>
+                <Popup minWidth={260} className="custom-popup">
+                  <div className="p-1">
+                    <div className="flex items-center gap-2 mb-2"><span className="text-lg">{meta.emoji}</span><span className="text-[11px] font-bold uppercase tracking-wider text-teal-700">{meta.label}</span></div>
+                    <h3 className="font-bold text-slate-900 mb-1">{business.name}</h3>
+                    <p className="text-xs text-slate-600 line-clamp-3 mb-2">{business.description}</p>
+                    {business.imageUrl && <img src={business.imageUrl} alt={business.name} className="w-full h-32 object-cover rounded-xl mb-2" loading="lazy" decoding="async" />}
+                    {business.avgRating != null && <p className="text-xs font-semibold text-amber-700 mb-2">★ {business.avgRating.toFixed(1)} {business.totalRatings ? `(${business.totalRatings})` : ''}</p>}
+                    <p className="text-xs text-slate-500 mb-2">📍 {business.address || (business as Business & { neighborhood?: string }).neighborhood || 'Localização cadastrada'}{approximate ? ' · posição aproximada' : ''}</p>
+                    <div className="flex gap-2">
+                      {business.whatsapp && <a href={`https://wa.me/${business.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="flex-1 text-center py-2 rounded-lg bg-teal-700 text-white text-xs font-bold">WhatsApp</a>}
+                      {business.phone && <a href={`tel:${business.phone.replace(/[^\d+]/g, '')}`} className="flex-1 text-center py-2 rounded-lg bg-slate-100 text-slate-700 text-xs font-bold">Ligar</a>}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+
+          <RecenterButton points={visiblePoints} />
+        </MapContainer>
+
+        <div className="absolute top-3 right-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 hidden lg:block min-w-[180px]">
+          <h4 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2"><Info className="w-3.5 h-3.5" /> Visível no mapa</h4>
+          <div className="space-y-2">
+            {(Object.keys(layerMeta) as LayerKey[]).filter((layer) => layers.has(layer)).map((layer) => <div key={layer} className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${layerMeta[layer].color}18` }}>{layerMeta[layer].emoji}</span><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{layerMeta[layer].label}</span><span className="text-xs font-black text-slate-500 ml-auto">{layerCounts[layer]}</span></div>)}
+            {layers.size === 0 && <p className="text-xs text-slate-500">Ative uma camada acima.</p>}
+          </div>
+        </div>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
+        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-600" /><strong className="text-slate-900 dark:text-white">{visiblePoints.length}</strong><span>itens visíveis</span></div>
+        {jobsLoading && <div className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando vagas...</div>}
+        <p className="hidden sm:block">Você pode combinar várias camadas. Marcadores aproximados são identificados no detalhe.</p>
+      </div>
+    </div>
+  );
 }
