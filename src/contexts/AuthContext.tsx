@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string; pendingVerification?: boolean }>;
   logout: () => void;
   updateProfile: (data: { name?: string; avatarUrl?: string }) => Promise<{ ok: boolean; error?: string }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ ok: boolean; error?: string }>;
@@ -70,21 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        fetchProfile(
-          session.user.id,
-          session.user.email || '',
-          session.user.user_metadata
-        );
+        fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        fetchProfile(
-          session.user.id,
-          session.user.email || '',
-          session.user.user_metadata
-        );
+        fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
       } else {
         setUser(null);
       }
@@ -132,18 +124,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(async (data: { name?: string; avatarUrl?: string }): Promise<{ ok: boolean; error?: string }> => {
     if (!user) return { ok: false, error: 'Não autenticado.' };
 
-    const updates: Record<string, string> = {};
-    if (data.name) updates.name = data.name;
-    if (data.avatarUrl) updates.avatar_url = data.avatarUrl;
+    const updates: { name?: string; avatar_url?: string | null; updated_at?: string } = {};
+    if (data.name !== undefined) updates.name = data.name;
+    if (data.avatarUrl !== undefined) updates.avatar_url = data.avatarUrl || null;
+    updates.updated_at = new Date().toISOString();
+
+    if (Object.keys(updates).length === 1) {
+      return { ok: false, error: 'Nenhuma alteração para salvar.' };
+    }
 
     const { error } = await supabase
       .from('users')
       .update(updates)
-      .eq('id', user.id);
+      .eq('id', user.id)
+      .select('id, name, avatar_url, reputation, created_at')
+      .single();
 
     if (error) return { ok: false, error: error.message };
 
-    setUser(prev => prev ? { ...prev, ...data } : null);
+    const { data: saved, error: verifyError } = await supabase
+      .from('users')
+      .select('id, name, avatar_url, reputation, created_at')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (verifyError || !saved) {
+      return { ok: false, error: 'Perfil atualizado, mas não foi possível confirmar a gravação. Tente recarregar a página.' };
+    }
+
+    setUser(prev => prev ? {
+      ...prev,
+      name: saved.name,
+      avatarUrl: saved.avatar_url,
+      reputation: saved.reputation || 0,
+      createdAt: saved.created_at,
+    } : null);
+
     return { ok: true };
   }, [user]);
 
