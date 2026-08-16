@@ -58,7 +58,7 @@ async function makeSquareCrop(source: SourceImage, zoom: number, offset: Point) 
   return canvas.toDataURL('image/jpeg', 0.82);
 }
 
-function AvatarCropper({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+function AvatarCropper({ value, onChange, onEditingChange }: { value: string; onChange: (value: string) => void; onEditingChange?: (editing: boolean) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<SourceImage | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -75,8 +75,9 @@ function AvatarCropper({ value, onChange }: { value: string; onChange: (value: s
       setSource(next);
       setZoom(1);
       setOffset({ x: 0, y: 0 });
+      onEditingChange?.(true);
     } catch {
-      // ignore invalid files
+      onEditingChange?.(false);
     }
   };
 
@@ -86,8 +87,8 @@ function AvatarCropper({ value, onChange }: { value: string; onChange: (value: s
     try {
       const cropped = await makeSquareCrop(source, zoom, offset);
       onChange(cropped);
-      URL.revokeObjectURL(source.src);
       setSource(null);
+      onEditingChange?.(false);
     } finally {
       setProcessing(false);
     }
@@ -98,6 +99,7 @@ function AvatarCropper({ value, onChange }: { value: string; onChange: (value: s
     setSource(null);
     setZoom(1);
     setOffset({ x: 0, y: 0 });
+    onEditingChange?.(false);
   };
 
   const resetCrop = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
@@ -142,10 +144,14 @@ function AvatarCropper({ value, onChange }: { value: string; onChange: (value: s
           <input aria-label="Zoom da foto" type="range" min="1" max="3" step="0.01" value={zoom} onChange={e => setZoom(Number(e.target.value))} className="w-full accent-emerald-600" />
         </div>
 
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-semibold text-orange-900 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-200">
+          Para salvar esta nova foto, primeiro toque em <strong>Usar foto</strong>.
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-2">
           <Button type="button" variant="secondary" className="sm:flex-1 h-11" onClick={resetCrop}><RotateCcw className="w-4 h-4" /> Recentrar</Button>
           <Button type="button" variant="secondary" className="sm:flex-1 h-11" onClick={cancelCrop}>Cancelar</Button>
-          <Button type="button" className="sm:flex-1 h-11" onClick={saveCrop} disabled={processing}><Check className="w-4 h-4" /> {processing ? 'Salvando...' : 'Usar foto'}</Button>
+          <Button type="button" className="sm:flex-1 h-11" onClick={saveCrop} disabled={processing}><Check className="w-4 h-4" /> {processing ? 'Preparando...' : 'Usar foto'}</Button>
         </div>
       </div>
     );
@@ -159,7 +165,7 @@ function AvatarCropper({ value, onChange }: { value: string; onChange: (value: s
             <img src={value} alt="Foto de perfil" className="w-full h-full object-cover" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-slate-800 dark:text-white">Foto escolhida</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-white">Foto pronta para salvar</p>
             <button type="button" onClick={() => inputRef.current?.click()} className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">Trocar e recortar novamente</button>
           </div>
         </div>
@@ -170,7 +176,17 @@ function AvatarCropper({ value, onChange }: { value: string; onChange: (value: s
           <span className="block text-xs text-slate-400 mt-1">Você poderá escolher exatamente qual parte aparecerá no perfil.</span>
         </button>
       )}
-      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/heic,image/heif" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) void chooseFile(f); }} />
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
+        className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          if (f) void chooseFile(f);
+          e.currentTarget.value = '';
+        }}
+      />
     </div>
   );
 }
@@ -185,6 +201,8 @@ export default function Profile() {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [editName, setEditName] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const [avatarCropPending, setAvatarCropPending] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [currentPwd, setCurrentPwd] = useState('');
   const [newPwd, setNewPwd] = useState('');
@@ -207,15 +225,39 @@ export default function Profile() {
     return { myPosts: myPosts.length, myEvents: myEvents.length, supportsReceived, earnedBadges: earned };
   }, [user, posts, events]);
 
-  const openEditProfile = () => { if (!user) return; setEditName(user.name); setEditAvatar(user.avatarUrl ?? ''); setShowEditProfile(true); };
+  const openEditProfile = () => {
+    if (!user) return;
+    setEditName(user.name);
+    setEditAvatar(user.avatarUrl ?? '');
+    setAvatarChanged(false);
+    setAvatarCropPending(false);
+    setShowEditProfile(true);
+  };
+
+  const closeEditProfile = () => {
+    setAvatarCropPending(false);
+    setShowEditProfile(false);
+  };
+
   const handleSaveProfile = async () => {
     if (!editName.trim()) return;
+    if (avatarCropPending) {
+      toast('Finalize o recorte tocando em “Usar foto” antes de salvar.', 'error');
+      return;
+    }
     setSavingProfile(true);
-    const result = await updateProfile({ name: editName.trim(), avatarUrl: editAvatar });
+    const result = await updateProfile({
+      name: editName.trim(),
+      ...(avatarChanged ? { avatarUrl: editAvatar } : {}),
+    });
     setSavingProfile(false);
-    if (result.ok) { setShowEditProfile(false); toast('Perfil atualizado com sucesso!'); }
-    else toast(result.error ?? 'Erro ao atualizar perfil.', 'error');
+    if (result.ok) {
+      setAvatarChanged(false);
+      setShowEditProfile(false);
+      toast(avatarChanged ? 'Foto e perfil atualizados com sucesso!' : 'Perfil atualizado com sucesso!');
+    } else toast(result.error ?? 'Erro ao atualizar perfil.', 'error');
   };
+
   const handleChangePassword = async () => {
     setPwdError('');
     if (!currentPwd || !newPwd || !confirmPwd) { setPwdError('Preencha todos os campos.'); return; }
@@ -287,12 +329,21 @@ export default function Profile() {
         </div>
       </Card>
 
-      <Modal open={showEditProfile} onClose={() => setShowEditProfile(false)} title="Editar perfil">
+      <Modal open={showEditProfile} onClose={closeEditProfile} title="Editar perfil">
         <div className="space-y-5 pb-8 sm:pb-0">
           <div className="flex flex-col items-center gap-3"><div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-1 ring-slate-200 dark:ring-slate-700">{editAvatar ? <img src={editAvatar} alt="Preview" className="w-full h-full object-cover" /> : editName.charAt(0).toUpperCase() || '?'}</div></div>
           <Input label="Nome" placeholder="Seu nome" value={editName} onChange={e => setEditName(e.target.value)} required />
-          <AvatarCropper value={editAvatar} onChange={setEditAvatar} />
-          <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0"><Button type="button" variant="secondary" className="flex-1 h-11" onClick={() => setShowEditProfile(false)}>Cancelar</Button><Button className="flex-1 h-11" disabled={!editName.trim() || savingProfile} onClick={handleSaveProfile}>{savingProfile ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : 'Salvar'}</Button></div>
+          <AvatarCropper
+            value={editAvatar}
+            onEditingChange={setAvatarCropPending}
+            onChange={(value) => { setEditAvatar(value); setAvatarChanged(true); }}
+          />
+          <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0">
+            <Button type="button" variant="secondary" className="flex-1 h-11" onClick={closeEditProfile}>Cancelar</Button>
+            <Button className="flex-1 h-11" disabled={!editName.trim() || savingProfile || avatarCropPending} onClick={handleSaveProfile}>
+              {savingProfile ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : avatarCropPending ? 'Finalize o recorte acima' : 'Salvar'}
+            </Button>
+          </div>
         </div>
       </Modal>
 
