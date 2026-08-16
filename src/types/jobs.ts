@@ -35,6 +35,10 @@ export interface JobPost {
   workModel: WorkModel;
   location?: string;
   neighborhood?: string;
+  locality?: string;
+  latitude?: number;
+  longitude?: number;
+  locationPrecision?: 'exact' | 'reverse' | 'neighborhood';
   contactEmail?: string;
   contactWhatsapp?: string;
   contactEmailEnabled: boolean;
@@ -78,6 +82,9 @@ export interface JobFormData {
   workModel: WorkModel;
   location: string;
   neighborhood: string;
+  locality?: string;
+  latitude?: number;
+  longitude?: number;
   contactEmail: string;
   contactWhatsapp: string;
   contactEmailEnabled: boolean;
