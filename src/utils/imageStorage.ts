@@ -20,6 +20,27 @@ function extensionForMime(mime: string) {
   return 'jpg';
 }
 
+export function postImageStoragePath(url: string | undefined | null) {
+  if (!url) return null;
+  const marker = '/storage/v1/object/public/post-images/';
+  const index = url.indexOf(marker);
+  if (index < 0) return null;
+  const raw = url.slice(index + marker.length).split('?')[0].split('#')[0];
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+export async function deleteStoredPostImage(url: string | undefined | null) {
+  const path = postImageStoragePath(url);
+  if (!path) return;
+  const { error } = await supabase.storage.from('post-images').remove([path]);
+  if (error) console.warn('Não foi possível remover a imagem antiga do relato:', error.message);
+}
+
 /**
  * Converts the temporary data URL created by ImageUpload into a real Storage object.
  * The database stores only the short public URL, never the base64 payload.
