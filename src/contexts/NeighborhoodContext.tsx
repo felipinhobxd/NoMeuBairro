@@ -25,7 +25,7 @@ export const curitibaNeighborhoods: Neighborhood[] = [
   { name: 'Augusta', latitude: -25.4800, longitude: -49.3700, cepExample: '81270-000' },
   { name: 'Bacacheri', latitude: -25.3900, longitude: -49.2300, cepExample: '82520-000' },
   { name: 'Bairro Alto', latitude: -25.4000, longitude: -49.2000, cepExample: '82820-000' },
-  { name: 'Barreirinha', latitude: -25.3600, longitude: -49.2500, cepExample: '82700-000', aliases: ['Barrerinha'] },
+  { name: 'Barrerinha', latitude: -25.3600, longitude: -49.2500, cepExample: '82700-000', aliases: ['Barreirinha'] },
   { name: 'Batel', latitude: -25.4439, longitude: -49.2886, cepExample: '80420-000' },
   { name: 'Bigorrilho', latitude: -25.4358, longitude: -49.3000, cepExample: '80730-000' },
   { name: 'Boa Vista', latitude: -25.3800, longitude: -49.2400, cepExample: '82540-000' },
@@ -124,7 +124,6 @@ export function neighborhoodMatches(selected: string, neighborhood?: string | nu
   const resolved = canonicalNeighborhoodName(neighborhood);
   if (resolved) return resolved === selectedFound.name;
 
-  // Compatibilidade apenas para registros antigos sem bairro resolvido.
   const raw = normalizeNeighborhoodText(rawLocation);
   const names = [selectedFound.name, ...(selectedFound.aliases || [])].map(normalizeNeighborhoodText);
   return names.some((name) => name.length >= 3 && raw.includes(name));
