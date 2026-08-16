@@ -10,8 +10,18 @@ export interface Neighborhood {
   parentNeighborhood?: string;
 }
 
-export const normalizeNeighborhoodText = (value: string | null | undefined) =>
-  (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export const normalizeNeighborhoodText = (value: string | null | undefined) => {
+  let normalized = (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!normalized) return '';
+
+  const hasCicToken = /(^| )cic( |$)/.test(normalized);
+  if (normalized.includes('cidade industrial de curitiba') && !hasCicToken) {
+    normalized = `${normalized} cic`;
+  } else if (normalized.includes('cidade industrial') && !hasCicToken) {
+    normalized = `${normalized} cic cidade industrial de curitiba`;
+  }
+  return normalized;
+};
 
 // 75 bairros oficiais de Curitiba (IPPUC) + Vitória Régia como localidade útil dentro de Tatuquara.
 export const curitibaNeighborhoods: Neighborhood[] = [
