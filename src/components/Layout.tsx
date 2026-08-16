@@ -5,8 +5,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import {
   useNeighborhood, curitibaNeighborhoods, neighborhoodSearchText,
-  neighborhoodMatches, normalizeNeighborhoodText,
+  findNeighborhood, normalizeNeighborhoodText,
 } from '../contexts/NeighborhoodContext';
+import { supabase } from '../utils/supabase';
 import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Briefcase,
@@ -178,18 +179,44 @@ function NeighborhoodPicker() {
   const [searchTerm, setSearchTerm] = useState('');
   const [cepInput, setCepInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [serverCounts, setServerCounts] = useState<Record<string, number>>({});
+  const [countsLoaded, setCountsLoaded] = useState(false);
 
-  const neighborhoodCounts = useMemo(() => {
+  const localCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     posts.forEach((post) => {
-      curitibaNeighborhoods.forEach((neighborhood) => {
-        if (neighborhoodMatches(neighborhood.name, post.neighborhood, post.locality, post.location)) {
-          counts[neighborhood.name] = (counts[neighborhood.name] || 0) + 1;
-        }
-      });
+      const primaryArea = post.locality || post.neighborhood;
+      const found = findNeighborhood(primaryArea);
+      if (found) counts[found.name] = (counts[found.name] || 0) + 1;
     });
     return counts;
   }, [posts]);
+
+  useEffect(() => {
+    let active = true;
+    void supabase.rpc('get_neighborhood_post_counts').then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        console.warn('Não foi possível carregar as contagens completas por bairro:', error);
+        setCountsLoaded(true);
+        return;
+      }
+      const counts: Record<string, number> = {};
+      for (const row of data || []) {
+        const found = findNeighborhood(row.area);
+        const key = found?.name || String(row.area || '');
+        if (key) counts[key] = Number(row.total || 0);
+      }
+      setServerCounts(counts);
+      setCountsLoaded(true);
+    }).catch((error) => {
+      console.warn('Não foi possível carregar as contagens completas por bairro:', error);
+      if (active) setCountsLoaded(true);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const neighborhoodCounts = countsLoaded ? serverCounts : localCounts;
 
   const filteredNeighborhoods = useMemo(() => {
     const q = normalizeNeighborhoodText(searchTerm);
@@ -278,11 +305,14 @@ function NeighborhoodPicker() {
                     <ChevronRight className="w-3 h-3 text-slate-300 group-hover:text-emerald-500 group-hover:translate-x-0.5 transition-all" />
                   </div>
                   {n.aliases?.length ? <span className="text-[9px] text-slate-400 truncate">{n.aliases.join(' · ')}</span> : null}
-                  {count > 0 && (
-                    <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded-lg w-fit">
-                      {count} {count === 1 ? 'RELATO' : 'RELATOS'}
-                    </span>
-                  )}
+                  <span className={cn(
+                    'text-[9px] font-black px-1.5 py-0.5 rounded-lg w-fit',
+                    count > 0
+                      ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-500/10'
+                      : 'text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800',
+                  )}>
+                    {count} {count === 1 ? 'RELATO' : 'RELATOS'}
+                  </span>
                 </button>
               );
             })}
