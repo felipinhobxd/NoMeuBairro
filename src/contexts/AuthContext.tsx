@@ -32,6 +32,20 @@ function dataUrlToBlob(dataUrl: string): Blob | null {
   }
 }
 
+function avatarStoragePath(url: string | undefined, userId: string) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const marker = '/storage/v1/object/public/avatars/';
+    const index = parsed.pathname.indexOf(marker);
+    if (index < 0) return null;
+    const path = decodeURIComponent(parsed.pathname.slice(index + marker.length));
+    return path.startsWith(`${userId}/`) ? path : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const profileInFlightRef = useRef<string | null>(null);
@@ -110,8 +124,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Token refreshes must not refetch the public profile and cascade into the
-      // app's data queries. Password recovery also does not need the whole app loaded.
       if (event === 'TOKEN_REFRESHED' || event === 'PASSWORD_RECOVERY') return;
       void fetchProfile(session.user.id, session.user.email || '', session.user.user_metadata);
     });
@@ -160,38 +172,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(async (data: { name?: string; avatarUrl?: string }): Promise<{ ok: boolean; error?: string }> => {
     if (!user) return { ok: false, error: 'Não autenticado.' };
 
-    let storedAvatarUrl: string | null | undefined;
+    const nextName = data.name?.trim();
+    const currentAvatar = user.avatarUrl || '';
+    const avatarInput = data.avatarUrl;
+    const nameChanged = nextName !== undefined && nextName !== user.name;
+    const avatarChanged = avatarInput !== undefined && avatarInput !== currentAvatar;
 
-    if (data.avatarUrl !== undefined) {
-      if (!data.avatarUrl) {
+    if (!nameChanged && !avatarChanged) {
+      return {
+        ok: false,
+        error: 'Nenhuma alteração foi aplicada. Se escolheu uma nova foto, finalize o recorte em “Usar foto” antes de tocar em “Salvar”.',
+      };
+    }
+
+    let storedAvatarUrl: string | null | undefined;
+    let newAvatarPath: string | null = null;
+    const oldAvatarPath = avatarStoragePath(user.avatarUrl, user.id);
+
+    if (avatarChanged) {
+      if (!avatarInput) {
         storedAvatarUrl = null;
-        try { await supabase.storage.from('avatars').remove([`${user.id}/avatar.jpg`]); } catch {}
-      } else if (data.avatarUrl.startsWith('data:image/')) {
-        const blob = dataUrlToBlob(data.avatarUrl);
+      } else if (avatarInput.startsWith('data:image/')) {
+        const blob = dataUrlToBlob(avatarInput);
         if (!blob) return { ok: false, error: 'Não foi possível processar a foto recortada.' };
 
-        const path = `${user.id}/avatar.jpg`;
+        newAvatarPath = `${user.id}/avatar-${Date.now()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(path, blob, {
+          .upload(newAvatarPath, blob, {
             contentType: 'image/jpeg',
-            upsert: true,
+            upsert: false,
             cacheControl: '31536000',
           });
 
         if (uploadError) return { ok: false, error: `Não foi possível salvar a foto: ${uploadError.message}` };
 
-        const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(path);
-        storedAvatarUrl = `${publicData.publicUrl}?v=${Date.now()}`;
+        const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(newAvatarPath);
+        storedAvatarUrl = publicData.publicUrl;
       } else {
-        storedAvatarUrl = data.avatarUrl;
+        storedAvatarUrl = avatarInput;
       }
     }
 
     const updates: { name?: string; avatar_url?: string | null; updated_at: string } = { updated_at: new Date().toISOString() };
-    if (data.name !== undefined) updates.name = data.name;
-    if (storedAvatarUrl !== undefined) updates.avatar_url = storedAvatarUrl;
-    if (Object.keys(updates).length === 1) return { ok: false, error: 'Nenhuma alteração para salvar.' };
+    if (nameChanged && nextName !== undefined) updates.name = nextName;
+    if (avatarChanged) updates.avatar_url = storedAvatarUrl ?? null;
 
     const { data: saved, error } = await supabase
       .from('users')
@@ -200,7 +225,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('id, name, avatar_url, reputation, created_at')
       .single();
 
-    if (error || !saved) return { ok: false, error: error?.message || 'Não foi possível salvar o perfil.' };
+    if (error || !saved) {
+      if (newAvatarPath) {
+        try { await supabase.storage.from('avatars').remove([newAvatarPath]); } catch {}
+      }
+      return { ok: false, error: error?.message || 'Não foi possível salvar o perfil.' };
+    }
+
+    if (avatarChanged && oldAvatarPath && oldAvatarPath !== newAvatarPath) {
+      try { await supabase.storage.from('avatars').remove([oldAvatarPath]); } catch {}
+    }
 
     setUser((prev) => prev ? {
       ...prev,
