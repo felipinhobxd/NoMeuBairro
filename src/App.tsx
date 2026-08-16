@@ -63,6 +63,7 @@ const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'), 'perfil')
 const PublicProfile = lazyWithRetry(() => import('./pages/PublicProfile'), 'perfil-publico');
 const Empregos = lazyWithRetry(() => import('./pages/Empregos'), 'empregos');
 const CompanyDashboard = lazyWithRetry(() => import('./pages/CompanyDashboard'), 'empresa');
+const CompanyPublicProfile = lazyWithRetry(() => import('./pages/CompanyPublicProfile'), 'empresa-publica');
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'notificacoes');
 const PostDetails = lazyWithRetry(() => import('./pages/PostDetails'), 'post');
 
@@ -103,6 +104,7 @@ export default function App() {
                         <Route path="/perfil" element={<ProfilePage />} />
                         <Route path="/perfil/:userId" element={<PublicProfile />} />
                         <Route path="/empresa" element={<CompanyDashboard />} />
+                        <Route path="/empresa/:companyId" element={<CompanyPublicProfile />} />
                         <Route path="/notificacoes" element={<Notifications />} />
                         <Route path="/post/:postId" element={<PostDetails />} />
                       </Routes>
