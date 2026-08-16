@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode, useEffect } from 'react';
 import type { Post, PostCategory, PostStatus, Business, BusinessCategory, CommunityEvent, EventType, Comment, AppNotification } from '../types';
 import { useAuth } from './AuthContext';
 import { useNeighborhood, curitibaNeighborhoods } from './NeighborhoodContext';
@@ -42,15 +42,21 @@ interface DataContextType {
 const DataContext = createContext<DataContextType>(null!);
 const SK_MY_ANON = 'anb-my-anonymous-ids';
 
+const POST_LIMIT = 150;
+const COMMENT_LIMIT = 500;
+const BUSINESS_LIMIT = 300;
+const EVENT_LIMIT = 150;
+const RATING_LIMIT = 2000;
+const NOTIFICATION_LIMIT = 20;
+const REFRESH_DEBOUNCE_MS = 350;
+
 const normalizeText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -85,10 +91,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
+  const [reports] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isFetching, setIsFetching] = useState(false);
-  const [processing, setProcessing] = useState<Set<string>>(new Set());
+
+  const fetchingAllRef = useRef(false);
+  const processingRef = useRef<Set<string>>(new Set());
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshQueueRef = useRef<Set<'posts' | 'businesses' | 'events' | 'notifications'>>(new Set());
 
   const getMyAnonIds = useCallback((): Set<string> => {
     try { return new Set(JSON.parse(localStorage.getItem(SK_MY_ANON) || '[]')); }
@@ -100,158 +109,358 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const ids = getMyAnonIds();
       ids.add(id);
       localStorage.setItem(SK_MY_ANON, JSON.stringify([...ids]));
-    } catch (e) { console.error('Error saving anon id:', e); }
+    } catch {}
   }, [getMyAnonIds]);
 
-  const fetchData = useCallback(async () => {
-    if (isFetching) return;
-    setIsFetching(true);
-    try {
-      const [postsRes, bizRes, eventsRes, commentsRes, ratingsRes] = await Promise.all([
-        supabase.from('posts').select('*, users(name, avatar_url), post_supports(count)').order('created_at', { ascending: false }),
-        supabase.from('businesses').select('*, users!businesses_created_by_fkey(name, avatar_url)').order('created_at', { ascending: false }),
-        supabase.from('events').select('*, users!events_created_by_fkey(name, avatar_url), event_attendance(count)').order('created_at', { ascending: false }),
-        supabase.from('comments').select('*, users(name, avatar_url)').order('created_at', { ascending: false }),
-        supabase.from('business_ratings').select('business_id, stars')
-      ]);
+  const loadPostsAndComments = useCallback(async () => {
+    const [postsRes, commentsRes] = await Promise.all([
+      supabase
+        .from('posts')
+        .select('id,author_id,category,status,title,description,image_url,location,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(POST_LIMIT),
+      supabase
+        .from('comments')
+        .select('id,post_id,author_id,content,parent_id,created_at,users(name,avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(COMMENT_LIMIT),
+    ]);
 
-      if (postsRes.data) {
-        setPosts(postsRes.data.map(p => ({
-          id: p.id,
-          authorId: p.author_id || 'anonymous',
-          authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
-          authorAvatarUrl: p.is_anonymous ? undefined : (p.users?.avatar_url),
-          category: p.category, status: p.status, title: p.title,
-          description: p.description, imageUrl: p.image_url,
-          location: withInferredNeighborhood(p.location, p.latitude, p.longitude),
-          latitude: p.latitude, longitude: p.longitude,
-          supports: p.post_supports?.[0]?.count ?? 0,
-          commentsCount: p.comments_count ?? 0,
-          createdAt: p.created_at, updatedAt: p.updated_at
-        })));
-      }
+    if (postsRes.error) console.error('Erro ao carregar relatos:', postsRes.error);
+    if (commentsRes.error) console.error('Erro ao carregar comentários:', commentsRes.error);
 
-      const ratingsByBiz: Record<string, { total: number; sum: number }> = {};
-      if (ratingsRes.data) ratingsRes.data.forEach(r => { const entry = ratingsByBiz[r.business_id] ||= { total: 0, sum: 0 }; entry.total++; entry.sum += r.stars; });
-
-      if (user) {
-        const { data: notifData } = await supabase.from('notifications').select('*, users:actor_id(name, avatar_url), posts:post_id(title), comments:comment_id(content)').eq('user_id', user.id).order('created_at', { ascending: false }).limit(20);
-        if (notifData) setNotifications(notifData.map(n => ({ id: n.id, userId: n.user_id, actorId: n.actor_id, actorName: n.users?.name || 'Alguém', actorAvatarUrl: n.users?.avatar_url, type: n.type as 'support' | 'comment', postId: n.post_id, postTitle: n.posts?.title, content: n.comments?.content, isRead: n.is_read, createdAt: n.created_at })));
-      }
-
-      if (bizRes.data) setBusinesses(bizRes.data.map(b => ({ id: b.id, name: b.name, description: b.description, category: b.category, phone: b.phone, whatsapp: b.whatsapp, address: b.address, neighborhood: b.neighborhood, latitude: b.latitude, longitude: b.longitude, imageUrl: b.image_url, open_time: b.open_time, close_time: b.close_time, createdBy: b.created_by, createdByName: b.users?.name || 'Morador', createdAt: b.created_at, avgRating: ratingsByBiz[b.id] ? ratingsByBiz[b.id].sum / ratingsByBiz[b.id].total : undefined, totalRatings: ratingsByBiz[b.id]?.total || 0 })));
-      if (eventsRes.data) setEvents(eventsRes.data.map(e => ({ id: e.id, title: e.title, description: e.description, date: e.event_date, location: e.location, latitude: e.latitude, longitude: e.longitude, type: e.type, createdBy: e.created_by, createdAt: e.created_at, attendanceCount: e.event_attendance?.[0]?.count ?? 0 })));
-      if (commentsRes.data) setComments(commentsRes.data.map(c => ({ id: c.id, postId: c.post_id, authorId: c.author_id, authorName: c.users?.name || 'Morador', content: c.content, parentId: c.parent_id, createdAt: c.created_at })));
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    } finally {
-      setLoading(false);
-      setIsFetching(false);
+    if (postsRes.data) {
+      setPosts(postsRes.data.map((p: any) => ({
+        id: p.id,
+        authorId: p.author_id || 'anonymous',
+        authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
+        authorAvatarUrl: p.is_anonymous ? undefined : p.users?.avatar_url,
+        category: p.category,
+        status: p.status,
+        title: p.title,
+        description: p.description,
+        imageUrl: p.image_url,
+        location: withInferredNeighborhood(p.location, p.latitude, p.longitude),
+        latitude: p.latitude,
+        longitude: p.longitude,
+        supports: p.post_supports?.[0]?.count ?? 0,
+        commentsCount: p.comments_count ?? 0,
+        createdAt: p.created_at,
+        updatedAt: p.updated_at,
+      })));
     }
-  }, [user, isFetching]);
+
+    if (commentsRes.data) {
+      setComments(commentsRes.data.map((c: any) => ({
+        id: c.id,
+        postId: c.post_id,
+        authorId: c.author_id,
+        authorName: c.users?.name || 'Morador',
+        authorAvatarUrl: c.users?.avatar_url,
+        content: c.content,
+        parentId: c.parent_id,
+        createdAt: c.created_at,
+      })));
+    }
+  }, []);
+
+  const loadBusinesses = useCallback(async () => {
+    const [bizRes, ratingsRes] = await Promise.all([
+      supabase
+        .from('businesses')
+        .select('id,name,description,category,phone,whatsapp,address,neighborhood,latitude,longitude,image_url,open_time,close_time,created_by,created_at,users!businesses_created_by_fkey(name,avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(BUSINESS_LIMIT),
+      supabase
+        .from('business_ratings')
+        .select('business_id,stars')
+        .order('created_at', { ascending: false })
+        .limit(RATING_LIMIT),
+    ]);
+
+    if (bizRes.error) console.error('Erro ao carregar empresas:', bizRes.error);
+    if (ratingsRes.error) console.error('Erro ao carregar avaliações:', ratingsRes.error);
+
+    const ratingsByBiz: Record<string, { total: number; sum: number }> = {};
+    for (const r of ratingsRes.data || []) {
+      const entry = ratingsByBiz[r.business_id] ||= { total: 0, sum: 0 };
+      entry.total += 1;
+      entry.sum += Number(r.stars) || 0;
+    }
+
+    if (bizRes.data) {
+      setBusinesses(bizRes.data.map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        category: b.category,
+        phone: b.phone,
+        whatsapp: b.whatsapp,
+        address: b.address,
+        neighborhood: b.neighborhood,
+        latitude: b.latitude,
+        longitude: b.longitude,
+        imageUrl: b.image_url,
+        open_time: b.open_time,
+        close_time: b.close_time,
+        createdBy: b.created_by,
+        createdByName: b.users?.name || 'Morador',
+        createdAt: b.created_at,
+        avgRating: ratingsByBiz[b.id] ? ratingsByBiz[b.id].sum / ratingsByBiz[b.id].total : undefined,
+        totalRatings: ratingsByBiz[b.id]?.total || 0,
+      })));
+    }
+  }, []);
+
+  const loadEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('events')
+      .select('id,title,description,event_date,location,latitude,longitude,type,created_by,created_at,users!events_created_by_fkey(name,avatar_url),event_attendance(count)')
+      .order('event_date', { ascending: true })
+      .limit(EVENT_LIMIT);
+    if (error) console.error('Erro ao carregar eventos:', error);
+    if (data) {
+      setEvents(data.map((e: any) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        date: e.event_date,
+        location: e.location,
+        latitude: e.latitude,
+        longitude: e.longitude,
+        type: e.type,
+        createdBy: e.created_by,
+        createdAt: e.created_at,
+        attendanceCount: e.event_attendance?.[0]?.count ?? 0,
+      })));
+    }
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id,user_id,actor_id,type,post_id,comment_id,is_read,created_at,users:actor_id(name,avatar_url),posts:post_id(title),comments:comment_id(content)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(NOTIFICATION_LIMIT);
+    if (error) console.error('Erro ao carregar notificações:', error);
+    if (data) {
+      setNotifications(data.map((n: any) => ({
+        id: n.id,
+        userId: n.user_id,
+        actorId: n.actor_id,
+        actorName: n.users?.name || 'Alguém',
+        actorAvatarUrl: n.users?.avatar_url,
+        type: n.type as 'support' | 'comment',
+        postId: n.post_id,
+        postTitle: n.posts?.title,
+        content: n.comments?.content,
+        isRead: n.is_read,
+        createdAt: n.created_at,
+      })));
+    }
+  }, [user]);
+
+  const fetchData = useCallback(async () => {
+    if (fetchingAllRef.current) return;
+    fetchingAllRef.current = true;
+    setLoading(true);
+    try {
+      await Promise.all([loadPostsAndComments(), loadBusinesses(), loadEvents(), loadNotifications()]);
+    } finally {
+      fetchingAllRef.current = false;
+      setLoading(false);
+    }
+  }, [loadPostsAndComments, loadBusinesses, loadEvents, loadNotifications]);
+
+  const runQueuedRefresh = useCallback(async () => {
+    const queue = new Set(refreshQueueRef.current);
+    refreshQueueRef.current.clear();
+    const jobs: Promise<void>[] = [];
+    if (queue.has('posts')) jobs.push(loadPostsAndComments());
+    if (queue.has('businesses')) jobs.push(loadBusinesses());
+    if (queue.has('events')) jobs.push(loadEvents());
+    if (queue.has('notifications')) jobs.push(loadNotifications());
+    if (jobs.length) await Promise.all(jobs);
+  }, [loadPostsAndComments, loadBusinesses, loadEvents, loadNotifications]);
+
+  const scheduleRefresh = useCallback((target: 'posts' | 'businesses' | 'events' | 'notifications') => {
+    refreshQueueRef.current.add(target);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = null;
+      void runQueuedRefresh();
+    }, REFRESH_DEBOUNCE_MS);
+  }, [runQueuedRefresh]);
 
   useEffect(() => {
-    fetchData();
-    const channel = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => fetchData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => fetchData())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => { if (user && payload.new && payload.new.user_id === user.id) fetchData(); })
+    void fetchData();
+    const channel = supabase.channel(`db-changes-${user?.id || 'public'}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, () => scheduleRefresh('posts'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => scheduleRefresh('posts'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'post_supports' }, () => scheduleRefresh('posts'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'businesses' }, () => scheduleRefresh('businesses'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'business_ratings' }, () => scheduleRefresh('businesses'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => scheduleRefresh('events'))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_attendance' }, () => scheduleRefresh('events'))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        if (user && payload.new && (payload.new as any).user_id === user.id) scheduleRefresh('notifications');
+      })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchData, user]);
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchData, scheduleRefresh]);
 
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
     const res = await supabase.from('posts').insert({ author_id: user.id, category: data.category, title: data.title, description: data.description, image_url: data.imageUrl, location: data.location, latitude: data.latitude, longitude: data.longitude, is_anonymous: false });
-    if (!res.error) await fetchData();
+    if (!res.error) await loadPostsAndComments();
     return res;
-  }, [user, fetchData]);
+  }, [user, loadPostsAndComments]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
-    const { data: postData, error: postErr } = await supabase.from('posts').insert({ author_id: null, category: 'seguranca', title: `Denúncia: ${data.tipo}`, description: data.description, image_url: data.imageUrl, location: data.location || 'Local Privado', latitude: data.latitude, longitude: data.longitude, is_anonymous: true }).select().single();
-    if (!postErr && postData) { addMyAnonId(postData.id); await fetchData(); }
+    const { data: postData, error: postErr } = await supabase.from('posts').insert({ author_id: null, category: 'seguranca', title: `Denúncia: ${data.tipo}`, description: data.description, image_url: data.imageUrl, location: data.location || 'Local Privado', latitude: data.latitude, longitude: data.longitude, is_anonymous: true }).select('id').single();
+    if (!postErr && postData) { addMyAnonId(postData.id); await loadPostsAndComments(); }
     return { error: postErr };
-  }, [addMyAnonId, fetchData]);
+  }, [addMyAnonId, loadPostsAndComments]);
 
   const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; neighborhood?: string; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
     const res = await supabase.from('businesses').insert({ name: data.name, description: data.description, category: data.category, phone: data.phone, whatsapp: data.whatsapp, address: data.address, neighborhood: data.neighborhood, image_url: data.imageUrl, open_time: data.openTime, close_time: data.closeTime, latitude: data.latitude, longitude: data.longitude, created_by: user.id });
-    if (!res.error) await fetchData();
+    if (!res.error) await loadBusinesses();
     return res;
-  }, [user, fetchData]);
+  }, [user, loadBusinesses]);
 
   const supportPost = useCallback(async (postId: string) => {
-    if (!user || processing.has(postId)) return;
-    setProcessing(prev => new Set(prev).add(postId));
+    if (!user || processingRef.current.has(postId)) return;
+    processingRef.current.add(postId);
     try {
-      const { data: existing } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id);
-      if (existing && existing.length > 0) await supabase.from('post_supports').delete().eq('post_id', postId).eq('user_id', user.id);
+      const { data: existing } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle();
+      if (existing) await supabase.from('post_supports').delete().eq('id', existing.id);
       else await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
-      await fetchData();
-    } finally { setProcessing(prev => { const next = new Set(prev); next.delete(postId); return next; }); }
-  }, [user, processing, fetchData]);
+      await loadPostsAndComments();
+    } finally {
+      processingRef.current.delete(postId);
+    }
+  }, [user, loadPostsAndComments]);
 
-  const addComment = useCallback(async (postId: string, content: string, parentId?: string) => { if (!user) return; await supabase.from('comments').insert({ post_id: postId, author_id: user.id, parent_id: parentId, content }); await fetchData(); }, [user, fetchData]);
-  const deleteComment = useCallback(async (commentId: string) => { await supabase.from('comments').delete().eq('id', commentId); await fetchData(); }, [fetchData]);
+  const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
+    if (!user || !content.trim()) return;
+    const { error } = await supabase.from('comments').insert({ post_id: postId, author_id: user.id, parent_id: parentId, content: content.trim() });
+    if (!error) await loadPostsAndComments();
+  }, [user, loadPostsAndComments]);
+
+  const deleteComment = useCallback(async (commentId: string) => {
+    const { error } = await supabase.from('comments').delete().eq('id', commentId);
+    if (!error) await loadPostsAndComments();
+  }, [loadPostsAndComments]);
+
   const deletePost = useCallback(async (postId: string) => {
     const { error } = await supabase.from('posts').delete().eq('id', postId);
-    if (!error) { const ids = getMyAnonIds(); if (ids.has(postId)) { ids.delete(postId); localStorage.setItem(SK_MY_ANON, JSON.stringify([...ids])); } await fetchData(); }
-  }, [getMyAnonIds, fetchData]);
-  const updatePostStatus = useCallback(async (postId: string, status: PostStatus) => { await supabase.from('posts').update({ status }).eq('id', postId); await fetchData(); }, [fetchData]);
-  const markNotificationsAsRead = useCallback(async () => { if (!user) return; await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id); await fetchData(); }, [user, fetchData]);
-  const deleteAllNotifications = useCallback(async () => { if (!user) return; await supabase.from('notifications').delete().eq('user_id', user.id); await fetchData(); }, [user, fetchData]);
-  const deleteBusiness = useCallback(async (businessId: string) => { await supabase.from('businesses').delete().eq('id', businessId); await fetchData(); }, [fetchData]);
-  const deleteEvent = useCallback(async (eventId: string) => { await supabase.from('events').delete().eq('id', eventId); await fetchData(); }, [fetchData]);
+    if (!error) {
+      const ids = getMyAnonIds();
+      if (ids.has(postId)) {
+        ids.delete(postId);
+        try { localStorage.setItem(SK_MY_ANON, JSON.stringify([...ids])); } catch {}
+      }
+      await loadPostsAndComments();
+    }
+  }, [getMyAnonIds, loadPostsAndComments]);
+
+  const updatePostStatus = useCallback(async (postId: string, status: PostStatus) => {
+    const { error } = await supabase.from('posts').update({ status }).eq('id', postId);
+    if (!error) await loadPostsAndComments();
+  }, [loadPostsAndComments]);
+
+  const deleteBusiness = useCallback(async (businessId: string) => {
+    const { error } = await supabase.from('businesses').delete().eq('id', businessId);
+    if (!error) await loadBusinesses();
+  }, [loadBusinesses]);
+
+  const deleteEvent = useCallback(async (eventId: string) => {
+    const { error } = await supabase.from('events').delete().eq('id', eventId);
+    if (!error) await loadEvents();
+  }, [loadEvents]);
+
   const toggleAttendance = useCallback(async (eventId: string) => {
     if (!user) return;
-    const { data: existing } = await supabase.from('event_attendance').select('id').eq('event_id', eventId).eq('user_id', user.id);
-    if (existing && existing.length > 0) await supabase.from('event_attendance').delete().eq('event_id', eventId).eq('user_id', user.id); else await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
-    await fetchData();
-  }, [user, fetchData]);
+    const { data: existing } = await supabase.from('event_attendance').select('id').eq('event_id', eventId).eq('user_id', user.id).maybeSingle();
+    if (existing) await supabase.from('event_attendance').delete().eq('id', existing.id);
+    else await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
+    await loadEvents();
+  }, [user, loadEvents]);
 
   const getEventAttendees = useCallback(async (eventId: string) => {
-    try {
-      const { data, error } = await supabase.from('event_attendance').select(`id, users:user_id (name, avatar_url)`).eq('event_id', eventId);
-      if (error) return [];
-      return (data || []).map((att: any) => ({ id: att.id, userName: att.users?.name || 'Morador', userAvatarUrl: att.users?.avatar_url }));
-    } catch { return []; }
+    const { data, error } = await supabase.from('event_attendance').select('id, users:user_id(name,avatar_url)').eq('event_id', eventId).limit(100);
+    if (error) return [];
+    return (data || []).map((att: any) => ({ id: att.id, userName: att.users?.name || 'Morador', userAvatarUrl: att.users?.avatar_url }));
   }, []);
 
   const addBusinessRating = useCallback(async (data: { businessId: string; stars: number; comment?: string }) => {
     if (!user) return;
     const { error } = await supabase.from('business_ratings').upsert({ business_id: data.businessId, user_id: user.id, stars: data.stars, comment: data.comment, created_at: new Date().toISOString() }, { onConflict: 'business_id,user_id' });
     if (error) throw error;
-    await fetchData();
-  }, [user, fetchData]);
+    await loadBusinesses();
+  }, [user, loadBusinesses]);
 
   const getBusinessRatings = useCallback(async (businessId: string) => {
-    try {
-      const { data, error } = await supabase.from('business_ratings').select(`id, stars, comment, createdAt:created_at, users:user_id (name, avatar_url)`).eq('business_id', businessId).order('created_at', { ascending: false });
-      if (error) return [];
-      return (data || []).map((r: any) => ({ id: r.id, stars: r.stars, comment: r.comment, createdAt: r.createdAt, userName: r.users?.name || 'Morador', userAvatarUrl: r.users?.avatar_url }));
-    } catch { return []; }
+    const { data, error } = await supabase.from('business_ratings').select('id,stars,comment,created_at,users:user_id(name,avatar_url)').eq('business_id', businessId).order('created_at', { ascending: false }).limit(100);
+    if (error) return [];
+    return (data || []).map((r: any) => ({ id: r.id, stars: r.stars, comment: r.comment, createdAt: r.created_at, userName: r.users?.name || 'Morador', userAvatarUrl: r.users?.avatar_url }));
   }, []);
 
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
     const res = await supabase.from('events').insert({ title: data.title, description: data.description, event_date: data.date, location: data.location, type: data.type, latitude: data.latitude, longitude: data.longitude, created_by: user.id });
-    if (!res.error) await fetchData();
+    if (!res.error) await loadEvents();
     return res;
-  }, [user, fetchData]);
+  }, [user, loadEvents]);
 
-  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => { await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason }); await fetchData(); }, [user, fetchData]);
-  const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => { const { error } = await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId); if (error) console.error('Erro ao atualizar denúncia:', error); await fetchData(); }, [user, fetchData]);
+  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => {
+    await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason });
+  }, [user]);
 
-  const isMyPost = useCallback((post: { id: string; authorId: string }) => getMyAnonIds().has(post.id) || (user ? post.authorId === user.id : false), [user, getMyAnonIds]);
-  const isMyBusiness = useCallback((business: { id: string; createdBy: string }) => user ? business.createdBy === user.id : false, [user]);
-  const isMyEvent = useCallback((event: { id: string; createdBy: string }) => user ? event.createdBy === user.id : false, [user]);
+  const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => {
+    await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId);
+  }, [user]);
+
+  const markNotificationsAsRead = useCallback(async () => {
+    if (!user) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  }, [user]);
+
+  const deleteAllNotifications = useCallback(async () => {
+    if (!user) return;
+    await supabase.from('notifications').delete().eq('user_id', user.id);
+    setNotifications([]);
+  }, [user]);
+
+  const isMyPost = useCallback((post: { id: string; authorId: string }) => getMyAnonIds().has(post.id) || !!user && post.authorId === user.id, [user, getMyAnonIds]);
+  const isMyBusiness = useCallback((business: { id: string; createdBy: string }) => !!user && business.createdBy === user.id, [user]);
+  const isMyEvent = useCallback((event: { id: string; createdBy: string }) => !!user && event.createdBy === user.id, [user]);
+
   const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
-  const commentsByPost = useMemo(() => { const map: Record<string, Comment[]> = {}; for (const c of comments) (map[c.postId] ??= []).push(c); return map; }, [comments]);
+  const commentsByPost = useMemo(() => {
+    const map: Record<string, Comment[]> = {};
+    for (const c of comments) (map[c.postId] ??= []).push(c);
+    return map;
+  }, [comments]);
 
-  const contextValue = useMemo(() => ({ posts, businesses, events, comments, notifications, reports, unreadCount, commentsByPost, loading, fetchData, addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyBusiness, isMyEvent, reportContent, updateReportStatus, addBusinessRating, getBusinessRatings, toggleAttendance, getEventAttendees }), [posts, businesses, events, comments, notifications, reports, unreadCount, commentsByPost, loading, fetchData, addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteBusiness, deleteEvent, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyBusiness, isMyEvent, reportContent, updateReportStatus, addBusinessRating, getBusinessRatings, toggleAttendance, getEventAttendees]);
+  const contextValue = useMemo(() => ({
+    posts, businesses, events, comments, notifications, reports, unreadCount, commentsByPost, loading,
+    fetchData, addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment,
+    deletePost, updatePostStatus, deleteBusiness, deleteEvent, toggleAttendance, getEventAttendees,
+    addBusinessRating, getBusinessRatings, reportContent, updateReportStatus, markNotificationsAsRead,
+    deleteAllNotifications, isMyPost, isMyBusiness, isMyEvent,
+  }), [posts, businesses, events, comments, notifications, reports, unreadCount, commentsByPost, loading, fetchData, addPost, addAnonymousPost, addBusiness, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteBusiness, deleteEvent, toggleAttendance, getEventAttendees, addBusinessRating, getBusinessRatings, reportContent, updateReportStatus, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyBusiness, isMyEvent]);
 
   return <DataContext.Provider value={contextValue}>{children}</DataContext.Provider>;
 }
