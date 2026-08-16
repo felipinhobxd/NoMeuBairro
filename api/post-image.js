@@ -11,10 +11,10 @@ export default async function handler(req, res) {
   const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !key) return res.status(503).end();
 
+  const headers = { apikey: key, Authorization: `Bearer ${key}` };
+
   try {
-    const response = await fetch(`${supabaseUrl}/rest/v1/posts?id=eq.${encodeURIComponent(id)}&select=image_url&limit=1`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    });
+    const response = await fetch(`${supabaseUrl}/rest/v1/posts?id=eq.${encodeURIComponent(id)}&select=image_url&limit=1`, { headers });
     if (!response.ok) return res.status(502).end();
     const rows = await response.json();
     const imageUrl = rows?.[0]?.image_url;
@@ -25,7 +25,19 @@ export default async function handler(req, res) {
       return res.redirect(307, imageUrl);
     }
 
-    const match = String(imageUrl).match(/^data:([^;,]+)?;base64,(.+)$/);
+    let imageData = String(imageUrl);
+    if (imageData.startsWith('/api/post-image')) {
+      const legacyResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/get_legacy_post_image`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_post_id: id }),
+      });
+      if (!legacyResponse.ok) return res.status(404).end();
+      imageData = await legacyResponse.json();
+      if (!imageData) return res.status(404).end();
+    }
+
+    const match = imageData.match(/^data:([^;,]+)?;base64,(.+)$/);
     if (!match) return res.status(404).end();
     const mime = match[1] || 'image/jpeg';
     const bytes = Buffer.from(match[2], 'base64');
