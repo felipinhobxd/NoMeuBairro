@@ -36,7 +36,16 @@ export function postImageStoragePath(url: string | undefined | null) {
 
 export async function deleteStoredPostImage(url: string | undefined | null) {
   const path = postImageStoragePath(url);
-  if (!path) return;
+  if (!path || !url) return;
+
+  // Denúncias anônimas não concedem DELETE público no bucket. O endpoint só remove
+  // o arquivo quando confirma que nenhum relato do banco ainda referencia a URL.
+  if (path.startsWith('anonymous/')) {
+    const { error } = await supabase.functions.invoke('cleanup-anonymous-post-image', { body: { url } });
+    if (error) console.warn('Não foi possível limpar a imagem anônima do relato:', error.message);
+    return;
+  }
+
   const { error } = await supabase.storage.from('post-images').remove([path]);
   if (error) console.warn('Não foi possível remover a imagem antiga do relato:', error.message);
 }
