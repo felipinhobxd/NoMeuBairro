@@ -3,6 +3,7 @@ import type { Post, PostCategory, PostStatus, Business, BusinessCategory, Commun
 import { useAuth } from './AuthContext';
 import { useNeighborhood, curitibaNeighborhoods } from './NeighborhoodContext';
 import { supabase } from '../utils/supabase';
+import { storePostImage } from '../utils/imageStorage';
 
 interface DataContextType {
   posts: Post[];
@@ -43,11 +44,11 @@ interface DataContextType {
 const DataContext = createContext<DataContextType>(null!);
 const SK_MY_ANON = 'anb-my-anonymous-ids';
 const POST_LIMIT = 30;
-const COMMENT_LIMIT = 300;
-const BUSINESS_LIMIT = 150;
-const EVENT_LIMIT = 100;
-const RATING_LIMIT = 1000;
-const NOTIFICATION_LIMIT = 50;
+const COMMENT_LIMIT = 150;
+const BUSINESS_LIMIT = 80;
+const EVENT_LIMIT = 60;
+const RATING_LIMIT = 300;
+const NOTIFICATION_LIMIT = 40;
 
 const normalizeText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -174,7 +175,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const ratingsByBiz: Record<string, { total: number; sum: number }> = {};
       for (const r of ratingsRes.data || []) {
         const entry = ratingsByBiz[r.business_id] ||= { total: 0, sum: 0 };
-        entry.total++;
+        entry.total += 1;
         entry.sum += Number(r.stars) || 0;
       }
       if (bizRes.data) setBusinesses(bizRes.data.map((b: any) => ({
@@ -194,9 +195,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchNotifications]);
 
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   useEffect(() => {
     if (!user) return;
@@ -211,20 +210,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
-    const res = await supabase.from('posts').insert({ author_id: user.id, category: data.category, title: data.title, description: data.description, image_url: data.imageUrl, location: data.location, latitude: data.latitude, longitude: data.longitude, is_anonymous: false });
+    const stored = await storePostImage(data.imageUrl, user.id);
+    if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
+    const res = await supabase.from('posts').insert({ author_id: user.id, category: data.category, title: data.title, description: data.description, image_url: stored.url, location: data.location, latitude: data.latitude, longitude: data.longitude, is_anonymous: false });
     if (!res.error) await fetchData();
     return res;
   }, [user, fetchData]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
-    const { data: postData, error: postErr } = await supabase.from('posts').insert({ author_id: null, category: 'seguranca', title: `Denúncia: ${data.tipo}`, description: data.description, image_url: data.imageUrl, location: data.location || 'Local Privado', latitude: data.latitude, longitude: data.longitude, is_anonymous: true }).select('id').single();
+    const stored = await storePostImage(data.imageUrl, 'anonymous');
+    if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
+    const { data: postData, error: postErr } = await supabase.from('posts').insert({ author_id: null, category: 'seguranca', title: `Denúncia: ${data.tipo}`, description: data.description, image_url: stored.url, location: data.location || 'Local Privado', latitude: data.latitude, longitude: data.longitude, is_anonymous: true }).select('id').single();
     if (!postErr && postData) { addMyAnonId(postData.id); await fetchData(); }
     return { error: postErr };
   }, [addMyAnonId, fetchData]);
 
   const addBusiness = useCallback(async (data: { name: string; description: string; category: BusinessCategory; neighborhood?: string; phone?: string; whatsapp?: string; address?: string; imageUrl?: string; openTime?: string; closeTime?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
-    const res = await supabase.from('businesses').insert({ name: data.name, description: data.description, category: data.category, phone: data.phone, whatsapp: data.whatsapp, address: data.address, neighborhood: data.neighborhood, image_url: data.imageUrl, open_time: data.openTime, close_time: data.closeTime, latitude: data.latitude, longitude: data.longitude, created_by: user.id });
+    const stored = await storePostImage(data.imageUrl, user.id);
+    if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
+    const res = await supabase.from('businesses').insert({ name: data.name, description: data.description, category: data.category, phone: data.phone, whatsapp: data.whatsapp, address: data.address, neighborhood: data.neighborhood, image_url: stored.url, open_time: data.openTime, close_time: data.closeTime, latitude: data.latitude, longitude: data.longitude, created_by: user.id });
     if (!res.error) await fetchData();
     return res;
   }, [user, fetchData]);
@@ -236,6 +241,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const { data: existing } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle();
       if (existing) await supabase.from('post_supports').delete().eq('id', existing.id);
       else await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
+      // Only refresh after the write. Image values are now short Storage URLs, not base64 payloads.
       await fetchData();
     } finally { processingRef.current.delete(postId); }
   }, [user, fetchData]);
