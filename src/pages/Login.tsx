@@ -6,6 +6,27 @@ import { Building2, Eye, EyeOff, KeyRound, MapPin, MailCheck, ArrowLeft } from '
 
 const HCAPTCHA_SITEKEY = 'a306b7dc-5146-4ae0-b146-eefac760b3c2';
 const RECOVERY_FLAG = 'nmb-password-recovery';
+const RECOVERY_STARTED_AT = 'nmb-password-recovery-at';
+const RECOVERY_MAX_AGE_MS = 20 * 60 * 1000;
+
+function clearRecoveryState() {
+  try {
+    sessionStorage.removeItem(RECOVERY_FLAG);
+    sessionStorage.removeItem(RECOVERY_STARTED_AT);
+  } catch {}
+}
+
+function hasValidRecoveryState() {
+  try {
+    const flag = sessionStorage.getItem(RECOVERY_FLAG) === '1';
+    const startedAt = Number(sessionStorage.getItem(RECOVERY_STARTED_AT) || 0);
+    const valid = flag && startedAt > 0 && Date.now() - startedAt <= RECOVERY_MAX_AGE_MS;
+    if (!valid) clearRecoveryState();
+    return valid;
+  } catch {
+    return false;
+  }
+}
 
 function friendlyAuthError(message: string) {
   const text = message.toLowerCase();
@@ -15,7 +36,7 @@ function friendlyAuthError(message: string) {
   if (text.includes('password should be at least')) return 'A senha precisa ter pelo menos 6 caracteres.';
   if (text.includes('captcha')) return 'Confirme a verificação de segurança antes de continuar.';
   if (text.includes('same password')) return 'A nova senha precisa ser diferente da senha atual.';
-  if (text.includes('expired') || text.includes('otp')) return 'O link de recuperação expirou ou já foi utilizado. Solicite um novo link.';
+  if (text.includes('expired') || text.includes('otp') || text.includes('code verifier')) return 'O link de recuperação expirou ou já foi utilizado. Solicite um novo link.';
   return message;
 }
 
@@ -70,7 +91,10 @@ export default function Login() {
       const nextMode = getModeFromUrl();
       setMode(nextMode);
       if (getRecoveryError() === 'expired') {
+        clearRecoveryState();
         setError('Este link de recuperação expirou ou já foi usado. Solicite um novo link abaixo.');
+      } else if (nextMode === 'reset' && !hasValidRecoveryState()) {
+        setError('A sessão de recuperação não está mais válida. Solicite um novo link.');
       }
     };
     syncMode();
@@ -84,6 +108,7 @@ export default function Login() {
   };
 
   const navigateMode = (nextMode: 'login' | 'forgot' | 'reset') => {
+    if (nextMode !== 'reset') clearRecoveryState();
     const suffix = nextMode === 'login' ? '' : `?mode=${nextMode}`;
     window.location.hash = `/login${suffix}`;
     setMode(nextMode);
@@ -116,12 +141,13 @@ export default function Login() {
       setError('Confirme a verificação de segurança antes de continuar.');
       return;
     }
+    clearRecoveryState();
     setError('');
     setSuccess('');
     setLoading(true);
     try {
-      // Do not put a HashRouter route in redirectTo. Supabase needs the URL fragment
-      // for its temporary recovery session and the app routes only after it is parsed.
+      // Do not put a HashRouter route in redirectTo. Supabase needs the recovery
+      // payload first; RecoveryRedirect routes to #/login only after a real session exists.
       const redirectTo = `${window.location.origin}${window.location.pathname}?recovery=1`;
       const { error: e } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo,
@@ -129,7 +155,7 @@ export default function Login() {
       });
       resetCaptcha();
       if (e) setError(friendlyAuthError(e.message));
-      else setSuccess('Enviamos um link para redefinir sua senha. Use o link mais recente recebido e verifique também o spam.');
+      else setSuccess('Enviamos um link para redefinir sua senha. Abra somente o e-mail mais recente: cada link é de uso único.');
     } catch (err) {
       resetCaptcha();
       setError(err instanceof Error ? friendlyAuthError(err.message) : 'Não foi possível enviar o link de recuperação.');
@@ -151,10 +177,10 @@ export default function Login() {
     setSuccess('');
     setLoading(true);
     try {
-      let recoveryFlag = false;
-      try { recoveryFlag = sessionStorage.getItem(RECOVERY_FLAG) === '1'; } catch {}
+      const recoveryStateValid = hasValidRecoveryState();
       const session = await waitForRecoverySession();
-      if (!session || !recoveryFlag) {
+      if (!session || !recoveryStateValid) {
+        clearRecoveryState();
         setError('O link de recuperação expirou ou já foi utilizado. Solicite um novo link.');
         return;
       }
@@ -163,7 +189,7 @@ export default function Login() {
         setError(friendlyAuthError(e.message));
         return;
       }
-      try { sessionStorage.removeItem(RECOVERY_FLAG); } catch {}
+      clearRecoveryState();
       await supabase.auth.signOut();
       setPassword('');
       setConfirmPassword('');
