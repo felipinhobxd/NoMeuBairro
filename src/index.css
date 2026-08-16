@@ -69,19 +69,29 @@ body { font-family: var(--font-sans); background-color: var(--page-light); color
 .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .drop-zone-active { border-color: var(--brand-600) !important; background-color: rgba(234,88,12,0.05) !important; }
 
-nav[aria-label="Navegação principal"] button { color: #57534e; font-weight: 650; }
-nav[aria-label="Navegação principal"] button:hover { color: #292524; background-color: var(--brand-50); }
-nav[aria-label="Navegação principal"] button[aria-current="page"] { color: var(--brand-700); background-color: var(--brand-50); font-weight: 750; }
+nav[aria-label="Navegação principal"] button { color: #292524; font-weight: 700; background: #fffaf5; border: 1px solid #f1e8df; }
+nav[aria-label="Navegação principal"] button:hover { color: #1c1917; background-color: var(--brand-50); border-color: var(--brand-200); transform: translateY(-1px); }
+nav[aria-label="Navegação principal"] button[aria-current="page"] { color: var(--brand-800); background-color: #fff1e6; border-color: var(--brand-300); font-weight: 800; box-shadow: 0 3px 10px rgba(194,65,12,0.12), inset 0 -2px 0 var(--brand-600); }
 nav[aria-label="Navegação principal"] button > span { display: inline !important; }
 nav[aria-label="Navegação principal"] button > svg { color: currentColor; flex-shrink: 0; }
-.dark nav[aria-label="Navegação principal"] button { color: #d6c7bc; }
-.dark nav[aria-label="Navegação principal"] button:hover { color: #fff7ed; background-color: #2b211b; }
-.dark nav[aria-label="Navegação principal"] button[aria-current="page"] { color: #fb923c; background-color: rgba(234,88,12,0.12); }
+.dark nav[aria-label="Navegação principal"] button { color: #f1e4da; background: #241b16; border-color: #3a2b23; }
+.dark nav[aria-label="Navegação principal"] button:hover { color: #fff7ed; background-color: #30231c; border-color: #6b4b39; }
+.dark nav[aria-label="Navegação principal"] button[aria-current="page"] { color: #fdba74; background-color: rgba(234,88,12,0.16); border-color: rgba(234,88,12,0.38); box-shadow: inset 0 -2px 0 #fb923c; }
 
-@media (min-width: 768px) {
-  nav[aria-label="Navegação principal"] button { font-size: 0.875rem; padding: 0.625rem 0.75rem; letter-spacing: 0.005em; }
-  nav[aria-label="Navegação principal"] button[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--brand-600); }
-}
+header[role="banner"] button[aria-label="Ir para a página inicial"] > div:first-child { width: 44px; height: 44px; }
+header[role="banner"] button[aria-label="Ir para a página inicial"] div span { font-size: 1.15rem !important; font-weight: 900 !important; letter-spacing: -0.025em !important; color: #171412 !important; }
+.dark header[role="banner"] button[aria-label="Ir para a página inicial"] div span { color: #fff7ed !important; }
+header[role="banner"] { box-shadow: 0 1px 0 rgba(120,53,15,0.06); }
+header[role="banner"] > div > div { min-height: 76px; }
+
+main[role="main"] h1,
+main[role="main"] h2,
+main[role="main"] h3 { color: #171412; }
+.dark main[role="main"] h1,
+.dark main[role="main"] h2,
+.dark main[role="main"] h3 { color: #fff7ed; }
+main[role="main"] p { color: #57534e; }
+.dark main[role="main"] p { color: #d6c7bc; }
 
 .bg-emerald-600, .bg-emerald-700 { background-color: var(--brand-600) !important; }
 .hover\\:bg-emerald-700:hover, .hover\\:bg-emerald-600:hover { background-color: var(--brand-700) !important; }
@@ -103,34 +113,32 @@ nav[aria-label="Navegação principal"] button > svg { color: currentColor; flex
 .bg-teal-50, .bg-teal-100 { background-color: var(--brand-50) !important; }
 .border-teal-200 { border-color: var(--brand-200) !important; }
 
-/* UX/UI: mais visual, menos esforço de leitura e áreas de toque melhores, sem mudar as abas. */
 button, a[role="button"] { -webkit-tap-highlight-color: transparent; }
 button:active, a[role="button"]:active { transform: translateY(1px); }
 @media (max-width: 767px) {
   button, a[role="button"], input, select, textarea { min-height: 42px; }
-  nav[aria-label="Navegação principal"] button { min-height: 46px; }
 }
 
-/* Cards de ação e indicadores ficam mais claros no tema branco. */
 .bg-white.border, .bg-white.ring-1, .bg-white[class*="border-"] { box-shadow: 0 8px 24px -20px rgba(41,37,36,0.55); }
 .dark .bg-white.border, .dark .bg-white.ring-1, .dark .bg-white[class*="border-"] { box-shadow: none; }
-
-/* Destaca ações primárias sem deixar todas as cores iguais. */
 button[class*="bg-emerald-600"], a[class*="bg-emerald-600"] { box-shadow: 0 8px 18px -10px rgba(234,88,12,0.65); }
 button[class*="bg-emerald-600"]:hover, a[class*="bg-emerald-600"]:hover { box-shadow: 0 10px 22px -10px rgba(194,65,12,0.75); }
-
-/* Abas, filtros e chips ficam mais evidentes ao toque. */
 button[class*="rounded-xl"], button[class*="rounded-2xl"] { transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease, box-shadow .18s ease; }
 button[class*="rounded-xl"]:focus-visible, button[class*="rounded-2xl"]:focus-visible { box-shadow: 0 0 0 4px rgba(234,88,12,0.12); }
-
-/* Pequeno destaque contínuo para a ação ativa em controles do site. */
 button[aria-selected="true"], [role="tab"][aria-selected="true"] { animation: soft-pulse 2.6s ease-in-out infinite; }
-
-/* Reduz a sensação de página longa sem esconder conteúdo. */
 main section + section { scroll-margin-top: 96px; }
 
-/* O item antigo /guia agora representa a área pública de Empregos. */
 a[href="#/guia"] { font-size: 0; }
 a[href="#/guia"]::after { content: "Empregos"; font-size: 0.875rem; font-weight: 600; }
 a[href="/guia"] { font-size: 0; }
 a[href="/guia"]::after { content: "Empregos"; font-size: 0.875rem; font-weight: 600; }
+
+@media (min-width: 768px) {
+  nav[aria-label="Navegação principal"] { gap: 0.4rem !important; }
+  nav[aria-label="Navegação principal"] button { font-size: 0.92rem; padding: 0.7rem 0.85rem; letter-spacing: 0.005em; }
+}
+@media (max-width: 767px) {
+  header[role="banner"] > div > div { min-height: 68px; }
+  header[role="banner"] button[aria-label="Ir para a página inicial"] > div:first-child { width: 40px; height: 40px; }
+  header[role="banner"] button[aria-label="Ir para a página inicial"] div span { font-size: 1rem !important; }
+}
