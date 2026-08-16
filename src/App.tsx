@@ -8,6 +8,7 @@ import { ToastProvider } from './components/UI';
 import BrazilWhatsappMask from './components/BrazilWhatsappMask';
 import RecoveryRedirect from './components/RecoveryRedirect';
 import InteractionGuard from './components/InteractionGuard';
+import LocationRepairBridge from './components/LocationRepairBridge';
 import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import { PanicButton, CookieConsent } from './components/Safety';
@@ -40,21 +41,13 @@ function lazyWithRetry(importer: () => Promise<LazyModule>, key: string) {
       return loaded;
     } catch (error) {
       if (!isDynamicImportError(error)) throw error;
-
       let alreadyRetried = false;
       try { alreadyRetried = sessionStorage.getItem(retryKey) === '1'; } catch {}
       if (alreadyRetried) throw error;
-
       try { sessionStorage.setItem(retryKey, '1'); } catch {}
-
-      // A deployment can invalidate a hashed Vite chunk while an older index.html is
-      // still open in the browser. Reload the document once with a cache-busting query
-      // so the browser receives the newest asset manifest instead of showing a blank/error page.
       const url = new URL(window.location.href);
       url.searchParams.set(CHUNK_REFRESH_QUERY, Date.now().toString());
       window.location.replace(url.toString());
-
-      // Keep Suspense pending during the navigation instead of rendering the error boundary.
       return await new Promise<LazyModule>(() => {});
     }
   });
@@ -92,6 +85,7 @@ export default function App() {
           <NeighborhoodProvider>
             <DataProvider>
               <ToastProvider>
+                <LocationRepairBridge />
                 <RecoveryRedirect />
                 <HashRouter>
                   <BrazilWhatsappMask />
