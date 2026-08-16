@@ -5,6 +5,7 @@ import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { Building2, Eye, EyeOff, KeyRound, MapPin, MailCheck, ArrowLeft } from 'lucide-react';
 
 const HCAPTCHA_SITEKEY = 'a306b7dc-5146-4ae0-b146-eefac760b3c2';
+const RECOVERY_FLAG = 'nmb-password-recovery';
 
 function friendlyAuthError(message: string) {
   const text = message.toLowerCase();
@@ -14,14 +15,36 @@ function friendlyAuthError(message: string) {
   if (text.includes('password should be at least')) return 'A senha precisa ter pelo menos 6 caracteres.';
   if (text.includes('captcha')) return 'Confirme a verificação de segurança antes de continuar.';
   if (text.includes('same password')) return 'A nova senha precisa ser diferente da senha atual.';
+  if (text.includes('expired') || text.includes('otp')) return 'O link de recuperação expirou ou já foi utilizado. Solicite um novo link.';
   return message;
 }
 
+function routeParams() {
+  const hash = window.location.hash || '';
+  const queryIndex = hash.indexOf('?');
+  return queryIndex >= 0 ? new URLSearchParams(hash.slice(queryIndex + 1)) : new URLSearchParams();
+}
+
 function getModeFromUrl(): 'login' | 'forgot' | 'reset' {
-  const mode = new URLSearchParams(window.location.search).get('mode');
+  const searchMode = new URLSearchParams(window.location.search).get('mode');
+  const hashMode = routeParams().get('mode');
+  const mode = hashMode || searchMode;
   if (mode === 'forgot') return 'forgot';
   if (mode === 'reset') return 'reset';
   return 'login';
+}
+
+function getRecoveryError() {
+  return routeParams().get('recoveryError') || new URLSearchParams(window.location.search).get('recoveryError') || '';
+}
+
+async function waitForRecoverySession() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return data.session;
+    await new Promise((resolve) => window.setTimeout(resolve, 200));
+  }
+  return null;
 }
 
 export default function Login() {
@@ -43,7 +66,16 @@ export default function Login() {
   const normalizedEmail = email.trim().toLowerCase();
 
   useEffect(() => {
-    setMode(getModeFromUrl());
+    const syncMode = () => {
+      const nextMode = getModeFromUrl();
+      setMode(nextMode);
+      if (getRecoveryError() === 'expired') {
+        setError('Este link de recuperação expirou ou já foi usado. Solicite um novo link abaixo.');
+      }
+    };
+    syncMode();
+    window.addEventListener('hashchange', syncMode);
+    return () => window.removeEventListener('hashchange', syncMode);
   }, []);
 
   const resetCaptcha = () => {
@@ -53,7 +85,7 @@ export default function Login() {
 
   const navigateMode = (nextMode: 'login' | 'forgot' | 'reset') => {
     const suffix = nextMode === 'login' ? '' : `?mode=${nextMode}`;
-    window.history.replaceState({}, document.title, `${window.location.pathname}${suffix}${window.location.hash || '#/login'}`);
+    window.location.hash = `/login${suffix}`;
     setMode(nextMode);
     setError('');
     setSuccess('');
@@ -88,14 +120,16 @@ export default function Login() {
     setSuccess('');
     setLoading(true);
     try {
-      const redirectTo = `${window.location.origin}${window.location.pathname}?mode=reset#/login`;
+      // Do not put a HashRouter route in redirectTo. Supabase needs the URL fragment
+      // for its temporary recovery session and the app routes only after it is parsed.
+      const redirectTo = `${window.location.origin}${window.location.pathname}?recovery=1`;
       const { error: e } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo,
         captchaToken,
       });
       resetCaptcha();
       if (e) setError(friendlyAuthError(e.message));
-      else setSuccess('Enviamos um link para redefinir sua senha. Verifique seu e-mail e também a pasta de spam.');
+      else setSuccess('Enviamos um link para redefinir sua senha. Use o link mais recente recebido e verifique também o spam.');
     } catch (err) {
       resetCaptcha();
       setError(err instanceof Error ? friendlyAuthError(err.message) : 'Não foi possível enviar o link de recuperação.');
@@ -117,8 +151,10 @@ export default function Login() {
     setSuccess('');
     setLoading(true);
     try {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      let recoveryFlag = false;
+      try { recoveryFlag = sessionStorage.getItem(RECOVERY_FLAG) === '1'; } catch {}
+      const session = await waitForRecoverySession();
+      if (!session || !recoveryFlag) {
         setError('O link de recuperação expirou ou já foi utilizado. Solicite um novo link.');
         return;
       }
@@ -127,6 +163,7 @@ export default function Login() {
         setError(friendlyAuthError(e.message));
         return;
       }
+      try { sessionStorage.removeItem(RECOVERY_FLAG); } catch {}
       await supabase.auth.signOut();
       setPassword('');
       setConfirmPassword('');
