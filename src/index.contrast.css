@@ -1,45 +1,147 @@
-/* Contraste global dos controles nativos e formulários. */
+/* Acessibilidade visual e contraste global.
+   Este arquivo usa !important apenas onde precisamos impedir que utilitarios
+   de cor deixem textos com baixo contraste nos temas claro/escuro. */
+
+/* Controles nativos: leitura confortavel e sem texto claro sobre fundo claro. */
 select,
 select option,
 input,
 textarea {
-  color: #0f172a;
+  color: #0f172a !important;
   background-color: #ffffff;
+  font-size: 16px;
 }
 
 select option {
-  color: #0f172a;
-  background-color: #ffffff;
+  color: #0f172a !important;
+  background-color: #ffffff !important;
 }
 
 .dark select,
 .dark select option,
 .dark input,
 .dark textarea {
-  color: #f8fafc;
-  background-color: #0f172a;
+  color: #f8fafc !important;
+  background-color: #211a16;
 }
 
 .dark select option {
-  color: #f8fafc;
-  background-color: #0f172a;
+  color: #f8fafc !important;
+  background-color: #211a16 !important;
 }
 
 input::placeholder,
 textarea::placeholder {
-  color: #64748b;
+  color: #64748b !important;
   opacity: 1;
 }
 
 .dark input::placeholder,
 .dark textarea::placeholder {
-  color: #94a3b8;
+  color: #b6c2d1 !important;
   opacity: 1;
 }
 
 select:disabled,
 input:disabled,
 textarea:disabled {
-  opacity: 0.7;
+  opacity: 0.72;
   cursor: not-allowed;
+}
+
+/* Tema claro: cinzas muito suaves ficam escuros o suficiente para leitura. */
+html:not(.dark) .text-slate-400 { color: #64748b !important; }
+html:not(.dark) .text-slate-500 { color: #475569 !important; }
+html:not(.dark) .text-slate-600 { color: #334155 !important; }
+html:not(.dark) .text-slate-700 { color: #1e293b !important; }
+html:not(.dark) .text-slate-800 { color: #172033 !important; }
+html:not(.dark) .text-slate-900 { color: #0f172a !important; }
+
+/* Tema escuro: secundarios continuam secundarios, mas nao somem no fundo. */
+.dark .text-slate-500 { color: #a8b4c5 !important; }
+.dark .text-slate-400 { color: #c0cad8 !important; }
+.dark .text-slate-300 { color: #d8dee8 !important; }
+.dark .text-slate-200 { color: #eef2f7 !important; }
+
+/* Salvaguarda para componentes que acabem combinando fundo claro e text-white. */
+html:not(.dark) [class*="bg-white"][class*="text-white"],
+html:not(.dark) [class*="bg-slate-50"][class*="text-white"],
+html:not(.dark) [class*="bg-slate-100"][class*="text-white"] {
+  color: #0f172a !important;
+}
+
+/* O cabecalho do seletor de bairros precisa ter fundo real: o gradiente de
+   utilitarios podia desaparecer e deixar texto branco sobre branco. */
+[class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] {
+  background-color: #c2410c !important;
+  background-image: linear-gradient(135deg, #ea580c 0%, #c2410c 55%, #7c2d12 100%) !important;
+  color: #ffffff !important;
+}
+[class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] h1,
+[class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] h2,
+[class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] h3,
+[class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] p,
+[class*="bg-gradient-to-br"][class*="from-emerald-600"][class*="to-teal-700"] svg {
+  color: #ffffff !important;
+}
+
+/* Conteudo principal: pequenos metadados deixam de usar 9/10px. */
+main[role="main"] .text-\[9px\] { font-size: 0.72rem !important; line-height: 1rem !important; }
+main[role="main"] .text-\[10px\] { font-size: 0.75rem !important; line-height: 1rem !important; }
+main[role="main"] .text-\[11px\] { font-size: 0.8125rem !important; line-height: 1.15rem !important; }
+main[role="main"] .text-xs { font-size: 0.8125rem !important; line-height: 1.2rem !important; }
+main[role="main"] p { line-height: 1.55; }
+
+/* Botoes e campos ficam mais faceis de acertar, sobretudo no celular. */
+button,
+a[role="button"],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+@media (max-width: 767px) {
+  button,
+  a[role="button"],
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  /* A barra inferior precisa continuar cabendo em telas estreitas. */
+  nav[aria-label="Navegação mobile"] .text-\[10px\] {
+    font-size: 10px !important;
+    line-height: 12px !important;
+  }
+}
+
+/* Foco de teclado bem aparente nos dois temas. */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #ea580c !important;
+  outline-offset: 2px !important;
+}
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark input:focus-visible,
+.dark select:focus-visible,
+.dark textarea:focus-visible {
+  outline-color: #fb923c !important;
+}
+
+/* Respeita usuarios que preferem menos animacao. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
