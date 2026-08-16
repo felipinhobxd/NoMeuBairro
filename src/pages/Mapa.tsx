@@ -5,7 +5,7 @@ import { useData } from '../contexts/DataContext';
 import { useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card } from '../components/UI';
 import { Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot } from 'lucide-react';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import type { PostCategory } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
@@ -53,6 +53,16 @@ function createCategoryIcon(category: PostCategory) {
   });
 }
 
+function FocusPostOnMap({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView([lat, lng], 18, { animate: false });
+  }, [map, lat, lng]);
+
+  return null;
+}
+
 function RecenterButton({ points }: { points: [number, number][] }) {
   const map = useMap();
   if (points.length === 0) return null;
@@ -67,8 +77,13 @@ export default function Mapa() {
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
   const [imageByPost, setImageByPost] = useState<Record<string, string | null>>({});
   const [loadingImage, setLoadingImage] = useState<Set<string>>(new Set());
+  const [focusedPostId] = useState<string | null>(() => {
+    try { return sessionStorage.getItem('anb-map-focus-post'); }
+    catch { return null; }
+  });
 
   const filteredPosts = useMemo(() => posts.filter(p => p.latitude != null && p.longitude != null && (filter === 'all' || p.category === filter)), [posts, filter]);
+  const focusedPost = useMemo(() => focusedPostId ? posts.find(p => p.id === focusedPostId && p.latitude != null && p.longitude != null) ?? null : null, [posts, focusedPostId]);
   const points = useMemo(() => filteredPosts.map(p => [Number(p.latitude), Number(p.longitude)] as [number, number]), [filteredPosts]);
   const icons = useMemo(() => {
     const out = {} as Record<PostCategory, L.Icon>;
@@ -85,6 +100,13 @@ export default function Mapa() {
     setLoadingImage(prev => { const next = new Set(prev); next.delete(postId); return next; });
   }, [imageByPost, loadingImage]);
 
+  useEffect(() => {
+    if (!focusedPost) return;
+    setFilter('all');
+    void loadPostImage(focusedPost.id);
+    try { sessionStorage.removeItem('anb-map-focus-post'); } catch {}
+  }, [focusedPost, loadPostImage]);
+
   return <div className="h-[calc(100vh-160px)] flex flex-col gap-4">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
@@ -100,7 +122,8 @@ export default function Mapa() {
     <Card className="flex-1 !p-0 overflow-hidden relative border-slate-200 dark:border-slate-800 shadow-xl">
       <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
         <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {filteredPosts.map(post => <Marker key={post.id} position={[Number(post.latitude), Number(post.longitude)]} icon={icons[post.category] ?? icons.outros} riseOnHover zIndexOffset={500} eventHandlers={{ click: () => { void loadPostImage(post.id); } }}>
+        {focusedPost && <FocusPostOnMap lat={Number(focusedPost.latitude)} lng={Number(focusedPost.longitude)} />}
+        {filteredPosts.map(post => <Marker key={post.id} position={[Number(post.latitude), Number(post.longitude)]} icon={icons[post.category] ?? icons.outros} riseOnHover zIndexOffset={focusedPost?.id === post.id ? 1000 : 500} eventHandlers={{ click: () => { void loadPostImage(post.id); } }}>
           <Popup minWidth={260} className="custom-popup">
             <div className="p-1">
               <div className="flex items-center gap-2 mb-2"><span className="text-lg">{categoryIcons[post.category]?.emoji ?? '📍'}</span><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: categoryColors[post.category] }}>{categoryIcons[post.category]?.label ?? 'Outros'}</span></div>
@@ -113,6 +136,17 @@ export default function Mapa() {
             </div>
           </Popup>
         </Marker>)}
+        {focusedPost && <Popup position={[Number(focusedPost.latitude), Number(focusedPost.longitude)]} minWidth={280} className="custom-popup">
+          <div className="p-1">
+            <div className="flex items-center gap-2 mb-2"><span className="text-lg">{categoryIcons[focusedPost.category]?.emoji ?? '📍'}</span><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: categoryColors[focusedPost.category] }}>{categoryIcons[focusedPost.category]?.label ?? 'Outros'}</span></div>
+            <h3 className="font-bold text-slate-900 mb-1 leading-tight">{focusedPost.title}</h3>
+            <p className="text-xs text-slate-500 line-clamp-3 mb-3">{focusedPost.description}</p>
+            <p className="text-[10px] text-slate-400 mb-3">📍 {focusedPost.location}</p>
+            {loadingImage.has(focusedPost.id) && <div className="w-full h-36 rounded-xl bg-slate-100 animate-pulse mb-3" />}
+            {imageByPost[focusedPost.id] && <img src={imageByPost[focusedPost.id] || undefined} alt="Imagem do post" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" />}
+            <button onClick={() => navigate(`/post/${focusedPost.id}`)} type="button" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors">Ver detalhes no post</button>
+          </div>
+        </Popup>}
         <RecenterButton points={points} />
       </MapContainer>
 
