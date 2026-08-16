@@ -25,6 +25,7 @@ export default function Denuncias() {
   const [tipo, setTipo] = useState('');
   const [descricao, setDescricao] = useState('');
   const [localizacao, setLocalizacao] = useState('');
+  const [cep, setCep] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -32,16 +33,45 @@ export default function Denuncias() {
   const [fLng, setFLng] = useState<number | undefined>();
   const [fi, setFi] = useState('');
 
-  const handleCepSearch = async (cep: string) => {
-    const clean = cep.replace(/\D/g, '');
-    if (clean.length === 8) {
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
-        const data = await res.json();
-        if (!data.erro) setLocalizacao(data.logradouro);
-      } catch {}
-    }
+  const handleCepSearch = async (value: string) => {
+    const clean = value.replace(/\D/g, '').slice(0, 8);
+    setCep(clean);
+    if (clean.length !== 8) return;
+
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        const addressParts = [
+          data.logradouro,
+          data.bairro,
+          data.localidade && data.uf ? `${data.localidade} - ${data.uf}` : data.localidade,
+          data.cep ? `CEP ${data.cep}` : `CEP ${clean}`,
+        ].filter(Boolean);
+        setLocalizacao(addressParts.join(' — '));
+        // O endereço mudou; as coordenadas anteriores não devem ser reutilizadas.
+        setFLat(undefined);
+        setFLng(undefined);
+      }
+    } catch {}
   };
+
+  const geocodeBeforeSubmit = useCallback(async (address: string) => {
+    if (!address.trim()) return null;
+    try {
+      const query = cep.length === 8
+        ? `${cep}, Curitiba, PR, Brasil`
+        : `${address}, Curitiba, PR, Brasil`;
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lat = Number(data[0].lat);
+        const lng = Number(data[0].lon);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+      }
+    } catch {}
+    return null;
+  }, [cep]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -53,13 +83,33 @@ export default function Denuncias() {
       }
 
       setIsSubmitting(true);
+
+      const safeLocation = localizacao.trim();
+      let latitude = fLat;
+      let longitude = fLng;
+
+      // Se a pessoa informou rua ou CEP, garantimos que a denúncia tenha um ponto no mapa.
+      if (safeLocation && (typeof latitude !== 'number' || typeof longitude !== 'number')) {
+        const coords = await geocodeBeforeSubmit(safeLocation);
+        if (!coords) {
+          setIsSubmitting(false);
+          setError('Não conseguimos localizar esse endereço no mapa. Confira a rua/CEP ou use “Localizar no Mapa” antes de enviar.');
+          return;
+        }
+        latitude = coords.lat;
+        longitude = coords.lng;
+        setFLat(coords.lat);
+        setFLng(coords.lng);
+      }
+
       const result = await addAnonymousPost({
         tipo,
         description: descricao,
-        location: localizacao,
+        // Vazio significa que o DataContext usará "Local Privado". Endereço informado é preservado.
+        location: safeLocation,
         imageUrl: fi || undefined,
-        latitude: fLat,
-        longitude: fLng,
+        latitude,
+        longitude,
       });
       setIsSubmitting(false);
 
@@ -72,11 +122,12 @@ export default function Denuncias() {
       setTipo('');
       setDescricao('');
       setLocalizacao('');
+      setCep('');
       setFLat(undefined);
       setFLng(undefined);
       setFi('');
     },
-    [tipo, descricao, localizacao, fLat, fLng, fi, addAnonymousPost],
+    [tipo, descricao, localizacao, fLat, fLng, fi, addAnonymousPost, geocodeBeforeSubmit],
   );
 
   if (submitted) {
@@ -143,9 +194,23 @@ export default function Denuncias() {
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Input label="Localização (Rua/Bairro)" placeholder="Ex.: Rua das Flores, 123" value={localizacao} onChange={e => setLocalizacao(e.target.value)} />
-                  <Input label="Buscar por CEP" placeholder="Ex.: 81460296" maxLength={8} onChange={e => handleCepSearch(e.target.value)} />
+                  <Input
+                    label="Localização (Rua/Bairro)"
+                    placeholder="Ex.: Rua das Flores, 123"
+                    value={localizacao}
+                    onChange={e => { setLocalizacao(e.target.value); setCep(''); setFLat(undefined); setFLng(undefined); }}
+                  />
+                  <Input
+                    label="Buscar por CEP"
+                    placeholder="Ex.: 81460296"
+                    maxLength={8}
+                    value={cep}
+                    onChange={e => { void handleCepSearch(e.target.value); }}
+                  />
                 </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Se você informar rua ou CEP, o endereço será exibido no relato e o ponto aparecerá no mapa. Se deixar em branco, será mostrado “Local Privado”.
+                </p>
                 <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={localizacao} />
               </div>
 
