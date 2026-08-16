@@ -8,14 +8,7 @@ import {
 } from 'lucide-react';
 import { Card, Button, Modal, Input, useToast } from '../components/UI';
 import { cn } from '../utils/cn';
-
-const allBadges = [
-  { key: 'vizinho_engajado', name: 'Vizinho Engajado', desc: '10 relatos criados', emoji: '🏅' },
-  { key: 'guardiao', name: 'Guardião do Bairro', desc: '25 relatos criados', emoji: '🛡️' },
-  { key: 'voz_ativa', name: 'Voz Ativa', desc: '50 apoios recebidos', emoji: '📢' },
-  { key: 'construtor', name: 'Construtor', desc: 'Primeiro relato resolvido', emoji: '🏗️' },
-  { key: 'embaixador', name: 'Embaixador', desc: '100 interações', emoji: '⭐' },
-];
+import { communityBadges, getEarnedCommunityBadges } from '../utils/communityBadges';
 
 type Point = { x: number; y: number };
 type SourceImage = { src: string; width: number; height: number };
@@ -215,14 +208,8 @@ export default function Profile() {
     const myPosts = (posts || []).filter(p => p.authorId === user.id);
     const myEvents = (events || []).filter(e => e.createdBy === user.id);
     const supportsReceived = myPosts.reduce((sum, p) => sum + p.supports, 0);
-    const totalComments = myPosts.reduce((sum, p) => sum + p.commentsCount, 0);
-    const earned: string[] = [];
-    if (myPosts.length >= 10) earned.push('vizinho_engajado');
-    if (myPosts.length >= 25) earned.push('guardiao');
-    if (supportsReceived >= 50) earned.push('voz_ativa');
-    if (myPosts.some(p => p.status === 'resolved')) earned.push('construtor');
-    if (myPosts.length + totalComments >= 100) earned.push('embaixador');
-    return { myPosts: myPosts.length, myEvents: myEvents.length, supportsReceived, earnedBadges: earned };
+    const earnedBadges = getEarnedCommunityBadges({ posts: myPosts, supportsReceived, eventsCount: myEvents.length });
+    return { myPosts: myPosts.length, myEvents: myEvents.length, supportsReceived, earnedBadges };
   }, [user, posts, events]);
 
   const openEditProfile = () => {
@@ -314,9 +301,9 @@ export default function Profile() {
       </div>
 
       <Card>
-        <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos e Conquistas</h3><span className="text-xs text-slate-400">{stats.earnedBadges.length}/{allBadges.length}</span></div>
+        <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos e Conquistas</h3><span className="text-xs text-slate-400">{stats.earnedBadges.length}/{communityBadges.length}</span></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {allBadges.map(badge => { const earned = stats.earnedBadges.includes(badge.key); return <div key={badge.key} className={cn('flex flex-col items-center gap-2 p-3 rounded-xl text-center transition-all', earned ? 'bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20' : 'bg-slate-50 dark:bg-slate-800 opacity-50')}><span className="text-2xl">{earned ? badge.emoji : '🔒'}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500">{badge.desc}</p></div>{earned && <CheckCircle2 className="w-4 h-4 text-amber-500" />}</div>; })}
+          {communityBadges.map(badge => { const earned = stats.earnedBadges.includes(badge.key); return <div key={badge.key} className={cn('flex flex-col items-center gap-2 p-3 rounded-xl text-center transition-all', earned ? 'bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20' : 'bg-slate-50 dark:bg-slate-800 opacity-50')}><span className="text-2xl">{earned ? badge.emoji : '🔒'}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500">{badge.desc}</p></div>{earned && <CheckCircle2 className="w-4 h-4 text-amber-500" />}</div>; })}
         </div>
       </Card>
 
