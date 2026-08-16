@@ -1,5 +1,5 @@
 import { type ReactNode, useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -8,9 +8,11 @@ import { cn } from '../utils/cn';
 import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Briefcase,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
-  BarChart3, Search, ChevronRight, Building2, Sparkles, MapPinned
+  BarChart3, Search, ChevronRight, Building2, Sparkles, MapPinned, Reply, CheckCircle2, Eye, PhoneCall, CalendarCheck,
 } from 'lucide-react';
 import { timeAgo, Button, Card, Input, useToast } from './UI';
+import type { AppNotification } from '../types';
+import { notificationDestination, notificationMessage, notificationTargetTitle } from '../utils/notificationActivity';
 
 const navItems = [
   { path: '/', label: 'Feed', icon: LayoutGrid },
@@ -39,27 +41,48 @@ function ScrollToTop() {
   );
 }
 
+function NotificationActivityIcon({ notification }: { notification: AppNotification }) {
+  switch (notification.type) {
+    case 'support': return <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500" />;
+    case 'comment': return <MessageSquare className="w-3.5 h-3.5 text-orange-600" />;
+    case 'reply': return <Reply className="w-3.5 h-3.5 text-violet-600" />;
+    case 'post_resolved': return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />;
+    case 'job_interest': return <Briefcase className="w-3.5 h-3.5 text-blue-600" />;
+    case 'application_viewed': return <Eye className="w-3.5 h-3.5 text-sky-600" />;
+    case 'application_contacted': return <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />;
+    case 'event_attendance': return <CalendarCheck className="w-3.5 h-3.5 text-purple-600" />;
+    default: return <Bell className="w-3.5 h-3.5 text-slate-500" />;
+  }
+}
+
 function NotificationBell() {
   const { isAuthenticated } = useAuth();
-  const { notifications, unreadCount, markNotificationsAsRead, deleteAllNotifications } = useData();
+  const { notifications, unreadCount, markNotificationAsRead, deleteAllNotifications } = useData();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
 
   if (!isAuthenticated) return null;
 
+  const openNotification = async (notification: AppNotification) => {
+    await markNotificationAsRead(notification.id);
+    setIsOpen(false);
+    navigate(notificationDestination(notification));
+  };
+
   return (
     <div className="relative">
       <button
-        onClick={() => { setIsOpen(!isOpen); if (!isOpen) markNotificationsAsRead(); }}
+        onClick={() => setIsOpen(prev => !prev)}
         className={cn(
-          "p-2.5 rounded-xl transition-all duration-200 relative",
-          isOpen ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800"
+          'p-2.5 rounded-xl transition-all duration-200 relative',
+          isOpen ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800',
         )}
         aria-label="Notificações"
+        aria-expanded={isOpen}
       >
         <Bell className="w-[18px] h-[18px]" />
         {unreadCount > 0 && (
-          <span className="absolute top-2 right-2 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900 animate-pulse">
+          <span className="absolute top-1 right-1 min-w-4 h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -68,91 +91,74 @@ function NotificationBell() {
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-2 w-80 max-h-[400px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 z-50 overflow-hidden flex flex-col animate-scale-in origin-top-right">
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
-              <div className="flex items-center gap-3">
+          <div className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] max-h-[440px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 z-50 overflow-hidden flex flex-col animate-scale-in origin-top-right">
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/80 dark:bg-slate-800/50">
+              <div>
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white">Notificações</h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{unreadCount > 0 ? `${unreadCount} nova${unreadCount === 1 ? '' : 's'}` : 'Tudo em dia'}</p>
+              </div>
+              <div className="flex items-center gap-2">
                 {notifications.length > 0 && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); if(confirm('Deseja apagar todas as notificações?')) deleteAllNotifications(); }}
-                    className="text-[10px] font-bold text-red-500 hover:text-red-600 dark:hover:text-red-400 uppercase tracking-wider transition-colors"
+                    onClick={(e) => { e.stopPropagation(); if (confirm('Deseja apagar todas as notificações?')) void deleteAllNotifications(); }}
+                    className="text-[10px] font-bold text-red-600 hover:text-red-700 dark:text-red-400 uppercase tracking-wider transition-colors px-2 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10"
                   >
                     Apagar tudo
                   </button>
                 )}
+                <button onClick={() => setIsOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 transition-colors" aria-label="Fechar notificações">
+                  <X className="w-4 h-4" />
+                </button>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                <X className="w-4 h-4" />
-              </button>
             </div>
             <div className="overflow-y-auto flex-1 no-scrollbar">
               {notifications.length === 0 ? (
                 <div className="p-8 text-center">
-                  <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Bell className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+                  <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <Bell className="w-6 h-6 text-slate-400 dark:text-slate-500" />
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Nenhuma notificação por enquanto.</p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Nenhuma notificação</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Novas atividades aparecerão aqui.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-50 dark:divide-slate-800/50">
-                  {notifications.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => {
-                        setIsOpen(false);
-                        navigate('/');
-                        setTimeout(() => {
-                          const element = document.getElementById(`post-${n.postId}`);
-                          if (element) {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            element.classList.add('ring-2', 'ring-emerald-500', 'ring-offset-2');
-                            setTimeout(() => element.classList.remove('ring-2', 'ring-emerald-500', 'ring-offset-2'), 3000);
-                          }
-                        }, 100);
-                      }}
-                      className={cn(
-                        "w-full p-4 flex gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group",
-                        !n.isRead && "bg-emerald-50/30 dark:bg-emerald-500/5"
-                      )}
-                    >
-                      <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                        {n.actorAvatarUrl ? (
-                          <img src={n.actorAvatarUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xs font-bold text-slate-400">{n.actorName?.charAt(0)}</span>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                  {notifications.slice(0, 12).map((n) => {
+                    const targetTitle = notificationTargetTitle(n);
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => void openNotification(n)}
+                        className={cn(
+                          'w-full p-4 flex gap-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors group',
+                          !n.isRead && 'bg-orange-50/70 dark:bg-orange-500/5',
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-snug">
-                          <span className="font-bold text-slate-900 dark:text-white">{n.actorName}</span>
-                          {n.type === 'support' ? ' apoiou seu relato: ' : ' comentou no seu relato: '}
-                          <span className="font-medium text-emerald-600 dark:text-emerald-400">"{n.postTitle}"</span>
-                        </p>
-                        {n.content && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 italic line-clamp-2">
-                            "{n.content}"
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 mt-1.5">
-                          {n.type === 'support' ? (
-                            <Heart className="w-3 h-3 text-rose-500 fill-rose-500" />
+                      >
+                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                          {n.actorAvatarUrl ? (
+                            <img src={n.actorAvatarUrl} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <MessageSquare className="w-3 h-3 text-emerald-500" />
+                            <NotificationActivityIcon notification={n} />
                           )}
-                          <span className="text-[10px] text-slate-400">{timeAgo(n.createdAt)}</span>
                         </div>
-                      </div>
-                      {!n.isRead && (
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                      )}
-                    </button>
-                  ))}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 leading-snug">{notificationMessage(n)}</p>
+                          {targetTitle && <p className="text-[11px] font-semibold text-orange-800 dark:text-orange-300 mt-1 line-clamp-1">“{targetTitle}”</p>}
+                          {n.content && <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 line-clamp-2">“{n.content}”</p>}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <NotificationActivityIcon notification={n} />
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">{timeAgo(n.createdAt)}</span>
+                          </div>
+                        </div>
+                        {!n.isRead && <div className="w-2 h-2 rounded-full bg-orange-500 mt-2 shrink-0" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
-            <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-center">
-              <button onClick={() => { navigate('/perfil'); setIsOpen(false); }} className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
-                Ver todas as atividades
+            <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 text-center">
+              <button onClick={() => { navigate('/notificacoes'); setIsOpen(false); }} className="text-xs font-bold text-orange-700 dark:text-orange-300 hover:underline underline-offset-2">
+                Ver todas as notificações
               </button>
             </div>
           </div>
@@ -170,7 +176,7 @@ function NeighborhoodPicker() {
   const [cepInput, setCepInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
-  const normalize = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
   const neighborhoodCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -178,19 +184,15 @@ function NeighborhoodPicker() {
       const loc = normalize(p.location || '');
       curitibaNeighborhoods.forEach(n => {
         const nName = normalize(n.name);
-        if (loc.includes(nName)) {
-          counts[n.name] = (counts[n.name] || 0) + 1;
-        }
+        if (loc.includes(nName)) counts[n.name] = (counts[n.name] || 0) + 1;
       });
     });
     return counts;
   }, [posts]);
 
-  const filteredNeighborhoods = useMemo(() => {
-    return curitibaNeighborhoods.filter(n =>
-      n.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a, b) => a.name.localeCompare(b.name));
-  }, [searchTerm]);
+  const filteredNeighborhoods = useMemo(() => curitibaNeighborhoods.filter(n =>
+    n.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  ).sort((a, b) => a.name.localeCompare(b.name)), [searchTerm]);
 
   const handleCepSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -301,22 +303,15 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isActive = (path: string) =>
-    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+  const isActive = (path: string) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    document.title = currentNeighborhood.name
-      ? `No Meu Bairro — ${currentNeighborhood.name}`
-      : 'No Meu Bairro — Todos os bairros';
+    document.title = currentNeighborhood.name ? `No Meu Bairro — ${currentNeighborhood.name}` : 'No Meu Bairro — Todos os bairros';
   }, [location.pathname, currentNeighborhood]);
 
   if (!isNeighborhoodSelected) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
-        <NeighborhoodPicker />
-      </div>
-    );
+    return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col"><NeighborhoodPicker /></div>;
   }
 
   const displayNeighborhood = currentNeighborhood.name || 'Todos os bairros';
@@ -329,14 +324,9 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center justify-between h-16 gap-4">
             <div className="flex items-center gap-3 shrink-0">
               <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
-                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300">
-                  <img src="/logo.png" alt="" className="w-full h-full object-cover" />
-                </div>
-                <div className="flex flex-col items-start hidden lg:flex">
-                  <span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span>
-                </div>
+                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
+                <div className="flex flex-col items-start hidden lg:flex"><span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span></div>
               </button>
-
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
               <button onClick={clearSelection} className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all" title="Escolher bairro para filtrar">
                 <div className="flex flex-col items-start">
@@ -351,36 +341,23 @@ export default function Layout({ children }: LayoutProps) {
               {navItems.map((item) => {
                 const Icon = item.icon; const active = isActive(item.path);
                 return (
-                  <button key={item.path} onClick={() => navigate(item.path)}
-                    className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0',
-                      active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')}
-                    aria-current={active ? 'page' : undefined}>
-                    <Icon className="w-4 h-4" />
-                    <span className="hidden xl:inline">{item.label}</span>
+                  <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0', active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-current={active ? 'page' : undefined}>
+                    <Icon className="w-4 h-4" /><span className="hidden xl:inline">{item.label}</span>
                   </button>
                 );
               })}
             </nav>
 
             <div className="flex items-center gap-1 lg:gap-2 shrink-0">
-              <button onClick={toggle} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>
-                {isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
-              </button>
+              <button onClick={toggle} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>{isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}</button>
               <NotificationBell />
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5 lg:gap-2">
-                  <button onClick={() => navigate('/perfil')} className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors" aria-label={`Perfil de ${user.name}`}>
-                    {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}
-                  </button>
-                  <button onClick={logout} className="hidden lg:flex p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200" aria-label="Sair" title="Sair">
-                    <LogOut className="w-[18px] h-[18px]" />
-                  </button>
+                  <button onClick={() => navigate('/perfil')} className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors" aria-label={`Perfil de ${user.name}`}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}</button>
+                  <button onClick={logout} className="hidden lg:flex p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200" aria-label="Sair" title="Sair"><LogOut className="w-[18px] h-[18px]" /></button>
                 </div>
               ) : (
-                <button onClick={() => navigate('/login')} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold transition-all duration-200 shadow-sm shadow-emerald-600/20 active:scale-[0.98]">
-                  <UserCircle className="w-4 h-4" /><span className="hidden sm:inline">Entrar</span>
-                </button>
+                <button onClick={() => navigate('/login')} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold transition-all duration-200 shadow-sm shadow-emerald-600/20 active:scale-[0.98]"><UserCircle className="w-4 h-4" /><span className="hidden sm:inline">Entrar</span></button>
               )}
             </div>
           </div>
@@ -393,30 +370,13 @@ export default function Layout({ children }: LayoutProps) {
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
             <div className="grid sm:grid-cols-3 gap-8">
               <div>
-                <div className="flex items-center gap-2.5 mb-3">
-                  <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
-                  <div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{displayNeighborhood}</p></div>
-                </div>
+                <div className="flex items-center gap-2.5 mb-3"><div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div><div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{displayNeighborhood}</p></div></div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">Plataforma comunitária criada para conectar moradores, resolver problemas e fortalecer os bairros de Curitiba{currentNeighborhood.name ? ` — filtro: ${currentNeighborhood.name}` : ''}.</p>
               </div>
-              <div>
-                <h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Navegação</h4>
-                <ul className="space-y-2">{navItems.map(item => <li key={item.path}><button onClick={() => navigate(item.path)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">{item.label}</button></li>)}</ul>
-              </div>
-              <div>
-                <h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Apoio</h4>
-                <ul className="space-y-2 text-sm text-slate-500 dark:text-slate-400">
-                  <li><a href="tel:190" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Polícia Militar: 190</a></li>
-                  <li><a href="tel:180" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Mulher: 180</a></li>
-                  <li><a href="tel:192" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">SAMU: 192</a></li>
-                  <li><a href="tel:100" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Direitos Humanos: 100</a></li>
-                </ul>
-              </div>
+              <div><h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Navegação</h4><ul className="space-y-2">{navItems.map(item => <li key={item.path}><button onClick={() => navigate(item.path)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">{item.label}</button></li>)}</ul></div>
+              <div><h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Apoio</h4><ul className="space-y-2 text-sm text-slate-500 dark:text-slate-400"><li><a href="tel:190" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Polícia Militar: 190</a></li><li><a href="tel:180" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Mulher: 180</a></li><li><a href="tel:192" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">SAMU: 192</a></li><li><a href="tel:100" className="hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">Direitos Humanos: 100</a></li></ul></div>
             </div>
-            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p className="text-[11px] text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} No Meu Bairro — Curitiba. Todos os direitos reservados.</p>
-              <p className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">Feito com <Heart className="w-3 h-3 text-red-400 inline fill-current" /> pelo 2°DS</p>
-            </div>
+            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3"><p className="text-[11px] text-slate-400 dark:text-slate-500">© {new Date().getFullYear()} No Meu Bairro — Curitiba. Todos os direitos reservados.</p><p className="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">Feito com <Heart className="w-3 h-3 text-red-400 inline fill-current" /> pelo 2°DS</p></div>
           </div>
         </footer>
       </main>
@@ -427,7 +387,7 @@ export default function Layout({ children }: LayoutProps) {
             const Icon = item.icon; const active = isActive(item.path);
             return (
               <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-300 flex-1 relative active:scale-90', active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')} aria-current={active ? 'page' : undefined}>
-                <div className={cn("p-2 rounded-xl transition-all duration-300", active && "bg-emerald-50 dark:bg-emerald-500/10 scale-110 shadow-sm")}><Icon className="w-5 h-5 transition-transform duration-300" strokeWidth={active ? 2.5 : 2} /></div>
+                <div className={cn('p-2 rounded-xl transition-all duration-300', active && 'bg-emerald-50 dark:bg-emerald-500/10 scale-110 shadow-sm')}><Icon className="w-5 h-5 transition-transform duration-300" strokeWidth={active ? 2.5 : 2} /></div>
                 <span className="text-[10px] font-bold tracking-tight transition-all">{item.label}</span>
               </button>
             );
