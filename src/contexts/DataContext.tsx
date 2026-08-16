@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode, useEffect } from 'react';
 import type { Post, PostCategory, PostStatus, CommunityEvent, EventType, Comment, AppNotification } from '../types';
 import { useAuth } from './AuthContext';
-import { useNeighborhood, curitibaNeighborhoods } from './NeighborhoodContext';
+import { curitibaNeighborhoods } from './NeighborhoodContext';
 import { supabase } from '../utils/supabase';
 import { storePostImage } from '../utils/imageStorage';
 
@@ -104,7 +104,6 @@ function createAnonymousEditToken() {
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  useNeighborhood();
   const [posts, setPosts] = useState<Post[]>([]);
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -205,6 +204,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         updatedAt: p.updated_at,
       })));
 
+      if (eventsRes.error) console.error('Erro ao carregar eventos:', eventsRes.error);
       if (eventsRes.data) setEvents(eventsRes.data.map((e: any) => ({
         id: e.id,
         title: e.title,
@@ -219,6 +219,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         attendanceCount: e.event_attendance?.[0]?.count ?? 0,
       })));
 
+      if (commentsRes.error) console.error('Erro ao carregar comentários:', commentsRes.error);
       if (commentsRes.data) setComments(commentsRes.data.map((c: any) => ({
         id: c.id,
         postId: c.post_id,
@@ -269,10 +270,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!user) return { error: 'Not authenticated' };
     const stored = await storePostImage(data.imageUrl, user.id);
     if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
-    const res = await supabase.from('posts').insert({ author_id: user.id, category: data.category, title: data.title, description: data.description, image_url: stored.url, location: data.location, latitude: data.latitude, longitude: data.longitude, is_anonymous: false });
-    if (!res.error) await fetchData();
-    return res;
-  }, [user, fetchData]);
+
+    const { data: inserted, error } = await supabase.from('posts').insert({
+      author_id: user.id,
+      category: data.category,
+      title: data.title,
+      description: data.description,
+      image_url: stored.url,
+      location: data.location,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      is_anonymous: false,
+    }).select('id,author_id,category,status,title,description,image_url,location,latitude,longitude,created_at,updated_at,comments_count').single();
+
+    if (!error && inserted) {
+      const nextPost: Post = {
+        id: inserted.id,
+        authorId: user.id,
+        authorName: user.name || 'Morador',
+        authorAvatarUrl: user.avatarUrl,
+        category: inserted.category,
+        status: inserted.status,
+        title: inserted.title,
+        description: inserted.description,
+        imageUrl: inserted.image_url || undefined,
+        location: withInferredNeighborhood(inserted.location, inserted.latitude, inserted.longitude),
+        latitude: inserted.latitude,
+        longitude: inserted.longitude,
+        supports: 0,
+        commentsCount: inserted.comments_count ?? 0,
+        createdAt: inserted.created_at,
+        updatedAt: inserted.updated_at,
+      };
+      setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
+    }
+
+    return { data: inserted, error } as any;
+  }, [user]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     const stored = await storePostImage(data.imageUrl, 'anonymous');
@@ -297,31 +331,80 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
 
     saveAnonControl(result.postId, editToken);
-    await fetchData();
+    const { data: row } = await supabase.from('posts')
+      .select('id,category,status,title,description,image_url,location,latitude,longitude,created_at,updated_at,comments_count')
+      .eq('id', result.postId)
+      .maybeSingle();
+    if (row) {
+      const nextPost: Post = {
+        id: row.id,
+        authorId: 'anonymous',
+        authorName: 'Denúncia Anônima',
+        category: row.category,
+        status: row.status,
+        title: row.title,
+        description: row.description,
+        imageUrl: row.image_url || undefined,
+        location: withInferredNeighborhood(row.location, row.latitude, row.longitude),
+        latitude: row.latitude,
+        longitude: row.longitude,
+        supports: 0,
+        commentsCount: row.comments_count ?? 0,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+      setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
+    }
     return { error: null };
-  }, [fetchData, saveAnonControl]);
+  }, [saveAnonControl]);
 
   const supportPost = useCallback(async (postId: string) => {
     if (!user || processingRef.current.has(postId)) return;
     processingRef.current.add(postId);
     try {
       const { data: existing } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle();
-      if (existing) await supabase.from('post_supports').delete().eq('id', existing.id);
-      else await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
-      await fetchData();
-    } finally { processingRef.current.delete(postId); }
-  }, [user, fetchData]);
+      if (existing) {
+        const { error } = await supabase.from('post_supports').delete().eq('id', existing.id);
+        if (!error) setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: Math.max(0, post.supports - 1) } : post));
+      } else {
+        const { error } = await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
+        if (!error) setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: post.supports + 1 } : post));
+      }
+    } finally {
+      processingRef.current.delete(postId);
+    }
+  }, [user]);
 
   const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
     if (!user || !content.trim()) return;
-    const { error } = await supabase.from('comments').insert({ post_id: postId, author_id: user.id, parent_id: parentId, content: content.trim() });
-    if (!error) await fetchData();
-  }, [user, fetchData]);
+    const { data: inserted, error } = await supabase.from('comments')
+      .insert({ post_id: postId, author_id: user.id, parent_id: parentId, content: content.trim() })
+      .select('id,post_id,author_id,content,parent_id,created_at')
+      .single();
+    if (error || !inserted) return;
+
+    const nextComment: Comment = {
+      id: inserted.id,
+      postId: inserted.post_id,
+      authorId: inserted.author_id,
+      authorName: user.name || 'Morador',
+      authorAvatarUrl: user.avatarUrl,
+      content: inserted.content,
+      parentId: inserted.parent_id,
+      createdAt: inserted.created_at,
+    };
+    setComments(prev => [nextComment, ...prev.filter(comment => comment.id !== nextComment.id)].slice(0, COMMENT_LIMIT));
+    setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
+  }, [user]);
 
   const deleteComment = useCallback(async (commentId: string) => {
+    const target = comments.find(comment => comment.id === commentId);
     const { error } = await supabase.from('comments').delete().eq('id', commentId);
-    if (!error) await fetchData();
-  }, [fetchData]);
+    if (!error) {
+      setComments(prev => prev.filter(comment => comment.id !== commentId));
+      if (target?.postId) setPosts(prev => prev.map(post => post.id === target.postId ? { ...post, commentsCount: Math.max(0, post.commentsCount - 1) } : post));
+    }
+  }, [comments]);
 
   const deletePost = useCallback(async (postId: string): Promise<ActionResult> => {
     const target = posts.find(post => post.id === postId);
@@ -333,12 +416,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (error || !data?.ok) return { ok: false, error: data?.error || error?.message || 'Não foi possível excluir a denúncia.' };
       clearAnonControl(postId);
       setPosts(prev => prev.filter(post => post.id !== postId));
+      setComments(prev => prev.filter(comment => comment.postId !== postId));
       return { ok: true };
     }
 
     const { error } = await supabase.from('posts').delete().eq('id', postId);
     if (error) return { ok: false, error: error.message };
     setPosts(prev => prev.filter(post => post.id !== postId));
+    setComments(prev => prev.filter(comment => comment.postId !== postId));
     return { ok: true };
   }, [posts, getAnonTokens, clearAnonControl]);
 
@@ -362,16 +447,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const deleteEvent = useCallback(async (eventId: string) => {
     const { error } = await supabase.from('events').delete().eq('id', eventId);
-    if (!error) await fetchData();
-  }, [fetchData]);
+    if (!error) setEvents(prev => prev.filter(event => event.id !== eventId));
+  }, []);
 
   const toggleAttendance = useCallback(async (eventId: string) => {
     if (!user) return;
     const { data: existing } = await supabase.from('event_attendance').select('id').eq('event_id', eventId).eq('user_id', user.id).maybeSingle();
-    if (existing) await supabase.from('event_attendance').delete().eq('id', existing.id);
-    else await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
-    await fetchData();
-  }, [user, fetchData]);
+    if (existing) {
+      const { error } = await supabase.from('event_attendance').delete().eq('id', existing.id);
+      if (!error) setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: Math.max(0, (event.attendanceCount || 0) - 1) } : event));
+    } else {
+      const { error } = await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
+      if (!error) setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: (event.attendanceCount || 0) + 1 } : event));
+    }
+  }, [user]);
 
   const getEventAttendees = useCallback(async (eventId: string) => {
     const { data, error } = await supabase.from('event_attendance').select('id,users:user_id(name,avatar_url)').eq('event_id', eventId).limit(100);
@@ -381,10 +470,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
-    const res = await supabase.from('events').insert({ title: data.title, description: data.description, event_date: data.date, location: data.location, type: data.type, latitude: data.latitude, longitude: data.longitude, created_by: user.id });
-    if (!res.error) await fetchData();
-    return res;
-  }, [user, fetchData]);
+    const { data: inserted, error } = await supabase.from('events').insert({
+      title: data.title,
+      description: data.description,
+      event_date: data.date,
+      location: data.location,
+      type: data.type,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      created_by: user.id,
+    }).select('id,title,description,event_date,location,latitude,longitude,type,created_by,created_at').single();
+
+    if (!error && inserted) {
+      const nextEvent: CommunityEvent = {
+        id: inserted.id,
+        title: inserted.title,
+        description: inserted.description,
+        date: inserted.event_date,
+        location: inserted.location,
+        latitude: inserted.latitude,
+        longitude: inserted.longitude,
+        type: inserted.type,
+        createdBy: inserted.created_by,
+        createdAt: inserted.created_at,
+        attendanceCount: 0,
+      };
+      setEvents(prev => [...prev.filter(event => event.id !== nextEvent.id), nextEvent]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .slice(0, EVENT_LIMIT));
+    }
+    return { data: inserted, error } as any;
+  }, [user]);
 
   const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => {
     await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason });
