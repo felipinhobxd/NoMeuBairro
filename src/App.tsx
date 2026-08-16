@@ -52,7 +52,6 @@ export default function App() {
                     <Suspense fallback={<RouteFallback />}>
                       <Routes>
                         <Route path="/" element={<Feed />} />
-                        <Route path="/guia" element={<Empregos />} />
                         <Route path="/empregos" element={<Empregos />} />
                         <Route path="/mural" element={<Mural />} />
                         <Route path="/denuncias" element={<Denuncias />} />
