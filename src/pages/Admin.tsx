@@ -1,0 +1,205 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CalendarDays, Check, MessageSquare, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Button, Card, EmptyState, useToast } from '../components/UI';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../utils/supabase';
+
+type ModerationItem = {
+  report_id: string;
+  reason: string;
+  report_status: string;
+  reported_at: string;
+  post_id?: string | null;
+  comment_id?: string | null;
+  event_id?: string | null;
+  content_type: 'post' | 'comment' | 'event' | string;
+  content_title: string;
+  content_preview: string;
+  content_author_name: string;
+  reporter_name: string;
+};
+
+const typeMeta: Record<string, { label: string; icon: typeof MessageSquare }> = {
+  post: { label: 'Post do feed', icon: MessageSquare },
+  comment: { label: 'Comentário', icon: MessageSquare },
+  event: { label: 'Evento do mural', icon: CalendarDays },
+};
+
+export default function Admin() {
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  const [allowed, setAllowed] = useState(false);
+  const [items, setItems] = useState<ModerationItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const loadQueue = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      let result = await supabase.rpc('get_moderation_queue_v2', { p_limit: 100 });
+      if (result.error && /get_moderation_queue_v2/i.test(result.error.message || '')) {
+        result = await supabase.rpc('get_moderation_queue', { p_limit: 100 });
+      }
+      if (result.error) throw result.error;
+      setItems((result.data || []) as ModerationItem[]);
+    } catch (err: any) {
+      setItems([]);
+      setError(err?.message || 'Não foi possível carregar as denúncias.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      if (!isAuthenticated) {
+        setCheckingAccess(false);
+        setAllowed(false);
+        return;
+      }
+      const { data, error: accessError } = await supabase.rpc('is_moderator');
+      if (!active) return;
+      const canModerate = !accessError && Boolean(data);
+      setAllowed(canModerate);
+      setCheckingAccess(false);
+      if (canModerate) void loadQueue();
+    };
+    void check();
+    return () => { active = false; };
+  }, [isAuthenticated, loadQueue]);
+
+  const counts = useMemo(() => items.reduce((acc, item) => {
+    const key = item.content_type || 'post';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>), [items]);
+
+  const moderate = async (item: ModerationItem, action: 'ignore' | 'remove') => {
+    if (actingId) return;
+    if (action === 'remove' && !window.confirm(`Excluir definitivamente este ${item.content_type === 'event' ? 'evento' : item.content_type === 'comment' ? 'comentário' : 'post'}?`)) return;
+    setActingId(item.report_id);
+    try {
+      const { data, error: moderationError } = await supabase.rpc('moderate_content_report', {
+        p_report_id: item.report_id,
+        p_action: action,
+      });
+      if (moderationError || !data) throw moderationError || new Error('A ação não foi concluída.');
+      setItems(previous => previous.filter(report => report.report_id !== item.report_id));
+      toast(action === 'remove' ? 'Conteúdo excluído e denúncia resolvida.' : 'Conteúdo mantido e denúncia arquivada.', action === 'remove' ? 'info' : 'success');
+    } catch (err: any) {
+      toast(err?.message || 'Não foi possível concluir a moderação.', 'error');
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const openContent = (item: ModerationItem) => {
+    if (item.event_id) {
+      try { sessionStorage.setItem('anb-mural-focus-event', item.event_id); } catch {}
+      navigate('/mural');
+      return;
+    }
+    if (item.post_id) navigate(`/post/${item.post_id}`);
+  };
+
+  if (checkingAccess) return <div className="py-16 text-center text-sm text-slate-400">Verificando acesso administrativo...</div>;
+
+  if (!isAuthenticated) return (
+    <div className="max-w-xl mx-auto py-10">
+      <Card className="text-center">
+        <ShieldCheck className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Área administrativa</h1>
+        <p className="text-sm text-slate-500 mt-2">Entre em uma conta administrativa para acessar a moderação.</p>
+        <Button className="mt-5" onClick={() => navigate('/login')}>Entrar</Button>
+      </Card>
+    </div>
+  );
+
+  if (!allowed) return (
+    <div className="max-w-xl mx-auto py-10">
+      <Card className="text-center">
+        <AlertTriangle className="w-12 h-12 mx-auto text-amber-500 mb-4" />
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Acesso restrito</h1>
+        <p className="text-sm text-slate-500 mt-2">Sua conta não possui permissão de administrador ou moderador.</p>
+        <Button variant="secondary" className="mt-5" onClick={() => navigate('/')}>Voltar ao feed</Button>
+      </Card>
+    </div>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 mb-1"><ShieldCheck className="w-5 h-5" /><span className="text-xs font-black uppercase tracking-widest">Administração</span></div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Fila de denúncias</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Analise denúncias do feed, comentários e mural. “Deixar” mantém o conteúdo; “Excluir” remove o conteúdo denunciado.</p>
+        </div>
+        <button onClick={() => void loadQueue()} disabled={loading} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 disabled:opacity-50" aria-label="Atualizar denúncias">
+          <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card className="!p-4"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Pendentes</p><p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{items.length}</p></Card>
+        <Card className="!p-4"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Posts</p><p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{counts.post || 0}</p></Card>
+        <Card className="!p-4"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Comentários</p><p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{counts.comment || 0}</p></Card>
+        <Card className="!p-4"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Mural</p><p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{counts.event || 0}</p></Card>
+      </div>
+
+      {error && <Card className="!border-red-200 dark:!border-red-500/20"><p className="text-sm font-semibold text-red-600 dark:text-red-400">{error}</p></Card>}
+
+      {!loading && !error && items.length === 0 ? (
+        <EmptyState icon={ShieldCheck} title="Nenhuma denúncia pendente" description="A fila de moderação está em dia." />
+      ) : (
+        <div className="space-y-3">
+          {items.map(item => {
+            const meta = typeMeta[item.content_type] || typeMeta.post;
+            const Icon = meta.icon;
+            const busy = actingId === item.report_id;
+            return (
+              <Card key={item.report_id} className="!p-5">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-red-600 dark:text-red-400" /></div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{meta.label}</span>
+                        <span className="text-[11px] text-slate-400">{new Date(item.reported_at).toLocaleString('pt-BR')}</span>
+                      </div>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-white mt-2">{item.content_title || 'Conteúdo denunciado'}</h2>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line line-clamp-4">{item.content_preview || 'Sem prévia disponível.'}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-red-50/70 dark:bg-red-500/5 border border-red-100 dark:border-red-500/10 p-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-red-500">Motivo da denúncia</p>
+                    <p className="text-sm font-semibold text-red-700 dark:text-red-300 mt-1">{item.reason}</p>
+                  </div>
+
+                  <div className="grid sm:grid-cols-2 gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <p><strong className="text-slate-700 dark:text-slate-300">Autor:</strong> {item.content_author_name || 'Não identificado'}</p>
+                    <p><strong className="text-slate-700 dark:text-slate-300">Denunciante:</strong> {item.reporter_name || 'Não identificado'}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    {(item.post_id || item.event_id) && <Button variant="secondary" size="sm" onClick={() => openContent(item)}>Ver conteúdo</Button>}
+                    <Button variant="secondary" size="sm" disabled={Boolean(actingId)} onClick={() => void moderate(item, 'ignore')}><Check className="w-4 h-4" />Deixar</Button>
+                    <Button size="sm" disabled={Boolean(actingId)} className="!bg-red-600 hover:!bg-red-700 !text-white" onClick={() => void moderate(item, 'remove')}>
+                      {busy ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}Excluir
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
