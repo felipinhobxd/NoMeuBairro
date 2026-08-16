@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ComponentType } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
@@ -12,18 +12,66 @@ import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import { PanicButton, CookieConsent } from './components/Safety';
 
-const Feed = lazy(() => import('./pages/Feed'));
-const Mural = lazy(() => import('./pages/Mural'));
-const Denuncias = lazy(() => import('./pages/Denuncias'));
-const Mapa = lazy(() => import('./pages/Mapa'));
-const Estatisticas = lazy(() => import('./pages/Estatisticas'));
-const Login = lazy(() => import('./pages/Login'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const PublicProfile = lazy(() => import('./pages/PublicProfile'));
-const Empregos = lazy(() => import('./pages/Empregos'));
-const CompanyDashboard = lazy(() => import('./pages/CompanyDashboard'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const PostDetails = lazy(() => import('./pages/PostDetails'));
+type LazyModule = { default: ComponentType<any> };
+const CHUNK_RETRY_PREFIX = 'nmb-chunk-retry:';
+const CHUNK_REFRESH_QUERY = '_nmb_chunk_refresh';
+
+function isDynamicImportError(error: unknown) {
+  const text = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /failed to fetch dynamically imported module|dynamically imported module|importing a module script failed|error loading dynamically imported module|chunkloaderror|loading chunk/i.test(text);
+}
+
+function clearChunkRefreshQuery() {
+  try {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has(CHUNK_REFRESH_QUERY)) return;
+    url.searchParams.delete(CHUNK_REFRESH_QUERY);
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+}
+
+function lazyWithRetry(importer: () => Promise<LazyModule>, key: string) {
+  return lazy(async () => {
+    const retryKey = `${CHUNK_RETRY_PREFIX}${key}`;
+    try {
+      const loaded = await importer();
+      try { sessionStorage.removeItem(retryKey); } catch {}
+      clearChunkRefreshQuery();
+      return loaded;
+    } catch (error) {
+      if (!isDynamicImportError(error)) throw error;
+
+      let alreadyRetried = false;
+      try { alreadyRetried = sessionStorage.getItem(retryKey) === '1'; } catch {}
+      if (alreadyRetried) throw error;
+
+      try { sessionStorage.setItem(retryKey, '1'); } catch {}
+
+      // A deployment can invalidate a hashed Vite chunk while an older index.html is
+      // still open in the browser. Reload the document once with a cache-busting query
+      // so the browser receives the newest asset manifest instead of showing a blank/error page.
+      const url = new URL(window.location.href);
+      url.searchParams.set(CHUNK_REFRESH_QUERY, Date.now().toString());
+      window.location.replace(url.toString());
+
+      // Keep Suspense pending during the navigation instead of rendering the error boundary.
+      return await new Promise<LazyModule>(() => {});
+    }
+  });
+}
+
+const Feed = lazyWithRetry(() => import('./pages/Feed'), 'feed');
+const Mural = lazyWithRetry(() => import('./pages/Mural'), 'mural');
+const Denuncias = lazyWithRetry(() => import('./pages/Denuncias'), 'denuncias');
+const Mapa = lazyWithRetry(() => import('./pages/Mapa'), 'mapa');
+const Estatisticas = lazyWithRetry(() => import('./pages/Estatisticas'), 'estatisticas');
+const Login = lazyWithRetry(() => import('./pages/Login'), 'login');
+const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'), 'perfil');
+const PublicProfile = lazyWithRetry(() => import('./pages/PublicProfile'), 'perfil-publico');
+const Empregos = lazyWithRetry(() => import('./pages/Empregos'), 'empregos');
+const CompanyDashboard = lazyWithRetry(() => import('./pages/CompanyDashboard'), 'empresa');
+const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'notificacoes');
+const PostDetails = lazyWithRetry(() => import('./pages/PostDetails'), 'post');
 
 function RouteFallback() {
   return (
