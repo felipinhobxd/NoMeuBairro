@@ -19,12 +19,12 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - name: Apply targeted source patch
         run: python3 scripts/apply_admin_patch.py
-      - name: Install dependencies
-        run: npm ci
+      - name: Install dependencies without rewriting the existing lockfile
+        run: npm install --no-package-lock
       - name: Validate production build
         run: npm run build
       - name: Commit generated source changes
