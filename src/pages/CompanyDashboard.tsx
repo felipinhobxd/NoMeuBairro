@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Building2, Plus, Pencil, Power, Save, Trash2, X, Users, Mail, Phone, MapPin, FileText } from 'lucide-react';
+import { Building2, Plus, Pencil, Power, Save, Trash2, X, Users, Mail, Phone, MapPin, FileText, LocateFixed, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { curitibaNeighborhoods } from '../contexts/NeighborhoodContext';
+import { canonicalNeighborhoodName, curitibaNeighborhoods } from '../contexts/NeighborhoodContext';
 import { supabase } from '../utils/supabase';
+import { resolveCuritibaLocation } from '../utils/locationResolver';
 import { Card, Modal } from '../components/UI';
+import MapPicker from '../components/MapPicker';
 import type { EmploymentType, JobFormData, WorkModel, JobApplicationStatus } from '../types/jobs';
 
 const employmentOptions: Array<[EmploymentType, string]> = [
@@ -18,44 +20,10 @@ const applicantStatusLabels: Record<JobApplicationStatus, string> = {
 };
 const emptyForm: JobFormData = {
   title: '', description: '', requirements: '', benefits: '', salaryMin: '', salaryMax: '',
-  employmentType: 'clt', workModel: 'presencial', location: '', neighborhood: '', contactEmail: '',
-  contactWhatsapp: '', contactEmailEnabled: true, contactWhatsappEnabled: false, expiresAt: '',
+  employmentType: 'clt', workModel: 'presencial', location: '', neighborhood: '', locality: '',
+  latitude: undefined, longitude: undefined, contactEmail: '', contactWhatsapp: '',
+  contactEmailEnabled: true, contactWhatsappEnabled: false, expiresAt: '',
 };
-
-const normalizeText = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-
-type JobCoordinates = { latitude: number | null; longitude: number | null; precision: 'exact' | 'neighborhood' | null };
-
-async function resolveJobCoordinates(location: string, neighborhood: string): Promise<JobCoordinates> {
-  const street = location.trim();
-  const district = neighborhood.trim();
-  if (!street && !district) return { latitude: null, longitude: null, precision: null };
-
-  const query = [street, district, 'Curitiba', 'Paraná', 'Brasil'].filter(Boolean).join(', ');
-  try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`, {
-      headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' },
-    });
-    if (response.ok) {
-      const result = await response.json();
-      const first = Array.isArray(result) ? result[0] : null;
-      const latitude = Number(first?.lat);
-      const longitude = Number(first?.lon);
-      if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-        return { latitude, longitude, precision: street ? 'exact' : 'neighborhood' };
-      }
-    }
-  } catch {
-    // O fallback por bairro abaixo mantém a criação da vaga funcionando offline.
-  }
-
-  if (district) {
-    const fallback = curitibaNeighborhoods.find((item) => normalizeText(item.name) === normalizeText(district));
-    if (fallback) return { latitude: fallback.latitude, longitude: fallback.longitude, precision: 'neighborhood' };
-  }
-
-  return { latitude: null, longitude: null, precision: null };
-}
 
 function toForm(job: any): JobFormData {
   return {
@@ -63,6 +31,8 @@ function toForm(job: any): JobFormData {
     benefits: job.benefits || '', salaryMin: job.salary_min == null ? '' : String(job.salary_min),
     salaryMax: job.salary_max == null ? '' : String(job.salary_max), employmentType: job.employment_type || 'clt',
     workModel: job.work_model || 'presencial', location: job.location || '', neighborhood: job.neighborhood || '',
+    locality: job.locality || '', latitude: job.latitude == null ? undefined : Number(job.latitude),
+    longitude: job.longitude == null ? undefined : Number(job.longitude),
     contactEmail: job.contact_email || '', contactWhatsapp: job.contact_whatsapp || '',
     contactEmailEnabled: Boolean(job.contact_email_enabled), contactWhatsappEnabled: Boolean(job.contact_whatsapp_enabled),
     expiresAt: job.expires_at || '',
@@ -81,6 +51,7 @@ export default function CompanyDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locatingJob, setLocatingJob] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const load = async () => {
@@ -99,20 +70,13 @@ export default function CompanyDashboard() {
     if (loadedJobs.length > 0) {
       const jobIds = loadedJobs.map((job) => job.id);
       const applicationsResult = await supabase
-        .from('job_applications')
-        .select('*')
-        .in('job_id', jobIds)
-        .neq('status', 'withdrawn')
-        .order('created_at', { ascending: false });
+        .from('job_applications').select('*').in('job_id', jobIds).neq('status', 'withdrawn').order('created_at', { ascending: false });
       if (!applicationsResult.error) {
         const loadedApplications = applicationsResult.data || [];
         setApplications(loadedApplications);
         const applicantIds = [...new Set(loadedApplications.map((application: any) => application.user_id))];
         if (applicantIds.length > 0) {
-          const resumesResult = await supabase
-            .from('user_resumes')
-            .select('*, users(name, avatar_url)')
-            .in('user_id', applicantIds);
+          const resumesResult = await supabase.from('user_resumes').select('*, users(name, avatar_url)').in('user_id', applicantIds);
           if (!resumesResult.error) {
             const resumeMap: Record<string, any> = {};
             for (const resume of resumesResult.data || []) resumeMap[resume.user_id] = resume;
@@ -143,7 +107,12 @@ export default function CompanyDashboard() {
 
   const openNew = () => {
     setEditingId(null);
-    setForm({ ...emptyForm, contactEmail: company?.email || user?.email || '', neighborhood: company?.neighborhood || '' });
+    setForm({
+      ...emptyForm,
+      contactEmail: company?.email || user?.email || '',
+      location: company?.address || '',
+      neighborhood: canonicalNeighborhoodName(company?.neighborhood) || '',
+    });
     setMessage(null);
     setShowForm(true);
   };
@@ -160,11 +129,51 @@ export default function CompanyDashboard() {
       whatsapp: company.whatsapp || null,
       website: company.website || null,
       address: company.address || null,
-      neighborhood: company.neighborhood || null,
+      neighborhood: canonicalNeighborhoodName(company.neighborhood) || company.neighborhood || null,
     }).eq('id', user.id);
     setMessage(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Perfil da empresa salvo.' });
     setSaving(false);
     if (!error) void load();
+  };
+
+  const resolveAndApplyPoint = async (latitude: number, longitude: number, fillAddress = false) => {
+    const snapshot = form;
+    setForm((prev) => ({ ...prev, latitude, longitude }));
+    const resolved = await resolveCuritibaLocation({
+      location: snapshot.location,
+      neighborhood: snapshot.neighborhood,
+      latitude,
+      longitude,
+    });
+    setForm((prev) => ({
+      ...prev,
+      latitude: resolved.latitude ?? latitude,
+      longitude: resolved.longitude ?? longitude,
+      neighborhood: resolved.neighborhood || prev.neighborhood,
+      locality: resolved.locality || '',
+      location: fillAddress && !prev.location.trim() && resolved.displayAddress ? resolved.displayAddress : prev.location,
+    }));
+  };
+
+  const useCurrentJobLocation = () => {
+    if (!navigator.geolocation) {
+      setMessage({ type: 'error', text: 'Este navegador não oferece localização por GPS.' });
+      return;
+    }
+    setLocatingJob(true);
+    setMessage(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        void resolveAndApplyPoint(position.coords.latitude, position.coords.longitude, true)
+          .then(() => setMessage({ type: 'success', text: 'Localização capturada. Confira o ponto no mapa antes de publicar.' }))
+          .finally(() => setLocatingJob(false));
+      },
+      () => {
+        setLocatingJob(false);
+        setMessage({ type: 'error', text: 'Não foi possível acessar sua localização. Autorize o GPS ou marque o ponto no mapa.' });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    );
   };
 
   const saveJob = async () => {
@@ -177,25 +186,18 @@ export default function CompanyDashboard() {
     if (!form.contactEmailEnabled && !form.contactWhatsappEnabled) return setMessage({ type: 'error', text: 'Escolha pelo menos uma forma de contato.' });
     if (form.contactEmailEnabled && !form.contactEmail.trim()) return setMessage({ type: 'error', text: 'Informe o e-mail de contato.' });
     if (form.contactWhatsappEnabled && form.contactWhatsapp.replace(/\D/g, '').length < 10) return setMessage({ type: 'error', text: 'Informe um WhatsApp válido.' });
+    if (form.workModel !== 'remoto' && !form.location.trim() && (form.latitude == null || form.longitude == null)) {
+      return setMessage({ type: 'error', text: 'Informe o endereço, use sua localização ou marque o ponto da vaga no mapa.' });
+    }
 
     setSaving(true);
     setMessage(null);
-
-    const existingJob = editingId ? jobs.find((job) => job.id === editingId) : null;
-    const locationChanged = !existingJob
-      || (existingJob.location || '').trim() !== form.location.trim()
-      || (existingJob.neighborhood || '').trim() !== form.neighborhood.trim();
-
-    let coordinates: JobCoordinates;
-    if (!locationChanged && existingJob?.latitude != null && existingJob?.longitude != null) {
-      coordinates = {
-        latitude: Number(existingJob.latitude),
-        longitude: Number(existingJob.longitude),
-        precision: existingJob.location_precision === 'exact' ? 'exact' : 'neighborhood',
-      };
-    } else {
-      coordinates = await resolveJobCoordinates(form.location, form.neighborhood);
-    }
+    const resolved = await resolveCuritibaLocation({
+      location: form.location,
+      neighborhood: form.neighborhood,
+      latitude: form.latitude,
+      longitude: form.longitude,
+    });
 
     const payload = {
       company_id: user.id,
@@ -208,10 +210,11 @@ export default function CompanyDashboard() {
       employment_type: form.employmentType,
       work_model: form.workModel,
       location: form.location.trim() || null,
-      neighborhood: form.neighborhood.trim() || null,
-      latitude: coordinates.latitude,
-      longitude: coordinates.longitude,
-      location_precision: coordinates.precision,
+      neighborhood: resolved.neighborhood || canonicalNeighborhoodName(form.neighborhood) || null,
+      locality: resolved.locality || form.locality || null,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
+      location_precision: resolved.precision,
       contact_email: form.contactEmailEnabled ? form.contactEmail.trim() : null,
       contact_whatsapp: form.contactWhatsappEnabled ? form.contactWhatsapp.replace(/\D/g, '') : null,
       contact_email_enabled: form.contactEmailEnabled,
@@ -226,10 +229,11 @@ export default function CompanyDashboard() {
 
     if (result.error) setMessage({ type: 'error', text: result.error.message });
     else {
-      const locationNote = coordinates.precision === 'neighborhood'
-        ? ' A posição no mapa ficou aproximada pelo bairro; informe uma rua real para maior precisão.'
-        : coordinates.precision === 'exact'
-          ? ' A localização foi posicionada no mapa.'
+      const area = [resolved.locality, resolved.neighborhood].filter(Boolean).join(' · ');
+      const locationNote = resolved.precision === 'neighborhood'
+        ? ` Localização aproximada${area ? ` em ${area}` : ''}. Informe uma rua/número ou marque o mapa para maior precisão.`
+        : resolved.latitude != null
+          ? ` Localização confirmada${area ? ` em ${area}` : ''}.`
           : '';
       setMessage({ type: 'success', text: `${editingId ? 'Oportunidade atualizada.' : 'Oportunidade publicada com sucesso.'}${locationNote}` });
       setShowForm(false);
@@ -282,15 +286,16 @@ export default function CompanyDashboard() {
     {message && <div className={message.type === 'error' ? 'p-3 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 text-sm' : 'p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-sm'}>{message.text}</div>}
 
     <Card><div className="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h2 className="font-bold text-slate-900 dark:text-white">Suas oportunidades</h2><p className="text-sm text-slate-500">Publique vagas e acompanhe quem demonstrou interesse.</p></div><button onClick={openNew} className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold"><Plus className="w-4 h-4" />Nova oportunidade</button></div>
-      {jobs.length === 0 ? <div className="py-10 text-center"><p className="font-semibold text-slate-900 dark:text-white">Nenhuma oportunidade publicada.</p><button onClick={openNew} className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold">Publicar agora</button></div> : <div className="space-y-3">{jobs.map((job) => { const interestedCount = applicationCountByJob[job.id] || 0; return <div key={job.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700"><div className="flex justify-between gap-3"><div><h3 className="font-bold text-slate-900 dark:text-white">{job.title}</h3><p className="text-xs text-slate-500 mt-1">{job.neighborhood || 'Sem bairro'} · {modelOptions.find((item) => item[0] === job.work_model)?.[1] || job.work_model} · {employmentOptions.find((item) => item[0] === job.employment_type)?.[1] || job.employment_type}</p>{job.latitude != null && <p className="text-[11px] text-slate-400 mt-1 inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location_precision === 'exact' ? 'Posição exata no mapa' : 'Posição aproximada pelo bairro'}</p>}</div><span className={job.is_active ? 'text-xs font-bold text-emerald-700 dark:text-emerald-300' : 'text-xs font-bold text-slate-500'}>{job.is_active ? 'Ativa' : 'Pausada'}</span></div><div className="flex gap-2 mt-4 flex-wrap">{interestedCount > 0 && <button onClick={() => setSelectedJobId(job.id)} className="px-3 py-2 rounded-lg bg-orange-50 dark:bg-orange-500/10 text-orange-800 dark:text-orange-300 text-sm font-semibold inline-flex gap-2 items-center border border-orange-200 dark:border-orange-500/20"><Users className="w-4 h-4" />Interessados ({interestedCount})</button>}<button onClick={() => editJob(job)} className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-semibold inline-flex gap-2 items-center"><Pencil className="w-4 h-4" />Editar</button><button onClick={() => toggleJob(job)} className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-semibold inline-flex gap-2 items-center"><Power className="w-4 h-4" />{job.is_active ? 'Pausar' : 'Ativar'}</button><button onClick={() => deleteJob(job)} className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm font-semibold inline-flex gap-2 items-center"><Trash2 className="w-4 h-4" />Excluir</button></div></div>; })}</div>}
+      {jobs.length === 0 ? <div className="py-10 text-center"><p className="font-semibold text-slate-900 dark:text-white">Nenhuma oportunidade publicada.</p><button onClick={openNew} className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold">Publicar agora</button></div> : <div className="space-y-3">{jobs.map((job) => { const interestedCount = applicationCountByJob[job.id] || 0; const area = [job.locality, job.neighborhood].filter(Boolean).join(' · '); return <div key={job.id} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700"><div className="flex justify-between gap-3"><div><h3 className="font-bold text-slate-900 dark:text-white">{job.title}</h3><p className="text-xs text-slate-500 mt-1">{area || 'Sem bairro identificado'} · {modelOptions.find((item) => item[0] === job.work_model)?.[1] || job.work_model} · {employmentOptions.find((item) => item[0] === job.employment_type)?.[1] || job.employment_type}</p>{job.latitude != null && <p className="text-[11px] text-slate-400 mt-1 inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location_precision === 'neighborhood' ? 'Posição aproximada pelo bairro' : 'Posição confirmada no mapa'}</p>}</div><span className={job.is_active ? 'text-xs font-bold text-emerald-700 dark:text-emerald-300' : 'text-xs font-bold text-slate-500'}>{job.is_active ? 'Ativa' : 'Pausada'}</span></div><div className="flex gap-2 mt-4 flex-wrap">{interestedCount > 0 && <button onClick={() => setSelectedJobId(job.id)} className="px-3 py-2 rounded-lg bg-orange-50 dark:bg-orange-500/10 text-orange-800 dark:text-orange-300 text-sm font-semibold inline-flex gap-2 items-center border border-orange-200 dark:border-orange-500/20"><Users className="w-4 h-4" />Interessados ({interestedCount})</button>}<button onClick={() => editJob(job)} className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-semibold inline-flex gap-2 items-center"><Pencil className="w-4 h-4" />Editar</button><button onClick={() => toggleJob(job)} className="px-3 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-sm font-semibold inline-flex gap-2 items-center"><Power className="w-4 h-4" />{job.is_active ? 'Pausar' : 'Ativar'}</button><button onClick={() => deleteJob(job)} className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm font-semibold inline-flex gap-2 items-center"><Trash2 className="w-4 h-4" />Excluir</button></div></div>; })}</div>}
     </Card>
 
     <Card><h2 className="font-bold mb-4 text-slate-900 dark:text-white">Perfil da empresa</h2><div className="grid sm:grid-cols-2 gap-3">
-      {([['company_name','Nome da empresa'],['email','E-mail'],['phone','Telefone'],['whatsapp','WhatsApp'],['website','Site'],['address','Endereço'],['neighborhood','Bairro']] as const).map(([key, label]) => <input key={key} value={company[key] || ''} onChange={(event) => setCompany({ ...company, [key]: event.target.value })} placeholder={label} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />)}
+      {([['company_name','Nome da empresa'],['email','E-mail'],['phone','Telefone'],['whatsapp','WhatsApp'],['website','Site'],['address','Endereço']] as const).map(([key, label]) => <input key={key} value={company[key] || ''} onChange={(event) => setCompany({ ...company, [key]: event.target.value })} placeholder={label} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />)}
+      <select value={canonicalNeighborhoodName(company.neighborhood) || ''} onChange={(event) => setCompany({ ...company, neighborhood: event.target.value })} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white"><option value="">Bairro da empresa</option>{curitibaNeighborhoods.map((item) => <option key={item.name} value={item.name}>{item.name}{item.kind === 'locality' ? ` (${item.parentNeighborhood})` : ''}</option>)}</select>
       <textarea value={company.description || ''} onChange={(event) => setCompany({ ...company, description: event.target.value })} placeholder="Descrição da empresa" rows={4} className="sm:col-span-2 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
     </div><button onClick={saveProfile} disabled={saving} className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold inline-flex gap-2 items-center"><Save className="w-4 h-4" />Salvar perfil</button></Card>
 
-    {showForm && <div className="fixed inset-0 z-50 bg-black/60 p-4 overflow-y-auto"><div className="max-w-3xl mx-auto my-8 bg-white dark:bg-slate-900 rounded-2xl p-6"><div className="flex justify-between items-center mb-5"><div><h2 className="text-xl font-bold text-slate-900 dark:text-white">{editingId ? 'Editar oportunidade' : 'Publicar oportunidade'}</h2><p className="text-sm text-slate-500">Preencha os dados da vaga. Rua e bairro são usados uma única vez para posicioná-la no mapa.</p></div><button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-slate-500"><X /></button></div>
+    {showForm && <div className="fixed inset-0 z-[120] bg-black/60 p-4 overflow-y-auto"><div className="max-w-3xl mx-auto my-8 bg-white dark:bg-slate-900 rounded-2xl p-6"><div className="flex justify-between items-center mb-5"><div><h2 className="text-xl font-bold text-slate-900 dark:text-white">{editingId ? 'Editar oportunidade' : 'Publicar oportunidade'}</h2><p className="text-sm text-slate-500">Use endereço, GPS ou marque o ponto. O bairro será validado pela coordenada antes de salvar.</p></div><button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-slate-500"><X /></button></div>
       <div className="grid sm:grid-cols-2 gap-3">
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Título da oportunidade" className="sm:col-span-2 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
         <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descrição da oportunidade" rows={5} className="sm:col-span-2 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
@@ -300,14 +305,16 @@ export default function CompanyDashboard() {
         <select value={form.workModel} onChange={(e) => setForm({ ...form, workModel: e.target.value as WorkModel })} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white"><option value="presencial">Presencial</option><option value="hibrido">Híbrido</option><option value="remoto">Remoto</option></select>
         <input value={form.salaryMin} onChange={(e) => setForm({ ...form, salaryMin: e.target.value.replace(/\D/g, '') })} placeholder="Salário mínimo" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
         <input value={form.salaryMax} onChange={(e) => setForm({ ...form, salaryMax: e.target.value.replace(/\D/g, '') })} placeholder="Salário máximo" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
-        <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Rua e número (ex.: Rua XV de Novembro, 100)" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
-        <input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} placeholder="Bairro" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
+        <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value, latitude: undefined, longitude: undefined })} placeholder="Rua e número (ex.: Rua XV de Novembro, 100)" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
+        <select value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white"><option value="">Bairro (apoio para localização)</option>{curitibaNeighborhoods.map((item) => <option key={item.name} value={item.name}>{item.name}{item.kind === 'locality' ? ` (${item.parentNeighborhood})` : ''}</option>)}</select>
+        <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2 items-stretch sm:items-center rounded-xl border border-blue-200 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-500/5 p-3"><div className="flex-1"><p className="text-sm font-bold text-slate-900 dark:text-white">Localização da vaga</p><p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{form.locality || form.neighborhood ? `Identificada: ${[form.locality, form.neighborhood].filter(Boolean).join(' · ')}` : form.latitude != null ? 'Ponto definido; o bairro será validado ao salvar.' : 'Use o GPS ou marque exatamente no mapa.'}</p></div><button type="button" onClick={useCurrentJobLocation} disabled={locatingJob} className="min-h-11 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 text-sm font-bold disabled:opacity-60">{locatingJob ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}{locatingJob ? 'Localizando...' : 'Usar minha localização'}</button></div>
+        <div className="sm:col-span-2"><MapPicker address={form.location} initialLat={form.latitude} initialLng={form.longitude} onLocationSelect={(lat, lng) => { void resolveAndApplyPoint(lat, lng); }} className="h-72 w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 z-0" /></div>
         <input type="date" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white" />
         <input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} placeholder="E-mail para contato" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
         <input value={form.contactWhatsapp} onChange={(e) => setForm({ ...form, contactWhatsapp: e.target.value })} placeholder="WhatsApp" className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
       </div>
       <div className="mt-4 space-y-2 text-slate-700 dark:text-slate-200"><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.contactEmailEnabled} onChange={(e) => setForm({ ...form, contactEmailEnabled: e.target.checked })} />Permitir contato por e-mail</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.contactWhatsappEnabled} onChange={(e) => setForm({ ...form, contactWhatsappEnabled: e.target.checked })} />Permitir contato por WhatsApp</label></div>
-      <div className="mt-6 flex justify-end gap-2"><button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200">Cancelar</button><button onClick={saveJob} disabled={saving} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold">{saving ? 'Salvando e localizando...' : editingId ? 'Salvar alterações' : 'Publicar oportunidade'}</button></div>
+      <div className="mt-6 flex justify-end gap-2"><button onClick={() => setShowForm(false)} className="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200">Cancelar</button><button onClick={() => void saveJob()} disabled={saving || locatingJob} className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold disabled:opacity-60">{saving ? 'Salvando e validando bairro...' : editingId ? 'Salvar alterações' : 'Publicar oportunidade'}</button></div>
     </div></div>}
 
     <Modal open={Boolean(selectedJobId)} onClose={() => setSelectedJobId(null)} title={`Interessados${selectedJob ? ` — ${selectedJob.title}` : ''}`}>
