@@ -15,7 +15,7 @@ import Denuncias from './pages/Denuncias';
 import Mapa from './pages/Mapa';
 import Estatisticas from './pages/Estatisticas';
 import Login from './pages/Login';
-import Profile from './pages/Profile';
+import ProfilePage from './pages/ProfilePage';
 import PublicProfile from './pages/PublicProfile';
 import Empregos from './pages/Empregos';
 import CompanyDashboard from './pages/CompanyDashboard';
@@ -32,7 +32,7 @@ export default function App() {
     <Route path="/mapa" element={<Mapa />} />
     <Route path="/estatisticas" element={<Estatisticas />} />
     <Route path="/login" element={<Login />} />
-    <Route path="/perfil" element={<Profile />} />
+    <Route path="/perfil" element={<ProfilePage />} />
     <Route path="/perfil/:userId" element={<PublicProfile />} />
     <Route path="/empresa" element={<CompanyDashboard />} />
     <Route path="/notificacoes" element={<Notifications />} />
