@@ -23,7 +23,7 @@ export const normalizeNeighborhoodText = (value: string | null | undefined) => {
   return normalized;
 };
 
-// 75 bairros oficiais de Curitiba (IPPUC) + Vitória Régia como localidade útil dentro de Tatuquara.
+// 75 bairros oficiais de Curitiba (IPPUC) + Vitória Régia como localidade útil dentro da CIC.
 export const curitibaNeighborhoods: Neighborhood[] = [
   { name: 'Abranches', latitude: -25.3725, longitude: -49.2708, cepExample: '82130-010' },
   { name: 'Água Verde', latitude: -25.4519, longitude: -49.2847, cepExample: '80240-000' },
@@ -100,7 +100,7 @@ export const curitibaNeighborhoods: Neighborhood[] = [
   { name: 'Vila Izabel', latitude: -25.4600, longitude: -49.2900, cepExample: '80320-000' },
   { name: 'Vista Alegre', latitude: -25.4100, longitude: -49.3000, cepExample: '80810-000' },
   { name: 'Xaxim', latitude: -25.4900, longitude: -49.2500, cepExample: '81710-000' },
-  { name: 'Vitória Régia', latitude: -25.5415, longitude: -49.3375, cepExample: '81470-430', aliases: ['Vitoria Regia'], kind: 'locality', parentNeighborhood: 'Tatuquara' },
+  { name: 'Vitória Régia', latitude: -25.5415, longitude: -49.3375, cepExample: '81470-430', aliases: ['Vitoria Regia'], kind: 'locality', parentNeighborhood: 'Cidade Industrial de Curitiba' },
 ].map((item) => ({ kind: 'official' as const, ...item }));
 
 export function findNeighborhood(value: string | null | undefined) {
@@ -126,10 +126,15 @@ export function neighborhoodMatches(selected: string, neighborhood?: string | nu
   const selectedFound = findNeighborhood(selected);
   if (!selectedFound) return false;
 
+  const resolvedLocality = findNeighborhood(locality);
   if (selectedFound.kind === 'locality') {
-    return canonicalNeighborhoodName(locality) === selectedFound.name
-      || neighborhoodSearchText(rawLocation).includes(normalizeNeighborhoodText(selectedFound.name));
+    return resolvedLocality?.name === selectedFound.name
+      || (!resolvedLocality && neighborhoodSearchText(rawLocation).includes(normalizeNeighborhoodText(selectedFound.name)));
   }
+
+  // Uma localidade reconhecida é a área principal do relato no filtro para não duplicar
+  // o mesmo conteúdo em Vitória Régia e no bairro oficial que contém aquele ponto.
+  if (resolvedLocality?.kind === 'locality') return false;
 
   const resolved = canonicalNeighborhoodName(neighborhood);
   if (resolved) return resolved === selectedFound.name;
