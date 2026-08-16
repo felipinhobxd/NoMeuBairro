@@ -22,7 +22,14 @@ interface DataContextType {
   reports: any[];
   unreadCount: number;
   commentsByPost: Record<string, Comment[]>;
+  attendingEventIds: Set<string>;
   loading: boolean;
+  postsLoading: boolean;
+  eventsLoading: boolean;
+  loadPosts: (force?: boolean) => Promise<void>;
+  loadEvents: (force?: boolean) => Promise<void>;
+  loadComments: (postId: string, force?: boolean) => Promise<void>;
+  loadMyAttendance: (force?: boolean) => Promise<void>;
   fetchData: () => Promise<void>;
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
@@ -48,9 +55,10 @@ const DataContext = createContext<DataContextType>(null!);
 const SK_MY_ANON = 'anb-my-anonymous-ids';
 const SK_ANON_TOKENS = 'anb-anonymous-control-tokens';
 const POST_LIMIT = 30;
-const COMMENT_LIMIT = 150;
 const EVENT_LIMIT = 60;
+const COMMENT_PER_POST_LIMIT = 100;
 const NOTIFICATION_LIMIT = 40;
+const NOTIFICATION_SELECT = 'id,user_id,actor_id,type,post_id,comment_id,job_id,application_id,event_id,is_read,created_at,users:actor_id(name,avatar_url),posts:post_id(title),comments:comment_id(content),job_posts:job_id(title),events:event_id(title)';
 
 function fallbackNeighborhoodFromText(location: string) {
   const normalized = normalizeNeighborhoodText(location);
@@ -91,6 +99,62 @@ async function resolveLocation(location: string, latitude?: number, longitude?: 
   };
 }
 
+function mapPost(p: any): Post {
+  return {
+    id: p.id,
+    authorId: p.author_id || 'anonymous',
+    authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
+    authorAvatarUrl: p.is_anonymous ? undefined : p.users?.avatar_url,
+    category: p.category,
+    status: p.status,
+    title: p.title,
+    description: p.description,
+    imageUrl: p.image_url || undefined,
+    location: p.location || '',
+    neighborhood: p.neighborhood || undefined,
+    locality: p.locality || undefined,
+    locationPrecision: p.location_precision || undefined,
+    latitude: p.latitude == null ? undefined : Number(p.latitude),
+    longitude: p.longitude == null ? undefined : Number(p.longitude),
+    supports: p.post_supports?.[0]?.count ?? p.supports ?? 0,
+    commentsCount: p.comments_count ?? 0,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  };
+}
+
+function mapEvent(e: any): CommunityEvent {
+  return {
+    id: e.id,
+    title: e.title,
+    description: e.description,
+    date: e.event_date,
+    location: e.location,
+    neighborhood: e.neighborhood || undefined,
+    locality: e.locality || undefined,
+    locationPrecision: e.location_precision || undefined,
+    latitude: e.latitude == null ? undefined : Number(e.latitude),
+    longitude: e.longitude == null ? undefined : Number(e.longitude),
+    type: e.type,
+    createdBy: e.created_by,
+    createdAt: e.created_at,
+    attendanceCount: e.event_attendance?.[0]?.count ?? e.attendance_count ?? 0,
+  };
+}
+
+function mapComment(c: any): Comment {
+  return {
+    id: c.id,
+    postId: c.post_id,
+    authorId: c.author_id,
+    authorName: c.users?.name || 'Morador',
+    authorAvatarUrl: c.users?.avatar_url || undefined,
+    content: c.content,
+    parentId: c.parent_id || undefined,
+    createdAt: c.created_at,
+  };
+}
+
 function mapNotification(n: any): AppNotification {
   return {
     id: n.id,
@@ -126,10 +190,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [reports] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [postsLoading, setPostsLoading] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [managedAnonIds, setManagedAnonIds] = useState<Set<string>>(new Set());
-  const fetchingRef = useRef(false);
+  const [attendingEventIds, setAttendingEventIds] = useState<Set<string>>(new Set());
+
+  const postsLoadedRef = useRef(false);
+  const eventsLoadedRef = useRef(false);
+  const postsRequestRef = useRef<Promise<void> | null>(null);
+  const eventsRequestRef = useRef<Promise<void> | null>(null);
+  const commentRequestsRef = useRef<Map<string, Promise<void>>>(new Map());
+  const loadedCommentPostsRef = useRef<Set<string>>(new Set());
   const processingRef = useRef<Set<string>>(new Set());
+  const notificationRequestRef = useRef<Promise<void> | null>(null);
+  const notificationLoadedUserRef = useRef<string | null>(null);
+  const attendanceRequestRef = useRef<Promise<void> | null>(null);
+  const attendanceLoadedUserRef = useRef<string | null>(null);
+  const attendanceIdsRef = useRef<Set<string>>(new Set());
+
+  const setAttendanceIds = useCallback((next: Set<string>) => {
+    attendanceIdsRef.current = next;
+    setAttendingEventIds(new Set(next));
+  }, []);
 
   const getMyAnonIds = useCallback((): Set<string> => {
     try { return new Set(JSON.parse(localStorage.getItem(SK_MY_ANON) || '[]')); } catch { return new Set(); }
@@ -172,98 +254,175 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, [getAnonTokens, getMyAnonIds]);
 
-  const fetchNotifications = useCallback(async () => {
-    if (!user) {
+  const loadPosts = useCallback(async (force = false) => {
+    if (postsRequestRef.current) return postsRequestRef.current;
+    if (postsLoadedRef.current && !force) return;
+
+    const request = (async () => {
+      setPostsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('posts')
+          .select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)')
+          .order('created_at', { ascending: false })
+          .limit(POST_LIMIT);
+        if (error) {
+          console.error('Erro ao carregar relatos:', error);
+          return;
+        }
+        setPosts((data || []).map(mapPost));
+        postsLoadedRef.current = true;
+      } finally {
+        setPostsLoading(false);
+        postsRequestRef.current = null;
+      }
+    })();
+    postsRequestRef.current = request;
+    return request;
+  }, []);
+
+  const loadEvents = useCallback(async (force = false) => {
+    if (eventsRequestRef.current) return eventsRequestRef.current;
+    if (eventsLoadedRef.current && !force) return;
+
+    const request = (async () => {
+      setEventsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('events')
+          .select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at,event_attendance(count)')
+          .order('event_date', { ascending: true })
+          .limit(EVENT_LIMIT);
+        if (error) {
+          console.error('Erro ao carregar eventos:', error);
+          return;
+        }
+        setEvents((data || []).map(mapEvent));
+        eventsLoadedRef.current = true;
+      } finally {
+        setEventsLoading(false);
+        eventsRequestRef.current = null;
+      }
+    })();
+    eventsRequestRef.current = request;
+    return request;
+  }, []);
+
+  const loadComments = useCallback(async (postId: string, force = false) => {
+    if (!postId) return;
+    const currentRequest = commentRequestsRef.current.get(postId);
+    if (currentRequest) return currentRequest;
+    if (loadedCommentPostsRef.current.has(postId) && !force) return;
+
+    const request = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('comments')
+          .select('id,post_id,author_id,content,parent_id,created_at,users(name,avatar_url)')
+          .eq('post_id', postId)
+          .order('created_at', { ascending: true })
+          .limit(COMMENT_PER_POST_LIMIT);
+        if (error) {
+          console.error('Erro ao carregar comentários:', error);
+          return;
+        }
+        const mapped = (data || []).map(mapComment);
+        setComments(prev => [...prev.filter(comment => comment.postId !== postId), ...mapped]);
+        loadedCommentPostsRef.current.add(postId);
+      } finally {
+        commentRequestsRef.current.delete(postId);
+      }
+    })();
+    commentRequestsRef.current.set(postId, request);
+    return request;
+  }, []);
+
+  const fetchNotifications = useCallback(async (force = false) => {
+    const userId = user?.id;
+    if (!userId) {
       setNotifications([]);
+      notificationLoadedUserRef.current = null;
       return;
     }
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('id,user_id,actor_id,type,post_id,comment_id,job_id,application_id,event_id,is_read,created_at,users:actor_id(name,avatar_url),posts:post_id(title),comments:comment_id(content),job_posts:job_id(title),events:event_id(title)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(NOTIFICATION_LIMIT);
-    if (error) {
-      console.error('Erro ao carregar notificações:', error);
-      return;
-    }
-    setNotifications((data || []).map(mapNotification));
+    if (notificationRequestRef.current) return notificationRequestRef.current;
+    if (notificationLoadedUserRef.current === userId && !force) return;
+
+    const request = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select(NOTIFICATION_SELECT)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(NOTIFICATION_LIMIT);
+        if (error) {
+          console.error('Erro ao carregar notificações:', error);
+          return;
+        }
+        setNotifications((data || []).map(mapNotification));
+        notificationLoadedUserRef.current = userId;
+      } finally {
+        notificationRequestRef.current = null;
+      }
+    })();
+    notificationRequestRef.current = request;
+    return request;
   }, [user?.id]);
 
-  const fetchData = useCallback(async () => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    setLoading(true);
-    try {
-      const [postsRes, eventsRes, commentsRes] = await Promise.all([
-        supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT),
-        supabase.from('events').select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at,event_attendance(count)').order('event_date', { ascending: true }).limit(EVENT_LIMIT),
-        supabase.from('comments').select('id,post_id,author_id,content,parent_id,created_at,users(name,avatar_url)').order('created_at', { ascending: false }).limit(COMMENT_LIMIT),
-      ]);
+  const fetchNotificationById = useCallback(async (notificationId: string) => {
+    const userId = user?.id;
+    if (!userId || !notificationId) return;
+    const { data, error } = await supabase
+      .from('notifications')
+      .select(NOTIFICATION_SELECT)
+      .eq('id', notificationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error || !data) return;
+    const mapped = mapNotification(data);
+    setNotifications(prev => [mapped, ...prev.filter(item => item.id !== mapped.id)].slice(0, NOTIFICATION_LIMIT));
+  }, [user?.id]);
 
-      if (postsRes.error) console.error('Erro ao carregar relatos:', postsRes.error);
-      if (postsRes.data) setPosts(postsRes.data.map((p: any) => ({
-        id: p.id,
-        authorId: p.author_id || 'anonymous',
-        authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
-        authorAvatarUrl: p.is_anonymous ? undefined : p.users?.avatar_url,
-        category: p.category,
-        status: p.status,
-        title: p.title,
-        description: p.description,
-        imageUrl: p.image_url || undefined,
-        location: p.location || '',
-        neighborhood: p.neighborhood || undefined,
-        locality: p.locality || undefined,
-        locationPrecision: p.location_precision || undefined,
-        latitude: p.latitude == null ? undefined : Number(p.latitude),
-        longitude: p.longitude == null ? undefined : Number(p.longitude),
-        supports: p.post_supports?.[0]?.count ?? 0,
-        commentsCount: p.comments_count ?? 0,
-        createdAt: p.created_at,
-        updatedAt: p.updated_at,
-      })));
-
-      if (eventsRes.error) console.error('Erro ao carregar eventos:', eventsRes.error);
-      if (eventsRes.data) setEvents(eventsRes.data.map((e: any) => ({
-        id: e.id,
-        title: e.title,
-        description: e.description,
-        date: e.event_date,
-        location: e.location,
-        neighborhood: e.neighborhood || undefined,
-        locality: e.locality || undefined,
-        locationPrecision: e.location_precision || undefined,
-        latitude: e.latitude == null ? undefined : Number(e.latitude),
-        longitude: e.longitude == null ? undefined : Number(e.longitude),
-        type: e.type,
-        createdBy: e.created_by,
-        createdAt: e.created_at,
-        attendanceCount: e.event_attendance?.[0]?.count ?? 0,
-      })));
-
-      if (commentsRes.error) console.error('Erro ao carregar comentários:', commentsRes.error);
-      if (commentsRes.data) setComments(commentsRes.data.map((c: any) => ({
-        id: c.id,
-        postId: c.post_id,
-        authorId: c.author_id,
-        authorName: c.users?.name || 'Morador',
-        authorAvatarUrl: c.users?.avatar_url,
-        content: c.content,
-        parentId: c.parent_id,
-        createdAt: c.created_at,
-      })));
-
-      await fetchNotifications();
-    } catch (err) {
-      console.error('Error fetching data:', err);
-    } finally {
-      fetchingRef.current = false;
-      setLoading(false);
+  const loadMyAttendance = useCallback(async (force = false) => {
+    const userId = user?.id;
+    if (!userId) {
+      attendanceLoadedUserRef.current = null;
+      setAttendanceIds(new Set());
+      return;
     }
-  }, [fetchNotifications]);
+    if (attendanceRequestRef.current) return attendanceRequestRef.current;
+    if (attendanceLoadedUserRef.current === userId && !force) return;
 
-  useEffect(() => { void fetchData(); }, [fetchData]);
+    const request = (async () => {
+      try {
+        const { data, error } = await supabase.from('event_attendance').select('event_id').eq('user_id', userId);
+        if (error) {
+          console.error('Erro ao carregar presenças:', error);
+          return;
+        }
+        setAttendanceIds(new Set((data || []).map(row => row.event_id as string)));
+        attendanceLoadedUserRef.current = userId;
+      } finally {
+        attendanceRequestRef.current = null;
+      }
+    })();
+    attendanceRequestRef.current = request;
+    return request;
+  }, [user?.id, setAttendanceIds]);
+
+  const fetchData = useCallback(async () => {
+    await Promise.all([loadPosts(true), loadEvents(true)]);
+  }, [loadPosts, loadEvents]);
+
+  useEffect(() => {
+    notificationRequestRef.current = null;
+    notificationLoadedUserRef.current = null;
+    attendanceRequestRef.current = null;
+    attendanceLoadedUserRef.current = null;
+    setAttendanceIds(new Set());
+    if (user?.id) void fetchNotifications(true);
+    else setNotifications([]);
+  }, [user?.id, fetchNotifications, setAttendanceIds]);
 
   useEffect(() => {
     let active = true;
@@ -279,15 +438,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user) return;
-    const refreshNotifications = () => { void fetchNotifications(); };
+    if (!user?.id) return;
     const channel = supabase.channel(`notifications-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, refreshNotifications)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, refreshNotifications)
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, refreshNotifications)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload: any) => {
+        const id = payload?.new?.id;
+        if (id) void fetchNotificationById(String(id));
+      })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [fetchNotifications, user?.id]);
+  }, [fetchNotificationById, user?.id]);
 
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
@@ -311,27 +470,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }).select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,created_at,updated_at,comments_count').single();
 
     if (!error && inserted) {
-      const nextPost: Post = {
-        id: inserted.id,
-        authorId: user.id,
-        authorName: user.name || 'Morador',
-        authorAvatarUrl: user.avatarUrl,
-        category: inserted.category,
-        status: inserted.status,
-        title: inserted.title,
-        description: inserted.description,
-        imageUrl: inserted.image_url || undefined,
-        location: inserted.location || '',
-        neighborhood: inserted.neighborhood || undefined,
-        locality: inserted.locality || undefined,
-        locationPrecision: inserted.location_precision || undefined,
-        latitude: inserted.latitude == null ? undefined : Number(inserted.latitude),
-        longitude: inserted.longitude == null ? undefined : Number(inserted.longitude),
-        supports: 0,
-        commentsCount: inserted.comments_count ?? 0,
-        createdAt: inserted.created_at,
-        updatedAt: inserted.updated_at,
-      };
+      const nextPost = mapPost({ ...inserted, users: { name: user.name, avatar_url: user.avatarUrl }, post_supports: [{ count: 0 }] });
+      postsLoadedRef.current = true;
       setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
     }
     return { data: inserted, error } as any;
@@ -360,26 +500,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       .eq('id', result.postId)
       .maybeSingle();
     if (row) {
-      const nextPost: Post = {
-        id: row.id,
-        authorId: 'anonymous',
-        authorName: 'Denúncia Anônima',
-        category: row.category,
-        status: row.status,
-        title: row.title,
-        description: row.description,
-        imageUrl: row.image_url || undefined,
-        location: row.location || '',
-        neighborhood: row.neighborhood || undefined,
-        locality: row.locality || undefined,
-        locationPrecision: row.location_precision || undefined,
-        latitude: row.latitude == null ? undefined : Number(row.latitude),
-        longitude: row.longitude == null ? undefined : Number(row.longitude),
-        supports: 0,
-        commentsCount: row.comments_count ?? 0,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      };
+      const nextPost = mapPost({ ...row, author_id: null, is_anonymous: true, post_supports: [{ count: 0 }] });
+      postsLoadedRef.current = true;
       setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
     }
     return { error: null };
@@ -409,9 +531,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const nextComment: Comment = {
       id: inserted.id, postId: inserted.post_id, authorId: inserted.author_id,
       authorName: user.name || 'Morador', authorAvatarUrl: user.avatarUrl,
-      content: inserted.content, parentId: inserted.parent_id, createdAt: inserted.created_at,
+      content: inserted.content, parentId: inserted.parent_id || undefined, createdAt: inserted.created_at,
     };
-    setComments(prev => [nextComment, ...prev.filter(comment => comment.id !== nextComment.id)].slice(0, COMMENT_LIMIT));
+    loadedCommentPostsRef.current.add(postId);
+    setComments(prev => [...prev.filter(comment => comment.id !== nextComment.id), nextComment]);
     setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
   }, [user]);
 
@@ -433,12 +556,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       clearAnonControl(postId);
       setPosts(prev => prev.filter(post => post.id !== postId));
       setComments(prev => prev.filter(comment => comment.postId !== postId));
+      loadedCommentPostsRef.current.delete(postId);
       return { ok: true };
     }
     const { error } = await supabase.from('posts').delete().eq('id', postId);
     if (error) return { ok: false, error: error.message };
     setPosts(prev => prev.filter(post => post.id !== postId));
     setComments(prev => prev.filter(comment => comment.postId !== postId));
+    loadedCommentPostsRef.current.delete(postId);
     return { ok: true };
   }, [posts, getAnonTokens, clearAnonControl]);
 
@@ -463,21 +588,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleAttendance = useCallback(async (eventId: string) => {
-    if (!user) return;
-    const { data: existing } = await supabase.from('event_attendance').select('id').eq('event_id', eventId).eq('user_id', user.id).maybeSingle();
-    if (existing) {
-      const { error } = await supabase.from('event_attendance').delete().eq('id', existing.id);
-      if (!error) setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: Math.max(0, (event.attendanceCount || 0) - 1) } : event));
+    const userId = user?.id;
+    if (!userId) return;
+    if (attendanceLoadedUserRef.current !== userId) await loadMyAttendance();
+    const isAttending = attendanceIdsRef.current.has(eventId);
+    if (isAttending) {
+      const { error } = await supabase.from('event_attendance').delete().eq('event_id', eventId).eq('user_id', userId);
+      if (!error) {
+        const next = new Set(attendanceIdsRef.current);
+        next.delete(eventId);
+        setAttendanceIds(next);
+        setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: Math.max(0, (event.attendanceCount || 0) - 1) } : event));
+      }
     } else {
-      const { error } = await supabase.from('event_attendance').insert({ event_id: eventId, user_id: user.id });
-      if (!error) setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: (event.attendanceCount || 0) + 1 } : event));
+      const { error } = await supabase.from('event_attendance').insert({ event_id: eventId, user_id: userId });
+      if (!error) {
+        const next = new Set(attendanceIdsRef.current);
+        next.add(eventId);
+        setAttendanceIds(next);
+        setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: (event.attendanceCount || 0) + 1 } : event));
+      }
     }
-  }, [user]);
+  }, [user?.id, loadMyAttendance, setAttendanceIds]);
 
   const getEventAttendees = useCallback(async (eventId: string) => {
-    const { data, error } = await supabase.from('event_attendance').select('id,users:user_id(name,avatar_url)').eq('event_id', eventId).limit(100);
+    const { data, error } = await supabase.from('event_attendance').select('id,event_id,user_id,users:user_id(name,avatar_url)').eq('event_id', eventId).limit(100);
     if (error) return [];
-    return (data || []).map((a: any) => ({ id: a.id, userName: a.users?.name || 'Morador', userAvatarUrl: a.users?.avatar_url }));
+    return (data || []).map((a: any) => ({ id: a.id, eventId: a.event_id, userId: a.user_id, userName: a.users?.name || 'Morador', userAvatarUrl: a.users?.avatar_url }));
   }, []);
 
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
@@ -491,14 +628,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }).select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at').single();
 
     if (!error && inserted) {
-      const nextEvent: CommunityEvent = {
-        id: inserted.id, title: inserted.title, description: inserted.description, date: inserted.event_date,
-        location: inserted.location, neighborhood: inserted.neighborhood || undefined,
-        locality: inserted.locality || undefined, locationPrecision: inserted.location_precision || undefined,
-        latitude: inserted.latitude == null ? undefined : Number(inserted.latitude),
-        longitude: inserted.longitude == null ? undefined : Number(inserted.longitude),
-        type: inserted.type, createdBy: inserted.created_by, createdAt: inserted.created_at, attendanceCount: 0,
-      };
+      const nextEvent = mapEvent({ ...inserted, event_attendance: [{ count: 0 }] });
+      eventsLoadedRef.current = true;
       setEvents(prev => [...prev.filter(event => event.id !== nextEvent.id), nextEvent].sort((a, b) => a.date.localeCompare(b.date)).slice(0, EVENT_LIMIT));
     }
     return { data: inserted, error } as any;
@@ -547,16 +678,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     for (const c of comments) (map[c.postId] ??= []).push(c);
     return map;
   }, [comments]);
+  const loading = postsLoading || eventsLoading;
 
   const contextValue = useMemo(() => ({
-    posts, events, comments, notifications, reports, unreadCount, commentsByPost, loading,
-    fetchData, addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment,
+    posts, events, comments, notifications, reports, unreadCount, commentsByPost, attendingEventIds,
+    loading, postsLoading, eventsLoading, loadPosts, loadEvents, loadComments, loadMyAttendance, fetchData,
+    addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteEvent, toggleAttendance, getEventAttendees,
     reportContent, updateReportStatus, markNotificationAsRead, markNotificationsAsRead,
     deleteAllNotifications, isMyPost, isMyEvent,
   }), [
-    posts, events, comments, notifications, reports, unreadCount, commentsByPost, loading,
-    fetchData, addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment,
+    posts, events, comments, notifications, reports, unreadCount, commentsByPost, attendingEventIds,
+    loading, postsLoading, eventsLoading, loadPosts, loadEvents, loadComments, loadMyAttendance, fetchData,
+    addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment,
     deletePost, updatePostStatus, deleteEvent, toggleAttendance, getEventAttendees,
     reportContent, updateReportStatus, markNotificationAsRead, markNotificationsAsRead,
     deleteAllNotifications, isMyPost, isMyEvent,
