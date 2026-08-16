@@ -1,6 +1,6 @@
-# 🏢 No Meu Bairro
+# 🏘️ NoMeuBairro
 
-Plataforma comunitária interativa para moradores do bairro Vitória Régia registrarem problemas, acompanharem estatísticas locais, descobrirem comércios e fortalecerem a comunicação no bairro.
+Plataforma comunitária para moradores de Curitiba registrarem problemas, acompanharem relatos por bairro, participarem de eventos, encontrarem oportunidades de emprego e contribuírem para a comunidade.
 
 ---
 
@@ -16,39 +16,51 @@ Plataforma comunitária interativa para moradores do bairro Vitória Régia regi
 ![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
 ![React Router](https://img.shields.io/badge/React_Router-CA4245?style=for-the-badge&logo=react-router&logoColor=white)
 ![Leaflet](https://img.shields.io/badge/Leaflet-199903?style=for-the-badge&logo=leaflet&logoColor=white)
-![Lucide Icons](https://img.shields.io/badge/Lucide_Icons-F1F5F9?style=for-the-badge&logo=lucide&logoColor=black)
 
 #### **Backend & Infraestrutura**
 ![Supabase](https://img.shields.io/badge/Supabase-1C1C1C?style=for-the-badge&logo=supabase&logoColor=3ECF8E)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
-#### **Ferramentas & Outros**
-![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)
-![GitHub](https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white)
-![Markdown](https://img.shields.io/badge/Markdown-000000?style=for-the-badge&logo=markdown&logoColor=white)
-![JSON](https://img.shields.io/badge/JSON-000000?style=for-the-badge&logo=json&logoColor=white)
-
 ---
 
 ## 🌟 Funcionalidades Principais
 
-*   **📝 Feed de Mensagens**: Registre e acompanhe problemas comunitários (buracos, iluminação, segurança) com fotos e descrições detalhadas.
-*   **📍 Mapa do Bairro**: Localize geograficamente todos os relatos em um mapa interativo, facilitando a visualização dos pontos críticos do Vitória Régia.
-*   **📊 Painel de Estatísticas**: Acompanhe gráficos em tempo real sobre os problemas mais frequentes e a taxa de solução do bairro.
-*   **🏪 Guia Comercial & Serviços**: Descubra e avalie comércios locais com sistema de 1 a 5 estrelas e comentários dos vizinhos.
-*   **🗓️ Mural de Eventos**: Fique por dentro de tudo o que acontece na comunidade, desde feiras locais até reuniões de moradores.
-*   **🛡️ Denúncias 100% Anônimas**: Canal seguro para relatos sensíveis, garantindo total privacidade e anonimato do morador.
-*   **⚖️ Painel do Administrador**: Ferramenta exclusiva para moderação, permitindo gerenciar denúncias e manter o ambiente organizado.
-*   **🔍 Filtro "Perto de Mim"**: Use a geolocalização exata para ver apenas as ocorrências que estão acontecendo na sua rua ou quadra.
+- **📝 Feed comunitário** com relatos, fotos, categorias, apoios, comentários e status Pendente / Em andamento / Resolvido.
+- **📍 Filtro por bairro** com catálogo de bairros de Curitiba, aliases como `CIC` e suporte a localidades específicas como Vitória Régia.
+- **🗺️ Mapa integrado** com relatos, eventos e empregos, além de localização aproximada quando não existe coordenada exata.
+- **📊 Dados da comunidade** calculados por agregações no banco, sem depender apenas dos itens visíveis no Feed.
+- **💼 Empregos** com perfil público de empresa, currículo privado, candidaturas, localização e busca em até 20 km.
+- **🗓️ Mural de eventos** com presença, busca, bairro/localidade e integração com o mapa.
+- **🛡️ Denúncias anônimas** com controle privado para atualizar status e excluir sem revelar autoria publicamente.
+- **🔔 Notificações** para interações comunitárias e candidaturas.
+- **👤 Perfis públicos e Minha atividade** com relatos, apoios, comentários, eventos e candidaturas.
+- **⚖️ Moderação** protegida por permissões no Supabase.
+
+---
+
+## ⚡ Arquitetura de Performance
+
+O frontend evita carregar dados que a rota atual não utiliza:
+
+- O **Feed** carrega somente relatos.
+- O **Mural** carrega eventos e a presença do usuário uma única vez por sessão da página.
+- O **Mapa** carrega relatos e eventos; vagas são carregadas apenas quando a camada de Empregos é usada.
+- **Comentários** são buscados somente quando a conversa de um relato é aberta.
+- **Perfis** usam consultas direcionadas e agregações leves em vez de baixar Feed e Mural completos.
+- **Empregos** usa campos explícitos, apenas vagas ativas/não expiradas, limite de resultados e cache curto no cliente.
+- **Notificações Realtime** recebem novos itens individualmente em vez de refazer a lista inteira em cada mudança.
+- O **Leaflet do seletor de localização** é carregado sob demanda.
+- Imagens de relatos e avatares ficam no **Supabase Storage**, com cache longo; o banco armazena apenas URLs.
+- Arquivos órfãos são evitados na falha/exclusão dos fluxos de imagem e denúncias anônimas têm limpeza segura própria.
 
 ---
 
 ## 🚀 Como Rodar o Projeto
 
 ### Pré-requisitos
-*   Node.js instalado
-*   Conta no Supabase
+- Node.js
+- Conta/projeto no Supabase
 
 ### Instalação
 1. Clone o repositório:
@@ -59,17 +71,17 @@ Plataforma comunitária interativa para moradores do bairro Vitória Régia regi
    ```bash
    npm install
    ```
-3. Configure o arquivo `.env.local` na raiz com suas chaves do Supabase:
+3. Configure `.env.local`:
    ```env
    VITE_SUPABASE_URL=sua_url_aqui
-   VITE_SUPABASE_ANON_KEY=sua_chave_anon_aqui
+   VITE_SUPABASE_ANON_KEY=sua_chave_publicavel_aqui
    ```
-4. Execute o banco de dados:
-   Copie o conteúdo de `backend/schema.sql` e cole no **SQL Editor** do Supabase.
-5. Inicie o servidor de desenvolvimento:
+4. Inicie o frontend:
    ```bash
    npm run dev
    ```
+
+> O banco de produção possui migrations, policies, triggers, RPCs e Edge Functions além do schema inicial. Para outro ambiente, replique as migrations do projeto em vez de depender somente de um snapshot antigo do schema.
 
 ---
 
@@ -79,4 +91,4 @@ Plataforma comunitária interativa para moradores do bairro Vitória Régia regi
 ---
 
 ## 📄 Licença
-Este projeto é para fins educacionais e comunitários.
+Projeto para fins educacionais e comunitários.
