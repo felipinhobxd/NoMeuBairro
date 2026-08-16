@@ -4,7 +4,7 @@ import { useData } from '../contexts/DataContext';
 import { useNavigate } from 'react-router-dom';
 import {
   UserCircle, LogOut, Award, Camera, Pencil,
-  MessageSquare, Heart, CheckCircle2, Shield, Store, CalendarDays, Loader2, Check, RotateCcw, ZoomIn, ImageIcon,
+  MessageSquare, Heart, CheckCircle2, Shield, CalendarDays, Loader2, Check, RotateCcw, ZoomIn, ImageIcon,
 } from 'lucide-react';
 import { Card, Button, Modal, Input, useToast } from '../components/UI';
 import { cn } from '../utils/cn';
@@ -179,7 +179,7 @@ export default function Profile() {
   const { user, isAuthenticated, logout, updateProfile, changePassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { posts, businesses, events } = useData();
+  const { posts, events } = useData();
 
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -193,10 +193,9 @@ export default function Profile() {
   const [savingPwd, setSavingPwd] = useState(false);
 
   const stats = useMemo(() => {
-    if (!user) return { myPosts: 0, myBiz: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] as string[] };
-    const myPosts = posts.filter(p => p.authorId === user.id);
-    const myBiz = businesses.filter(b => b.createdBy === user.id);
-    const myEvents = events.filter(e => e.createdBy === user.id);
+    if (!user) return { myPosts: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] as string[] };
+    const myPosts = (posts || []).filter(p => p.authorId === user.id);
+    const myEvents = (events || []).filter(e => e.createdBy === user.id);
     const supportsReceived = myPosts.reduce((sum, p) => sum + p.supports, 0);
     const totalComments = myPosts.reduce((sum, p) => sum + p.commentsCount, 0);
     const earned: string[] = [];
@@ -205,8 +204,8 @@ export default function Profile() {
     if (supportsReceived >= 50) earned.push('voz_ativa');
     if (myPosts.some(p => p.status === 'resolved')) earned.push('construtor');
     if (myPosts.length + totalComments >= 100) earned.push('embaixador');
-    return { myPosts: myPosts.length, myBiz: myBiz.length, myEvents: myEvents.length, supportsReceived, earnedBadges: earned };
-  }, [user, posts, businesses, events]);
+    return { myPosts: myPosts.length, myEvents: myEvents.length, supportsReceived, earnedBadges: earned };
+  }, [user, posts, events]);
 
   const openEditProfile = () => { if (!user) return; setEditName(user.name); setEditAvatar(user.avatarUrl ?? ''); setShowEditProfile(true); };
   const handleSaveProfile = async () => {
@@ -266,8 +265,8 @@ export default function Profile() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[{ icon: MessageSquare, value: stats.myPosts, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' }, { icon: Heart, value: stats.supportsReceived, label: 'Apoios recebidos', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' }, { icon: Store, value: stats.myBiz, label: 'Negócios', iconCls: 'text-violet-600 dark:text-violet-400', bgCls: 'bg-violet-50 dark:bg-violet-500/10' }, { icon: CalendarDays, value: stats.myEvents, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' }].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {[{ icon: MessageSquare, value: stats.myPosts, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' }, { icon: Heart, value: stats.supportsReceived, label: 'Apoios recebidos', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' }, { icon: CalendarDays, value: stats.myEvents, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' }].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
           <Card key={label} className="text-center !p-4"><div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}><Icon className={cn('w-5 h-5', iconCls)} /></div><p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="text-[11px] text-slate-500 font-medium">{label}</p></Card>
         ))}
       </div>
