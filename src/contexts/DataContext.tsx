@@ -1,11 +1,18 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode, useEffect } from 'react';
-import type { Post, PostCategory, PostStatus, CommunityEvent, EventType, Comment, AppNotification } from '../types';
+import type { Post, PostCategory, PostStatus, CommunityEvent, EventType, Comment, AppNotification, LocationPrecision } from '../types';
 import { useAuth } from './AuthContext';
-import { curitibaNeighborhoods } from './NeighborhoodContext';
+import { canonicalNeighborhoodName, curitibaNeighborhoods, normalizeNeighborhoodText } from './NeighborhoodContext';
 import { supabase } from '../utils/supabase';
 import { storePostImage } from '../utils/imageStorage';
 
 type ActionResult = { ok: boolean; error?: string };
+type ResolvedLocation = {
+  latitude?: number;
+  longitude?: number;
+  neighborhood?: string;
+  locality?: string;
+  precision?: LocationPrecision;
+};
 
 interface DataContextType {
   posts: Post[];
@@ -45,33 +52,43 @@ const COMMENT_LIMIT = 150;
 const EVENT_LIMIT = 60;
 const NOTIFICATION_LIMIT = 40;
 
-const normalizeText = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function inferNeighborhood(latitude?: number, longitude?: number) {
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') return null;
-  let nearest = curitibaNeighborhoods[0];
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const neighborhood of curitibaNeighborhoods) {
-    const distance = calculateDistance(latitude, longitude, neighborhood.latitude, neighborhood.longitude);
-    if (distance < nearestDistance) { nearest = neighborhood; nearestDistance = distance; }
+function fallbackNeighborhoodFromText(location: string) {
+  const normalized = normalizeNeighborhoodText(location);
+  if (!normalized) return undefined;
+  for (const item of curitibaNeighborhoods) {
+    const candidates = [item.name, ...(item.aliases || [])].map(normalizeNeighborhoodText);
+    if (candidates.some((candidate) => candidate.length >= 3 && normalized.includes(candidate))) {
+      return item.kind === 'locality' ? item.parentNeighborhood : item.name;
+    }
   }
-  return nearest?.name || null;
+  return undefined;
 }
 
-function withInferredNeighborhood(location: string | null | undefined, latitude?: number, longitude?: number) {
-  const base = (location || '').trim();
-  const inferred = inferNeighborhood(latitude, longitude);
-  if (!inferred) return base;
-  if (normalizeText(base).includes(normalizeText(inferred))) return base;
-  return base ? `${base} — ${inferred}` : inferred;
+async function resolveLocation(location: string, latitude?: number, longitude?: number, neighborhood?: string): Promise<ResolvedLocation> {
+  try {
+    const { data, error } = await supabase.functions.invoke('anonymous-post-control', {
+      body: { action: 'resolve_location', location, latitude, longitude, neighborhood },
+    });
+    if (!error && data?.ok) {
+      return {
+        latitude: data.latitude == null ? latitude : Number(data.latitude),
+        longitude: data.longitude == null ? longitude : Number(data.longitude),
+        neighborhood: data.neighborhood || canonicalNeighborhoodName(neighborhood) || fallbackNeighborhoodFromText(location),
+        locality: data.locality || undefined,
+        precision: data.precision || undefined,
+      };
+    }
+  } catch (error) {
+    console.warn('Não foi possível resolver o bairro pelo serviço de localização:', error);
+  }
+
+  return {
+    latitude,
+    longitude,
+    neighborhood: canonicalNeighborhoodName(neighborhood) || fallbackNeighborhoodFromText(location),
+    locality: normalizeNeighborhoodText(location).includes('vitoria regia') ? 'Vitória Régia' : undefined,
+    precision: latitude != null && longitude != null ? 'exact' : undefined,
+  };
 }
 
 function mapNotification(n: any): AppNotification {
@@ -179,8 +196,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const [postsRes, eventsRes, commentsRes] = await Promise.all([
-        supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT),
-        supabase.from('events').select('id,title,description,event_date,location,latitude,longitude,type,created_by,created_at,event_attendance(count)').order('event_date', { ascending: true }).limit(EVENT_LIMIT),
+        supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT),
+        supabase.from('events').select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at,event_attendance(count)').order('event_date', { ascending: true }).limit(EVENT_LIMIT),
         supabase.from('comments').select('id,post_id,author_id,content,parent_id,created_at,users(name,avatar_url)').order('created_at', { ascending: false }).limit(COMMENT_LIMIT),
       ]);
 
@@ -195,9 +212,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         title: p.title,
         description: p.description,
         imageUrl: p.image_url || undefined,
-        location: withInferredNeighborhood(p.location, p.latitude, p.longitude),
-        latitude: p.latitude,
-        longitude: p.longitude,
+        location: p.location || '',
+        neighborhood: p.neighborhood || undefined,
+        locality: p.locality || undefined,
+        locationPrecision: p.location_precision || undefined,
+        latitude: p.latitude == null ? undefined : Number(p.latitude),
+        longitude: p.longitude == null ? undefined : Number(p.longitude),
         supports: p.post_supports?.[0]?.count ?? 0,
         commentsCount: p.comments_count ?? 0,
         createdAt: p.created_at,
@@ -211,8 +231,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
         description: e.description,
         date: e.event_date,
         location: e.location,
-        latitude: e.latitude,
-        longitude: e.longitude,
+        neighborhood: e.neighborhood || undefined,
+        locality: e.locality || undefined,
+        locationPrecision: e.location_precision || undefined,
+        latitude: e.latitude == null ? undefined : Number(e.latitude),
+        longitude: e.longitude == null ? undefined : Number(e.longitude),
         type: e.type,
         createdBy: e.created_by,
         createdAt: e.created_at,
@@ -271,6 +294,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const stored = await storePostImage(data.imageUrl, user.id);
     if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
 
+    const resolved = await resolveLocation(data.location, data.latitude, data.longitude);
     const { data: inserted, error } = await supabase.from('posts').insert({
       author_id: user.id,
       category: data.category,
@@ -278,10 +302,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
       description: data.description,
       image_url: stored.url,
       location: data.location,
-      latitude: data.latitude,
-      longitude: data.longitude,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
+      neighborhood: resolved.neighborhood || null,
+      locality: resolved.locality || null,
+      location_precision: resolved.precision || null,
       is_anonymous: false,
-    }).select('id,author_id,category,status,title,description,image_url,location,latitude,longitude,created_at,updated_at,comments_count').single();
+    }).select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,created_at,updated_at,comments_count').single();
 
     if (!error && inserted) {
       const nextPost: Post = {
@@ -294,9 +321,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         title: inserted.title,
         description: inserted.description,
         imageUrl: inserted.image_url || undefined,
-        location: withInferredNeighborhood(inserted.location, inserted.latitude, inserted.longitude),
-        latitude: inserted.latitude,
-        longitude: inserted.longitude,
+        location: inserted.location || '',
+        neighborhood: inserted.neighborhood || undefined,
+        locality: inserted.locality || undefined,
+        locationPrecision: inserted.location_precision || undefined,
+        latitude: inserted.latitude == null ? undefined : Number(inserted.latitude),
+        longitude: inserted.longitude == null ? undefined : Number(inserted.longitude),
         supports: 0,
         commentsCount: inserted.comments_count ?? 0,
         createdAt: inserted.created_at,
@@ -304,7 +334,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
       };
       setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
     }
-
     return { data: inserted, error } as any;
   }, [user]);
 
@@ -315,14 +344,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const editToken = createAnonymousEditToken();
     const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', {
       body: {
-        action: 'create',
-        tipo: data.tipo,
-        description: data.description,
-        location: data.location || 'Local Privado',
-        imageUrl: stored.url,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        editToken,
+        action: 'create', tipo: data.tipo, description: data.description,
+        location: data.location || 'Local Privado', imageUrl: stored.url,
+        latitude: data.latitude, longitude: data.longitude, editToken,
       },
     });
 
@@ -332,7 +356,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
     saveAnonControl(result.postId, editToken);
     const { data: row } = await supabase.from('posts')
-      .select('id,category,status,title,description,image_url,location,latitude,longitude,created_at,updated_at,comments_count')
+      .select('id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,created_at,updated_at,comments_count')
       .eq('id', result.postId)
       .maybeSingle();
     if (row) {
@@ -345,9 +369,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
         title: row.title,
         description: row.description,
         imageUrl: row.image_url || undefined,
-        location: withInferredNeighborhood(row.location, row.latitude, row.longitude),
-        latitude: row.latitude,
-        longitude: row.longitude,
+        location: row.location || '',
+        neighborhood: row.neighborhood || undefined,
+        locality: row.locality || undefined,
+        locationPrecision: row.location_precision || undefined,
+        latitude: row.latitude == null ? undefined : Number(row.latitude),
+        longitude: row.longitude == null ? undefined : Number(row.longitude),
         supports: 0,
         commentsCount: row.comments_count ?? 0,
         createdAt: row.created_at,
@@ -370,28 +397,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const { error } = await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
         if (!error) setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: post.supports + 1 } : post));
       }
-    } finally {
-      processingRef.current.delete(postId);
-    }
+    } finally { processingRef.current.delete(postId); }
   }, [user]);
 
   const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
     if (!user || !content.trim()) return;
     const { data: inserted, error } = await supabase.from('comments')
       .insert({ post_id: postId, author_id: user.id, parent_id: parentId, content: content.trim() })
-      .select('id,post_id,author_id,content,parent_id,created_at')
-      .single();
+      .select('id,post_id,author_id,content,parent_id,created_at').single();
     if (error || !inserted) return;
-
     const nextComment: Comment = {
-      id: inserted.id,
-      postId: inserted.post_id,
-      authorId: inserted.author_id,
-      authorName: user.name || 'Morador',
-      authorAvatarUrl: user.avatarUrl,
-      content: inserted.content,
-      parentId: inserted.parent_id,
-      createdAt: inserted.created_at,
+      id: inserted.id, postId: inserted.post_id, authorId: inserted.author_id,
+      authorName: user.name || 'Morador', authorAvatarUrl: user.avatarUrl,
+      content: inserted.content, parentId: inserted.parent_id, createdAt: inserted.created_at,
     };
     setComments(prev => [nextComment, ...prev.filter(comment => comment.id !== nextComment.id)].slice(0, COMMENT_LIMIT));
     setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
@@ -410,16 +428,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const target = posts.find(post => post.id === postId);
     if (target?.authorId === 'anonymous') {
       const token = getAnonTokens()[postId] || '';
-      const { data, error } = await supabase.functions.invoke('anonymous-post-control', {
-        body: { action: 'delete', postId, editToken: token },
-      });
+      const { data, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'delete', postId, editToken: token } });
       if (error || !data?.ok) return { ok: false, error: data?.error || error?.message || 'Não foi possível excluir a denúncia.' };
       clearAnonControl(postId);
       setPosts(prev => prev.filter(post => post.id !== postId));
       setComments(prev => prev.filter(comment => comment.postId !== postId));
       return { ok: true };
     }
-
     const { error } = await supabase.from('posts').delete().eq('id', postId);
     if (error) return { ok: false, error: error.message };
     setPosts(prev => prev.filter(post => post.id !== postId));
@@ -431,14 +446,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const target = posts.find(post => post.id === postId);
     if (target?.authorId === 'anonymous') {
       const token = getAnonTokens()[postId] || '';
-      const { data, error } = await supabase.functions.invoke('anonymous-post-control', {
-        body: { action: 'update_status', postId, status, editToken: token },
-      });
+      const { data, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'update_status', postId, status, editToken: token } });
       if (error || !data?.ok) return { ok: false, error: data?.error || error?.message || 'Não foi possível atualizar o status.' };
       setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));
       return { ok: true };
     }
-
     const { error } = await supabase.from('posts').update({ status }).eq('id', postId);
     if (error) return { ok: false, error: error.message };
     setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));
@@ -470,34 +482,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
+    const resolved = await resolveLocation(data.location, data.latitude, data.longitude);
     const { data: inserted, error } = await supabase.from('events').insert({
-      title: data.title,
-      description: data.description,
-      event_date: data.date,
-      location: data.location,
-      type: data.type,
-      latitude: data.latitude,
-      longitude: data.longitude,
-      created_by: user.id,
-    }).select('id,title,description,event_date,location,latitude,longitude,type,created_by,created_at').single();
+      title: data.title, description: data.description, event_date: data.date, location: data.location,
+      type: data.type, latitude: resolved.latitude, longitude: resolved.longitude,
+      neighborhood: resolved.neighborhood || null, locality: resolved.locality || null,
+      location_precision: resolved.precision || null, created_by: user.id,
+    }).select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at').single();
 
     if (!error && inserted) {
       const nextEvent: CommunityEvent = {
-        id: inserted.id,
-        title: inserted.title,
-        description: inserted.description,
-        date: inserted.event_date,
-        location: inserted.location,
-        latitude: inserted.latitude,
-        longitude: inserted.longitude,
-        type: inserted.type,
-        createdBy: inserted.created_by,
-        createdAt: inserted.created_at,
-        attendanceCount: 0,
+        id: inserted.id, title: inserted.title, description: inserted.description, date: inserted.event_date,
+        location: inserted.location, neighborhood: inserted.neighborhood || undefined,
+        locality: inserted.locality || undefined, locationPrecision: inserted.location_precision || undefined,
+        latitude: inserted.latitude == null ? undefined : Number(inserted.latitude),
+        longitude: inserted.longitude == null ? undefined : Number(inserted.longitude),
+        type: inserted.type, createdBy: inserted.created_by, createdAt: inserted.created_at, attendanceCount: 0,
       };
-      setEvents(prev => [...prev.filter(event => event.id !== nextEvent.id), nextEvent]
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(0, EVENT_LIMIT));
+      setEvents(prev => [...prev.filter(event => event.id !== nextEvent.id), nextEvent].sort((a, b) => a.date.localeCompare(b.date)).slice(0, EVENT_LIMIT));
     }
     return { data: inserted, error } as any;
   }, [user]);
