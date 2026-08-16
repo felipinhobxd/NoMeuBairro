@@ -25,6 +25,13 @@ const applicationLabels: Record<JobApplicationStatus, string> = {
   withdrawn: 'Interesse retirado',
 };
 
+const JOB_SELECT = 'id,company_id,company_name,company_logo_url,title,description,requirements,benefits,salary_min,salary_max,employment_type,work_model,location,neighborhood,locality,latitude,longitude,location_precision,contact_email,contact_whatsapp,contact_email_enabled,contact_whatsapp_enabled,is_active,expires_at,created_at,updated_at';
+const RESUME_SELECT = 'user_id,email,phone,neighborhood,objective,experience,education,skills,created_at,updated_at';
+const APPLICATION_SELECT = 'id,job_id,user_id,status,created_at,updated_at';
+const JOB_CACHE_TTL = 60_000;
+let jobsCache: { fetchedAt: number; jobs: JobPost[] } | null = null;
+let jobsRequest: Promise<{ jobs: JobPost[]; error: any }> | null = null;
+
 const mapJob = (r: any): JobPost => ({
   id: r.id,
   companyId: r.company_id,
@@ -75,6 +82,28 @@ const mapApplication = (r: any): JobApplication => ({
   createdAt: r.created_at,
   updatedAt: r.updated_at,
 });
+
+async function fetchActiveJobs() {
+  if (jobsCache && Date.now() - jobsCache.fetchedAt < JOB_CACHE_TTL) return { jobs: jobsCache.jobs, error: null };
+  if (jobsRequest) return jobsRequest;
+
+  jobsRequest = (async () => {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('public_job_posts')
+      .select(JOB_SELECT)
+      .eq('is_active', true)
+      .or(`expires_at.is.null,expires_at.gte.${now}`)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    const jobs = error ? [] : (data || []).map(mapJob);
+    if (!error) jobsCache = { fetchedAt: Date.now(), jobs };
+    return { jobs, error };
+  })();
+
+  try { return await jobsRequest; }
+  finally { jobsRequest = null; }
+}
 
 type UserPoint = { lat: number; lng: number };
 
@@ -136,19 +165,19 @@ export default function Empregos() {
     const load = async () => {
       setLoading(true);
       setError('');
-      const jobsPromise = supabase.from('public_job_posts').select('*').order('created_at', { ascending: false });
+      const jobsPromise = fetchActiveJobs();
 
       if (isResident && user) {
         const [jobsResult, resumeResult, applicationsResult] = await Promise.all([
           jobsPromise,
-          supabase.from('user_resumes').select('*').eq('user_id', user.id).maybeSingle(),
-          supabase.from('job_applications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+          supabase.from('user_resumes').select(RESUME_SELECT).eq('user_id', user.id).maybeSingle(),
+          supabase.from('job_applications').select(APPLICATION_SELECT).eq('user_id', user.id).order('created_at', { ascending: false }).limit(100),
         ]);
         if (!active) return;
         if (jobsResult.error) {
           setJobs([]);
           setError('Não foi possível carregar as oportunidades agora. Tente novamente em alguns instantes.');
-        } else setJobs((jobsResult.data || []).map(mapJob));
+        } else setJobs(jobsResult.jobs);
         if (!resumeResult.error && resumeResult.data) {
           const mapped = mapResume(resumeResult.data);
           setResume(mapped);
@@ -164,7 +193,7 @@ export default function Empregos() {
         if (jobsResult.error) {
           setJobs([]);
           setError('Não foi possível carregar as oportunidades agora. Tente novamente em alguns instantes.');
-        } else setJobs((jobsResult.data || []).map(mapJob));
+        } else setJobs(jobsResult.jobs);
         setResume(null);
         setApplications([]);
       }
@@ -254,8 +283,8 @@ export default function Empregos() {
     setNotice(null);
     const existing = applicationByJob.get(jobId);
     const result = existing
-      ? await supabase.from('job_applications').update({ status: 'interested' }).eq('id', existing.id).eq('user_id', user.id).select('*').single()
-      : await supabase.from('job_applications').insert({ job_id: jobId, user_id: user.id, status: 'interested' }).select('*').single();
+      ? await supabase.from('job_applications').update({ status: 'interested' }).eq('id', existing.id).eq('user_id', user.id).select(APPLICATION_SELECT).single()
+      : await supabase.from('job_applications').insert({ job_id: jobId, user_id: user.id, status: 'interested' }).select(APPLICATION_SELECT).single();
 
     if (result.error || !result.data) {
       setNotice({ type: 'error', text: 'Não foi possível registrar seu interesse. Tente novamente.' });
@@ -281,7 +310,7 @@ export default function Empregos() {
     if (!user) return;
     setActionJobId(application.jobId);
     const { data, error: updateError } = await supabase
-      .from('job_applications').update({ status: 'withdrawn' }).eq('id', application.id).eq('user_id', user.id).select('*').single();
+      .from('job_applications').update({ status: 'withdrawn' }).eq('id', application.id).eq('user_id', user.id).select(APPLICATION_SELECT).single();
     if (updateError || !data) setNotice({ type: 'error', text: 'Não foi possível retirar o interesse.' });
     else {
       const mapped = mapApplication(data);
@@ -313,7 +342,7 @@ export default function Empregos() {
       education: resumeDraft.education.trim() || null,
       skills: resumeDraft.skills.trim() || null,
     };
-    const { data, error: resumeError } = await supabase.from('user_resumes').upsert(payload, { onConflict: 'user_id' }).select('*').single();
+    const { data, error: resumeError } = await supabase.from('user_resumes').upsert(payload, { onConflict: 'user_id' }).select(RESUME_SELECT).single();
 
     if (resumeError || !data) {
       setNotice({ type: 'error', text: 'Não foi possível salvar seu currículo.' });
@@ -377,7 +406,7 @@ export default function Empregos() {
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <div className="flex items-start gap-3 min-w-0">
                   <button type="button" onClick={() => openCompanyProfile(job.companyId)} aria-label={`Ver perfil de ${job.companyName}`} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-transparent hover:ring-orange-300 dark:hover:ring-orange-500/40 transition-all">
-                    {job.companyLogoUrl ? <img src={job.companyLogoUrl} alt="" className="w-full h-full object-cover" /> : <Building2 className="w-6 h-6 text-emerald-600" />}
+                    {job.companyLogoUrl ? <img src={job.companyLogoUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" /> : <Building2 className="w-6 h-6 text-emerald-600" />}
                   </button>
                   <div className="min-w-0 sm:hidden">
                     <h2 className="font-bold text-base text-slate-900 dark:text-white leading-snug break-words">{job.title}</h2>
