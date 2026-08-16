@@ -5,9 +5,10 @@ import { useData } from '../contexts/DataContext';
 import { useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card } from '../components/UI';
 import { Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import type { PostCategory } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../utils/supabase';
 
 const categoryIcons: Record<PostCategory, { emoji: string; label: string }> = {
   buraco: { emoji: '🕳️', label: 'Buraco' },
@@ -64,6 +65,8 @@ export default function Mapa() {
   const { currentNeighborhood } = useNeighborhood();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
+  const [imageByPost, setImageByPost] = useState<Record<string, string | null>>({});
+  const [loadingImage, setLoadingImage] = useState<Set<string>>(new Set());
 
   const filteredPosts = useMemo(() => posts.filter(p => p.latitude != null && p.longitude != null && (filter === 'all' || p.category === filter)), [posts, filter]);
   const points = useMemo(() => filteredPosts.map(p => [Number(p.latitude), Number(p.longitude)] as [number, number]), [filteredPosts]);
@@ -73,6 +76,14 @@ export default function Mapa() {
     return out;
   }, []);
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
+
+  const loadPostImage = useCallback(async (postId: string) => {
+    if (Object.prototype.hasOwnProperty.call(imageByPost, postId) || loadingImage.has(postId)) return;
+    setLoadingImage(prev => new Set(prev).add(postId));
+    const { data, error } = await supabase.from('posts').select('image_url').eq('id', postId).maybeSingle();
+    setImageByPost(prev => ({ ...prev, [postId]: error ? null : (data?.image_url ?? null) }));
+    setLoadingImage(prev => { const next = new Set(prev); next.delete(postId); return next; });
+  }, [imageByPost, loadingImage]);
 
   return <div className="h-[calc(100vh-160px)] flex flex-col gap-4">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -89,14 +100,16 @@ export default function Mapa() {
     <Card className="flex-1 !p-0 overflow-hidden relative border-slate-200 dark:border-slate-800 shadow-xl">
       <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
         <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        {filteredPosts.map(post => <Marker key={post.id} position={[Number(post.latitude), Number(post.longitude)]} icon={icons[post.category] ?? icons.outros} riseOnHover zIndexOffset={500}>
-          <Popup minWidth={240} className="custom-popup">
+        {filteredPosts.map(post => <Marker key={post.id} position={[Number(post.latitude), Number(post.longitude)]} icon={icons[post.category] ?? icons.outros} riseOnHover zIndexOffset={500} eventHandlers={{ click: () => { void loadPostImage(post.id); } }}>
+          <Popup minWidth={260} className="custom-popup">
             <div className="p-1">
               <div className="flex items-center gap-2 mb-2"><span className="text-lg">{categoryIcons[post.category]?.emoji ?? '📍'}</span><span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: categoryColors[post.category] }}>{categoryIcons[post.category]?.label ?? 'Outros'}</span></div>
               <h3 className="font-bold text-slate-900 mb-1 leading-tight">{post.title}</h3>
               <p className="text-xs text-slate-500 line-clamp-3 mb-3">{post.description}</p>
               <p className="text-[10px] text-slate-400 mb-3">📍 {post.location}</p>
-              <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-colors">Ver detalhes no post</button>
+              {loadingImage.has(post.id) && <div className="w-full h-36 rounded-xl bg-slate-100 animate-pulse mb-3" />}
+              {imageByPost[post.id] && <img src={imageByPost[post.id] || undefined} alt="Imagem do post" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" />}
+              <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors">Ver detalhes no post</button>
             </div>
           </Popup>
         </Marker>)}
