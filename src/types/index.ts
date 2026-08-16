@@ -109,15 +109,31 @@ export interface EventAttendee {
 
 export type EventType = 'feira' | 'saude' | 'reuniao' | 'cultura' | 'esporte' | 'campanha' | 'outros';
 
+export type AppNotificationType =
+  | 'support'
+  | 'comment'
+  | 'reply'
+  | 'post_resolved'
+  | 'job_interest'
+  | 'application_viewed'
+  | 'application_contacted'
+  | 'event_attendance';
+
 export interface AppNotification {
   id: string;
   userId: string;
-  actorId: string;
+  actorId?: string;
   actorName?: string;
   actorAvatarUrl?: string;
-  type: 'support' | 'comment';
-  postId: string;
+  type: AppNotificationType;
+  postId?: string;
+  commentId?: string;
+  jobId?: string;
+  applicationId?: string;
+  eventId?: string;
   postTitle?: string;
+  jobTitle?: string;
+  eventTitle?: string;
   content?: string;
   isRead: boolean;
   createdAt: string;
