@@ -66,6 +66,7 @@ const CompanyDashboard = lazyWithRetry(() => import('./pages/CompanyDashboard'),
 const CompanyPublicProfile = lazyWithRetry(() => import('./pages/CompanyPublicProfile'), 'empresa-publica');
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'notificacoes');
 const PostDetails = lazyWithRetry(() => import('./pages/PostDetails'), 'post');
+const Admin = lazyWithRetry(() => import('./pages/Admin'), 'admin');
 
 function RouteFallback() {
   return (
@@ -107,6 +108,7 @@ export default function App() {
                         <Route path="/empresa/:companyId" element={<CompanyPublicProfile />} />
                         <Route path="/notificacoes" element={<Notifications />} />
                         <Route path="/post/:postId" element={<PostDetails />} />
+                        <Route path="/admin" element={<Admin />} />
                       </Routes>
                     </Suspense>
                   </Layout>

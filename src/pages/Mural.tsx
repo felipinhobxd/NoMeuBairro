@@ -5,7 +5,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
   useNeighborhood, neighborhoodMatches, neighborhoodSearchText, normalizeNeighborhoodText,
 } from '../contexts/NeighborhoodContext';
-import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw, Search, X, LocateFixed, Map } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw, Search, X, LocateFixed, Map, AlertTriangle } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast } from '../components/UI';
 import MapPicker from '../components/MapPicker';
 import { cn } from '../utils/cn';
@@ -37,10 +37,10 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 }
 
 export default function Mural() {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const {
-    events, addEvent, deleteEvent, isMyEvent, toggleAttendance, getEventAttendees,
+    events, addEvent, deleteEvent, isMyEvent, toggleAttendance, getEventAttendees, reportContent,
     loadEvents, eventsLoading, attendingEventIds,
   } = useData();
   const { currentNeighborhood, isNeighborhoodSelected } = useNeighborhood();
@@ -49,6 +49,9 @@ export default function Mural() {
   const [activeType, setActiveType] = useState<EventType | 'all'>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [showReport, setShowReport] = useState<{ eventId: string; title: string } | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetail, setReportDetail] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [nearMe, setNearMe] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -189,6 +192,25 @@ export default function Mural() {
     setLoadingAttendees(false);
   };
 
+  const openMapOverview = useCallback(() => {
+    try {
+      sessionStorage.removeItem('anb-map-focus-post');
+      sessionStorage.removeItem('anb-map-focus-event');
+    } catch {}
+    navigate('/mapa');
+  }, [navigate]);
+
+  const handleSendReport = async () => {
+    if (!showReport || !reportReason.trim()) return;
+    if (!isAuthenticated || !user) { navigate('/login'); return; }
+    const reason = reportDetail.trim() ? `${reportReason}: ${reportDetail.trim()}` : reportReason;
+    await reportContent({ eventId: showReport.eventId, reason });
+    setShowReport(null);
+    setReportReason('');
+    setReportDetail('');
+    toast('Denúncia enviada para análise do administrador.');
+  };
+
   const selectedLabel = isNeighborhoodSelected && currentNeighborhood.name ? currentNeighborhood.name : 'todos os bairros';
 
   return (
@@ -293,10 +315,11 @@ export default function Mural() {
                       {area && <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-500/10 px-2.5 py-1 font-semibold text-orange-800 dark:text-orange-300"><MapPin className="w-3 h-3" />{area}</span>}
                       <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" />{ev.location}</span>
                       <span className="inline-flex items-center gap-1 text-slate-400"><Clock className="w-3 h-3" />{fmtDate(ev.date)}</span>
-                      {ev.latitude != null && ev.longitude != null && <button onClick={() => navigate('/mapa')} className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"><Map className="w-3 h-3" />Ver no mapa</button>}
+                      {ev.latitude != null && ev.longitude != null && <button onClick={openMapOverview} className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"><Map className="w-3 h-3" />Ver no mapa</button>}
                     </div>
 
                     <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50">
+                      <button onClick={() => { if (!isAuthenticated) { navigate('/login'); return; } setShowReport({ eventId: ev.id, title: ev.title }); }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"><AlertTriangle className="w-3.5 h-3.5" />Denunciar</button>
                       <button onClick={() => openAttendees(ev.id, ev.title)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100"><Users className="w-3.5 h-3.5" /><span>{ev.attendanceCount || 0}</span></button>
                       <Button size="sm" variant="secondary" className={cn('h-8 !px-3 !text-[11px]', isAttending && '!bg-emerald-600 !text-white !ring-0 hover:!bg-emerald-700')} onClick={() => void handleToggleAttendance(ev.id)} aria-pressed={isAttending}>
                         <CheckCircle2 className="w-3.5 h-3.5" />{isAttending ? 'Confirmado' : 'Vou comparecer'}
@@ -321,6 +344,15 @@ export default function Mural() {
           <Textarea label="Descrição" placeholder="Detalhes do evento, horário, como participar..." value={fdesc} onChange={e => setFdesc(e.target.value)} required />
           <div className="flex gap-3 pt-2"><Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button><Button type="submit" className="flex-1" disabled={!ft.trim() || !fdate || !floc.trim() || !fdesc.trim()}>Publicar</Button></div>
         </form>
+      </Modal>
+
+      <Modal open={!!showReport} onClose={() => { setShowReport(null); setReportReason(''); setReportDetail(''); }} title="Denunciar Evento">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">Você está denunciando <strong>{showReport?.title}</strong>. Escolha o motivo para o administrador analisar.</p>
+          <Select label="Categoria da Denúncia" options={[{ value: '', label: 'Selecione uma categoria...' }, { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' }, { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' }, { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' }, { value: 'Conteúdo inadequado ou ilegal', label: 'Conteúdo inadequado ou ilegal' }, { value: 'Outros', label: 'Outros' }]} value={reportReason} onChange={e => setReportReason(e.target.value)} />
+          <Textarea label="Detalhes da denúncia (opcional)" placeholder="Explique o problema para ajudar na análise..." value={reportDetail} onChange={e => setReportDetail(e.target.value)} rows={3} />
+          <div className="flex gap-3 pt-2"><Button variant="secondary" className="flex-1" onClick={() => { setShowReport(null); setReportReason(''); setReportDetail(''); }}>Cancelar</Button><Button className="flex-1 !bg-red-600 hover:!bg-red-700 !text-white" onClick={() => void handleSendReport()} disabled={!reportReason}>Enviar Denúncia</Button></div>
+        </div>
       </Modal>
 
       <Modal open={!!viewAttendeesTarget} onClose={() => setViewAttendeesTarget(null)} title={`Confirmados: ${viewAttendeesTarget?.title || ''}`}>

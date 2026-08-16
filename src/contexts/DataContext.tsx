@@ -42,7 +42,7 @@ interface DataContextType {
   deleteEvent: (eventId: string) => Promise<void>;
   toggleAttendance: (eventId: string) => Promise<void>;
   getEventAttendees: (eventId: string) => Promise<any[]>;
-  reportContent: (data: { postId?: string; commentId?: string; reason: string }) => Promise<void>;
+  reportContent: (data: { postId?: string; commentId?: string; eventId?: string; reason: string }) => Promise<void>;
   updateReportStatus: (reportId: string, status: 'resolved' | 'ignored') => Promise<void>;
   markNotificationAsRead: (notificationId: string) => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;
@@ -362,7 +362,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return { data: inserted, error } as any;
   }, [user]);
 
-  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => { await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason }); }, [user]);
+  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; eventId?: string; reason: string }) => { await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, event_id: data.eventId, reason: data.reason }); }, [user]);
   const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => { await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId); }, [user]);
   const markNotificationAsRead = useCallback(async (notificationId: string) => { if (!user) return; const target = notifications.find(n => n.id === notificationId); if (target?.isRead) return; const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId).eq('user_id', user.id); if (!error) setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)); }, [user, notifications]);
   const markNotificationsAsRead = useCallback(async () => { if (!user) return; const { error } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false); if (!error) setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))); }, [user]);
