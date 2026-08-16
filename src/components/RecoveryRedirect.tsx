@@ -58,18 +58,23 @@ export default function RecoveryRedirect() {
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     };
 
-    const errorCode = urlErrorCode();
-    if (errorCode === 'otp_expired' || errorCode === 'access_denied' || errorCode === 'bad_code_verifier') {
-      goToExpired();
-      return;
-    }
-
     const search = new URLSearchParams(window.location.search);
     const recoveryHint = search.get('recovery') === '1';
     const code = search.get('code');
     const rawHash = window.location.hash;
-    const tokenInHash = rawHash.includes('type=recovery') || rawHash.includes('access_token=');
-    const explicitRecoveryPayload = Boolean(code || tokenInHash);
+    const tokenInHash = rawHash.includes('type=recovery') || (recoveryHint && rawHash.includes('access_token='));
+    const recoveryContext = recoveryHint || tokenInHash;
+    const explicitRecoveryPayload = Boolean((code && recoveryHint) || tokenInHash);
+
+    const errorCode = urlErrorCode();
+    if (recoveryContext && (errorCode === 'otp_expired' || errorCode === 'access_denied' || errorCode === 'bad_code_verifier')) {
+      goToExpired();
+      return;
+    }
+
+    // Ignore OAuth/signup confirmation codes. Only a code that came back through
+    // the password-recovery redirect (?recovery=1) belongs to this component.
+    if (!recoveryContext) return;
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
@@ -80,7 +85,7 @@ export default function RecoveryRedirect() {
     });
 
     const consumeRecovery = async () => {
-      if (code && !redirected) {
+      if (code && recoveryHint && !redirected) {
         const { data: exchanged, error } = await supabase.auth.exchangeCodeForSession(code);
         if (!active || redirected) return;
         if (!error && exchanged.session) {
