@@ -9,14 +9,7 @@ import {
 } from 'lucide-react';
 import { Card, Button, StatusBadge, CategoryBadge, timeAgo } from '../components/UI';
 import { cn } from '../utils/cn';
-
-const allBadges = [
-  { key: 'vizinho_engajado', name: 'Vizinho Engajado', desc: '10 relatos criados', emoji: '🏅' },
-  { key: 'guardiao', name: 'Guardião do Bairro', desc: '25 relatos criados', emoji: '🛡️' },
-  { key: 'voz_ativa', name: 'Voz Ativa', desc: '50 apoios recebidos', emoji: '📢' },
-  { key: 'construtor', name: 'Construtor', desc: 'Primeiro relato resolvido', emoji: '🏗️' },
-  { key: 'embaixador', name: 'Embaixador', desc: '100 interações', emoji: '⭐' },
-];
+import { communityBadges, getEarnedCommunityBadges } from '../utils/communityBadges';
 
 export default function PublicProfile() {
   const { userId } = useParams();
@@ -62,21 +55,14 @@ export default function PublicProfile() {
     const userPosts = (posts || []).filter(p => p.authorId === userId);
     const userEvents = (events || []).filter(e => e.createdBy === userId);
     const supportsReceived = userPosts.reduce((sum, p) => sum + (p.supports || 0), 0);
-    const totalComments = userPosts.reduce((sum, p) => sum + (p.commentsCount || 0), 0);
-
-    const earned: string[] = [];
-    if (userPosts.length >= 10) earned.push('vizinho_engajado');
-    if (userPosts.length >= 25) earned.push('guardiao');
-    if (supportsReceived >= 50) earned.push('voz_ativa');
-    if (userPosts.some(p => p.status === 'resolved')) earned.push('construtor');
-    if (userPosts.length + totalComments >= 100) earned.push('embaixador');
+    const earnedBadges = getEarnedCommunityBadges({ posts: userPosts, supportsReceived, eventsCount: userEvents.length });
 
     return {
       posts: userPosts,
       count: userPosts.length,
       evCount: userEvents.length,
       supportsReceived,
-      earnedBadges: earned
+      earnedBadges,
     };
   }, [userId, posts, events]);
 
@@ -153,7 +139,7 @@ export default function PublicProfile() {
           <Award className="w-4 h-4 text-amber-500" /> Conquistas de {displayName.split(' ')[0]}
         </h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {allBadges.map(badge => {
+          {communityBadges.map(badge => {
             const earned = stats.earnedBadges.includes(badge.key);
             if (!earned) return null;
             return (
