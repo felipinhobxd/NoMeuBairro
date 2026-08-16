@@ -1,6 +1,7 @@
 export type PostStatus = 'pending' | 'in_progress' | 'resolved';
 export type PostCategory = 'buraco' | 'iluminacao' | 'fios' | 'limpeza' | 'transporte' | 'seguranca' | 'outros';
 export type AccountType = 'resident' | 'company';
+export type LocationPrecision = 'exact' | 'reverse' | 'neighborhood';
 
 export interface User {
   id: string;
@@ -32,6 +33,9 @@ export interface Post {
   description: string;
   imageUrl?: string;
   location: string;
+  neighborhood?: string;
+  locality?: string;
+  locationPrecision?: LocationPrecision;
   latitude?: number;
   longitude?: number;
   supports: number;
@@ -57,6 +61,9 @@ export interface CommunityEvent {
   description: string;
   date: string;
   location: string;
+  neighborhood?: string;
+  locality?: string;
+  locationPrecision?: LocationPrecision;
   latitude?: number;
   longitude?: number;
   type: EventType;
