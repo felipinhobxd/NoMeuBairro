@@ -156,6 +156,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData, user]);
 
+  useEffect(() => {
+    if (!user) return;
+    const handleNotificationClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest('button');
+      if (!button) return;
+      const text = button.textContent || '';
+      if (!text.includes('apoiou seu relato') && !text.includes('comentou no seu relato')) return;
+      const match = notifications.find(n => {
+        if (!n.postTitle || !text.includes(n.postTitle)) return false;
+        if (!n.actorName || !text.includes(n.actorName)) return false;
+        return true;
+      });
+      if (!match || match.isRead) return;
+      void supabase.from('notifications').update({ is_read: true }).eq('id', match.id).eq('user_id', user.id).then(({ error }) => {
+        if (!error) setNotifications(prev => prev.map(n => n.id === match.id ? { ...n, isRead: true } : n));
+      });
+    };
+    document.addEventListener('click', handleNotificationClick, true);
+    return () => document.removeEventListener('click', handleNotificationClick, true);
+  }, [user, notifications]);
+
   const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' };
     const res = await supabase.from('posts').insert({ author_id: user.id, category: data.category, title: data.title, description: data.description, image_url: data.imageUrl, location: data.location, latitude: data.latitude, longitude: data.longitude, is_anonymous: false });
@@ -204,7 +226,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => { if (!user) return { error: 'Not authenticated' }; const res = await supabase.from('events').insert({ title: data.title, description: data.description, event_date: data.date, location: data.location, type: data.type, latitude: data.latitude, longitude: data.longitude, created_by: user.id }); if (!res.error) await fetchData(); return res; }, [user, fetchData]);
   const reportContent = useCallback(async (data: { postId?: string; commentId?: string; reason: string }) => { await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, reason: data.reason }); }, [user]);
   const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => { await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId); }, [user]);
-  const markNotificationsAsRead = useCallback(async () => { if (!user) return; await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false); setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))); }, [user]);
+  const markNotificationsAsRead = useCallback(async () => {
+    // Kept for compatibility with existing callers. Opening the notification panel must not mark everything as read.
+    return;
+  }, []);
   const deleteAllNotifications = useCallback(async () => { if (!user) return; await supabase.from('notifications').delete().eq('user_id', user.id); setNotifications([]); }, [user]);
 
   const isMyPost = useCallback((post: { id: string; authorId: string }) => getMyAnonIds().has(post.id) || (!!user && post.authorId === user.id), [user, getMyAnonIds]);
