@@ -21,13 +21,6 @@ export default function DataRouteLoader() {
     if (pathname === '/mapa') {
       void loadPosts();
       void loadEvents();
-      return;
-    }
-
-    // Os perfis ainda usam os agregados locais de relatos/eventos.
-    if (pathname === '/perfil' || pathname.startsWith('/perfil/')) {
-      void loadPosts();
-      void loadEvents();
     }
   }, [pathname, loadPosts, loadEvents, loadMyAttendance]);
 
