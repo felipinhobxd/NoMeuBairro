@@ -9,6 +9,7 @@ import { cn } from '../utils/cn';
 import type { AccountType } from '../types';
 
 type ActivityTab = 'posts' | 'comments' | 'supports' | 'events' | 'applications';
+type PostFilter = 'all' | 'pending' | 'in_progress' | 'resolved';
 
 type ActivityData = {
   posts: any[];
@@ -44,6 +45,12 @@ const applicationStatus: Record<string, { label: string; cls: string }> = {
   withdrawn: { label: 'Interesse retirado', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
 };
 
+const applicationSteps = [
+  { key: 'interested', label: 'Enviado' },
+  { key: 'viewed', label: 'Visualizado' },
+  { key: 'contacted', label: 'Contato' },
+] as const;
+
 function activityDate(value?: string) {
   if (!value) return '';
   return new Date(value).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -58,9 +65,33 @@ function getAnonymousIds() {
   }
 }
 
+function ApplicationProgress({ status }: { status: string }) {
+  if (status === 'withdrawn') {
+    return <p className="mt-3 text-xs font-semibold text-slate-500 dark:text-slate-400">Candidatura encerrada por você.</p>;
+  }
+  const currentIndex = Math.max(0, applicationSteps.findIndex((step) => step.key === status));
+  return (
+    <div className="mt-3 grid grid-cols-3 gap-1" aria-label="Progresso da candidatura">
+      {applicationSteps.map((step, index) => {
+        const reached = index <= currentIndex;
+        return (
+          <div key={step.key} className="min-w-0">
+            <div className="flex items-center">
+              <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', reached ? 'bg-green-600' : 'bg-slate-300 dark:bg-slate-700')} />
+              {index < applicationSteps.length - 1 && <span className={cn('h-0.5 flex-1', index < currentIndex ? 'bg-green-600' : 'bg-slate-200 dark:bg-slate-700')} />}
+            </div>
+            <p className={cn('mt-1 text-[10px] font-bold', reached ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400')}>{step.label}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ProfileActivity({ userId, accountType }: { userId: string; accountType?: AccountType }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<ActivityTab>('posts');
+  const [postFilter, setPostFilter] = useState<PostFilter>('all');
   const [data, setData] = useState<ActivityData>(EMPTY_DATA);
   const [counts, setCounts] = useState<ActivityCounts>(EMPTY_COUNTS);
   const [loading, setLoading] = useState(true);
@@ -174,15 +205,25 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
     [accountType],
   );
 
+  const visiblePosts = useMemo(
+    () => postFilter === 'all' ? data.posts : data.posts.filter((post) => post.status === postFilter),
+    [data.posts, postFilter],
+  );
+
   useEffect(() => {
     if (accountType !== 'resident' && activeTab === 'applications') setActiveTab('posts');
   }, [accountType, activeTab]);
 
   const openEvent = (eventId: string) => {
+    try { sessionStorage.setItem('anb-mural-focus-event', eventId); } catch {}
     navigate('/mural');
-    window.setTimeout(() => {
-      document.getElementById(`ev-${eventId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 180);
+  };
+
+  const openApplication = (application: any) => {
+    if (application.job_id) {
+      try { sessionStorage.setItem('anb-job-focus', application.job_id); } catch {}
+    }
+    navigate('/empregos');
   };
 
   const emptyMessages: Record<ActivityTab, string> = {
@@ -192,6 +233,8 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
     events: 'Você ainda não publicou nenhum evento.',
     applications: 'Você ainda não demonstrou interesse em nenhuma vaga.',
   };
+
+  const currentLength = activeTab === 'posts' ? visiblePosts.length : (data[activeTab] || []).length;
 
   return (
     <Card className="!p-0 overflow-hidden">
@@ -226,6 +269,20 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
             </button>
           ))}
         </div>
+        {activeTab === 'posts' && (
+          <div className="flex gap-2 overflow-x-auto no-scrollbar mt-3" aria-label="Filtrar relatos por status">
+            {([
+              ['all', 'Todos'], ['pending', 'Pendentes'], ['in_progress', 'Em andamento'], ['resolved', 'Resolvidos'],
+            ] as Array<[PostFilter, string]>).map(([value, label]) => (
+              <button key={value} type="button" onClick={() => setPostFilter(value)} className={cn(
+                'shrink-0 rounded-full px-3 py-1.5 text-xs font-bold border transition-colors',
+                postFilter === value
+                  ? value === 'resolved' ? 'bg-green-600 border-green-600 text-white' : 'bg-orange-700 border-orange-700 text-white'
+                  : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300',
+              )}>{label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="p-4 sm:p-5 min-h-48">
@@ -234,14 +291,14 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
         ) : (
           <>
             {error && <div className="mb-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-3 py-2.5 text-sm text-amber-800 dark:text-amber-300">{error}</div>}
-            {data[activeTab].length === 0 ? (
+            {currentLength === 0 ? (
               <div className="py-10 text-center">
                 <p className="font-semibold text-slate-800 dark:text-slate-100">Nada por aqui ainda</p>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{emptyMessages[activeTab]}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{activeTab === 'posts' && postFilter !== 'all' ? 'Nenhum relato seu está com este status.' : emptyMessages[activeTab]}</p>
               </div>
             ) : (
               <div className="space-y-2.5">
-                {activeTab === 'posts' && data.posts.map((post) => {
+                {activeTab === 'posts' && visiblePosts.map((post) => {
                   const status = postStatus[post.status] || postStatus.pending;
                   return (
                     <button key={post.id} type="button" onClick={() => navigate(`/post/${post.id}`)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -279,16 +336,16 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
                 {activeTab === 'applications' && data.applications.map((application) => {
                   const status = applicationStatus[application.status] || applicationStatus.interested;
                   return (
-                    <button key={application.id} type="button" onClick={() => navigate('/empregos')} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                      <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0"><Briefcase className="w-5 h-5 text-blue-600 dark:text-blue-300" /></div><div className="flex-1 min-w-0"><p className="font-bold text-slate-900 dark:text-white truncate">{application.job?.title || 'Vaga'}</p><p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{application.job?.company_name || 'Empresa'}</p><div className="flex flex-wrap items-center gap-2 mt-2"><span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', status.cls)}>{status.label}</span>{application.job?.neighborhood && <span className="text-xs text-slate-500 inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{application.job.neighborhood}</span>}<span className="text-xs text-slate-500">{activityDate(application.created_at)}</span></div></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
+                    <button key={application.id} type="button" onClick={() => openApplication(application)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                      <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0"><Briefcase className="w-5 h-5 text-blue-600 dark:text-blue-300" /></div><div className="flex-1 min-w-0"><p className="font-bold text-slate-900 dark:text-white truncate">{application.job?.title || 'Vaga'}</p><p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{application.job?.company_name || 'Empresa'}</p><div className="flex flex-wrap items-center gap-2 mt-2"><span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', status.cls)}>{status.label}</span>{application.job?.neighborhood && <span className="text-xs text-slate-500 inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{application.job.neighborhood}</span>}<span className="text-xs text-slate-500">{activityDate(application.created_at)}</span></div><ApplicationProgress status={application.status} /></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
                     </button>
                   );
                 })}
               </div>
             )}
 
-            {counts[activeTab] > data[activeTab].length && (
-              <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">Mostrando as {data[activeTab].length} atividades mais recentes de {counts[activeTab]}.</p>
+            {counts[activeTab] > (data[activeTab] || []).length && (
+              <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">Mostrando as {(data[activeTab] || []).length} atividades mais recentes de {counts[activeTab]}.</p>
             )}
           </>
         )}
