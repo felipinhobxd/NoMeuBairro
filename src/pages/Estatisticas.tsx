@@ -1,168 +1,197 @@
-import { useMemo } from 'react';
-import { useData } from '../contexts/DataContext';
-import { useNeighborhood } from '../contexts/NeighborhoodContext';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, postCategories } from '../components/UI';
 import {
   BarChart3, PieChart, Activity, CheckCircle2,
-  Clock, AlertCircle, TrendingUp, Users
+  Clock, AlertCircle, TrendingUp, CalendarDays, Briefcase, Loader2, RefreshCw,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { supabase } from '../utils/supabase';
+
+type CategoryStat = { category: string; count: number };
+type DailyStat = { date: string; count: number };
+type DashboardStats = {
+  totalReports: number;
+  pending: number;
+  inProgress: number;
+  resolved: number;
+  categories: CategoryStat[];
+  dailyReports: DailyStat[];
+  upcomingEvents: number;
+  eventsNext7Days: number;
+  activeJobs: number;
+  updatedAt?: string;
+};
+
+function normalizeStats(value: any): DashboardStats {
+  return {
+    totalReports: Number(value?.totalReports || 0),
+    pending: Number(value?.pending || 0),
+    inProgress: Number(value?.inProgress || 0),
+    resolved: Number(value?.resolved || 0),
+    categories: Array.isArray(value?.categories)
+      ? value.categories.map((item: any) => ({ category: String(item.category || 'outros'), count: Number(item.count || 0) }))
+      : [],
+    dailyReports: Array.isArray(value?.dailyReports)
+      ? value.dailyReports.map((item: any) => ({ date: String(item.date || ''), count: Number(item.count || 0) }))
+      : [],
+    upcomingEvents: Number(value?.upcomingEvents || 0),
+    eventsNext7Days: Number(value?.eventsNext7Days || 0),
+    activeJobs: Number(value?.activeJobs || 0),
+    updatedAt: value?.updatedAt || undefined,
+  };
+}
 
 export default function Estatisticas() {
-  const { posts } = useData();
-  const { currentNeighborhood } = useNeighborhood();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const stats = useMemo(() => {
-    const total = posts.length;
-    if (total === 0) return null;
+  const loadStats = async () => {
+    setLoading(true);
+    setError('');
+    const { data, error: queryError } = await supabase.rpc('get_public_dashboard_stats');
+    if (queryError) {
+      console.error('Erro ao carregar dados agregados:', queryError);
+      setError('Não foi possível atualizar os dados agora.');
+    } else {
+      setStats(normalizeStats(data));
+    }
+    setLoading(false);
+  };
 
-    const byStatus = {
-      pending: posts.filter(p => p.status === 'pending').length,
-      in_progress: posts.filter(p => p.status === 'in_progress').length,
-      resolved: posts.filter(p => p.status === 'resolved').length,
-    };
+  useEffect(() => { void loadStats(); }, []);
 
-    const byCategory: Record<string, number> = {};
-    posts.forEach(p => {
-      byCategory[p.category] = (byCategory[p.category] || 0) + 1;
-    });
+  const derived = useMemo(() => {
+    if (!stats) return null;
+    const resolutionRate = stats.totalReports > 0 ? (stats.resolved / stats.totalReports) * 100 : 0;
+    const open = stats.pending + stats.inProgress;
+    const maxDaily = Math.max(1, ...stats.dailyReports.map((item) => item.count));
+    const mostCommon = stats.categories[0] || null;
+    return { resolutionRate, open, maxDaily, mostCommon };
+  }, [stats]);
 
-    const resolutionRate = ((byStatus.resolved / total) * 100).toFixed(1);
+  if (loading && !stats) {
+    return (
+      <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
+        <Loader2 className="w-10 h-10 text-orange-700 animate-spin mb-4" />
+        <p className="font-semibold text-slate-600 dark:text-slate-300">Calculando os dados da comunidade...</p>
+      </div>
+    );
+  }
 
-    // Encontrar categoria mais comum
-    let mostCommonCat = { name: '', count: 0 };
-    Object.entries(byCategory).forEach(([name, count]) => {
-      if (count > mostCommonCat.count) mostCommonCat = { name, count };
-    });
-
-    return {
-      total,
-      byStatus,
-      byCategory: Object.entries(byCategory).sort((a, b) => b[1] - a[1]),
-      resolutionRate,
-      mostCommonCat
-    };
-  }, [posts]);
-
-  if (!stats) {
+  if (!stats || !derived) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <Activity className="w-16 h-16 text-slate-200 mb-4" />
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Sem dados suficientes</h2>
-        <p className="text-slate-500 max-w-xs mt-2">Aguardando os primeiros relatos para gerar as estatísticas do bairro.</p>
+        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Dados indisponíveis</h2>
+        <p className="text-slate-500 max-w-sm mt-2">{error || 'Ainda não foi possível calcular os indicadores comunitários.'}</p>
+        <button type="button" onClick={() => void loadStats()} className="mt-5 min-h-11 rounded-xl bg-orange-700 px-4 py-2.5 text-sm font-bold text-white inline-flex items-center gap-2"><RefreshCw className="w-4 h-4" />Tentar novamente</button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
-            <BarChart3 className="w-5 h-5 text-emerald-600" />
-          </div>
-          Estatísticas do Bairro
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Transparência e dados sobre a manutenção em {currentNeighborhood.name}</p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-orange-700 dark:text-orange-300" />
+            </div>
+            Dados da Comunidade
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Indicadores calculados diretamente no banco, sem dados fictícios.</p>
+        </div>
+        <button type="button" onClick={() => void loadStats()} disabled={loading} className="min-h-11 self-start rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-200 inline-flex items-center gap-2 disabled:opacity-60">
+          <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} /> Atualizar
+        </button>
       </div>
 
-      {/* Resumo Rápido */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {error && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">{error}</div>}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { label: 'Total de Relatos', value: stats.total, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-500/10' },
-          { label: 'Resolvidos', value: stats.byStatus.resolved, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
-          { label: 'Taxa de Solução', value: `${stats.resolutionRate}%`, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-500/10' },
-          { label: 'Em Aberto', value: stats.byStatus.pending + stats.byStatus.in_progress, icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-500/10' },
-        ].map((item, i) => (
-          <Card key={i} className="!p-4 flex flex-col items-center text-center">
-            <div className={cn("w-10 h-10 rounded-full flex items-center justify-center mb-2", item.bg)}>
-              <item.icon className={cn("w-5 h-5", item.color)} />
-            </div>
+          { label: 'Total de relatos', value: stats.totalReports, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-500/10' },
+          { label: 'Resolvidos', value: stats.resolved, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-500/10' },
+          { label: 'Taxa de solução', value: `${derived.resolutionRate.toFixed(1)}%`, icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-500/10' },
+          { label: 'Em aberto', value: derived.open, icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+        ].map((item) => (
+          <Card key={item.label} className="!p-4 flex flex-col items-center text-center">
+            <div className={cn('w-10 h-10 rounded-full flex items-center justify-center mb-2', item.bg)}><item.icon className={cn('w-5 h-5', item.color)} /></div>
             <span className="text-2xl font-black text-slate-900 dark:text-white">{item.value}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mt-1">{item.label}</span>
+            <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mt-1">{item.label}</span>
           </Card>
         ))}
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Gráfico de Categorias */}
-        <Card className="flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <PieChart className="w-4 h-4 text-emerald-500" /> Distribuição por Categoria
-            </h3>
-          </div>
-          <div className="space-y-4 flex-1">
-            {stats.byCategory.map(([cat, count]) => {
-              const percentage = ((count / stats.total) * 100).toFixed(0);
-              const categoryInfo = postCategories[cat as keyof typeof postCategories] || { label: cat, emoji: '❓' };
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Card className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center shrink-0"><CalendarDays className="w-6 h-6 text-violet-600" /></div>
+          <div><p className="text-2xl font-black text-slate-900 dark:text-white">{stats.upcomingEvents}</p><p className="text-sm font-bold text-slate-700 dark:text-slate-200">Eventos futuros</p><p className="text-xs text-slate-500 mt-0.5">{stats.eventsNext7Days} nos próximos 7 dias</p></div>
+        </Card>
+        <Card className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0"><Briefcase className="w-6 h-6 text-blue-600" /></div>
+          <div><p className="text-2xl font-black text-slate-900 dark:text-white">{stats.activeJobs}</p><p className="text-sm font-bold text-slate-700 dark:text-slate-200">Vagas ativas</p><p className="text-xs text-slate-500 mt-0.5">Oportunidades ainda não expiradas</p></div>
+        </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-6"><PieChart className="w-4 h-4 text-orange-700" /> Relatos por categoria</h3>
+          {stats.categories.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">Ainda não existem relatos para comparar.</p> : <div className="space-y-4">
+            {stats.categories.map(({ category, count }) => {
+              const percentage = stats.totalReports > 0 ? (count / stats.totalReports) * 100 : 0;
+              const categoryInfo = postCategories[category as keyof typeof postCategories] || { label: category, emoji: '❓' };
               return (
-                <div key={cat} className="space-y-1.5">
-                  <div className="flex justify-between text-xs font-bold">
-                    <span className="text-slate-700 dark:text-slate-300">{categoryInfo.emoji} {categoryInfo.label}</span>
-                    <span className="text-slate-400">{count} ({percentage}%)</span>
-                  </div>
-                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
+                <div key={category} className="space-y-1.5">
+                  <div className="flex justify-between gap-3 text-xs font-bold"><span className="text-slate-700 dark:text-slate-300">{categoryInfo.emoji} {categoryInfo.label}</span><span className="text-slate-500">{count} · {percentage.toFixed(0)}%</span></div>
+                  <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden"><div className="h-full bg-orange-600 rounded-full" style={{ width: `${Math.max(percentage, count > 0 ? 2 : 0)}%` }} /></div>
                 </div>
               );
             })}
-          </div>
+          </div>}
         </Card>
 
-        {/* Status e Eficiência */}
         <Card>
-          <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-6">
-            <Clock className="w-4 h-4 text-emerald-500" /> Status dos Problemas
-          </h3>
-          <div className="relative h-48 flex items-center justify-center">
-            {/* Visualização de Status em Barras Verticais */}
-            <div className="flex items-end gap-6 h-full w-full px-4">
-              {[
-                { label: 'Pendente', count: stats.byStatus.pending, color: 'bg-slate-300 dark:bg-slate-700' },
-                { label: 'Em Curso', count: stats.byStatus.in_progress, color: 'bg-blue-500' },
-                { label: 'Resolvido', count: stats.byStatus.resolved, color: 'bg-emerald-500' },
-              ].map((s, i) => {
-                const h = stats.total > 0 ? (s.count / stats.total) * 100 : 0;
-                return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                    <span className="text-xs font-bold text-slate-900 dark:text-white opacity-0 group-hover:opacity-100 transition-opacity">{s.count}</span>
-                    <div
-                      className={cn("w-full rounded-t-lg transition-all duration-1000 ease-out min-h-[4px]", s.color)}
-                      style={{ height: `${Math.max(h, 5)}%` }}
-                    />
-                    <span className="text-[10px] font-bold text-slate-400 uppercase text-center leading-tight">{s.label}</span>
-                  </div>
-                );
-              })}
-            </div>
+          <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-6"><Clock className="w-4 h-4 text-orange-700" /> Situação dos relatos</h3>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Pendente', count: stats.pending, cls: 'bg-amber-500' },
+              { label: 'Em andamento', count: stats.inProgress, cls: 'bg-blue-500' },
+              { label: 'Resolvido', count: stats.resolved, cls: 'bg-green-600' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3 text-center"><div className={cn('w-3 h-3 rounded-full mx-auto mb-2', item.cls)} /><p className="text-xl font-black text-slate-900 dark:text-white">{item.count}</p><p className="text-[10px] sm:text-xs font-bold text-slate-500 mt-1">{item.label}</p></div>
+            ))}
           </div>
-
-          <div className="mt-8 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700">
-            <div className="flex items-start gap-3">
-              <TrendingUp className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-xs font-bold text-slate-900 dark:text-white">Insight da Comunidade</h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                  O problema mais recorrente é <span className="font-bold text-emerald-600 dark:text-emerald-400">"{postCategories[stats.mostCommonCat.name as keyof typeof postCategories]?.label}"</span>.
-                  Continue relatando e apoiando para que as autoridades priorizem o bairro {currentNeighborhood.name}!
-                </p>
-              </div>
-            </div>
+          <div className="mt-5 rounded-xl bg-slate-50 dark:bg-slate-800/60 p-4">
+            <p className="text-xs font-bold text-slate-900 dark:text-white">Leitura rápida</p>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
+              {derived.mostCommon
+                ? <>A categoria mais registrada é <strong>{postCategories[derived.mostCommon.category as keyof typeof postCategories]?.label || derived.mostCommon.category}</strong>, com {derived.mostCommon.count} relato{derived.mostCommon.count === 1 ? '' : 's'}.</>
+                : 'Os primeiros relatos ainda estão sendo registrados.'}
+            </p>
           </div>
         </Card>
       </div>
 
-      {/* Rodapé de Dados */}
-      <div className="text-center py-4">
-        <p className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-bold">
-          Dados atualizados em tempo real via Supabase ⚡
-        </p>
-      </div>
+      <Card>
+        <div className="flex items-center justify-between gap-3 mb-5"><div><h3 className="font-bold text-slate-900 dark:text-white">Novos relatos nos últimos 7 dias</h3><p className="text-xs text-slate-500 mt-1">Contagem diária diretamente do banco</p></div><TrendingUp className="w-5 h-5 text-orange-700" /></div>
+        <div className="grid grid-cols-7 gap-2 h-44 items-end">
+          {stats.dailyReports.map((item) => {
+            const height = (item.count / derived.maxDaily) * 100;
+            const date = item.date ? new Date(`${item.date}T12:00:00`) : null;
+            return (
+              <div key={item.date} className="h-full flex flex-col justify-end items-center gap-2 min-w-0">
+                <span className="text-xs font-black text-slate-700 dark:text-slate-200">{item.count}</span>
+                <div className="w-full max-w-10 rounded-t-lg bg-orange-600 min-h-1" style={{ height: `${Math.max(height, item.count > 0 ? 8 : 2)}%` }} />
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase">{date ? date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '') : '-'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <p className="text-center text-[10px] text-slate-400 uppercase tracking-[0.16em] font-bold">Dados agregados · nenhuma informação pessoal é exibida</p>
     </div>
   );
 }
