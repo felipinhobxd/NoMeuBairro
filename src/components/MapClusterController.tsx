@@ -28,23 +28,27 @@ function clusterColor(count: number) {
   return '#22c55e';
 }
 
-function clusterIcon(count: number) {
-  const color = clusterColor(count);
+function clusterIcon(count: number, heatEnabled: boolean) {
+  const color = heatEnabled ? clusterColor(count) : '#475569';
   const size = count >= 100 ? 62 : count >= 10 ? 58 : 54;
+  const title = heatEnabled
+    ? `${count} itens nesta área — cor indica intensidade; clique para aproximar`
+    : `${count} itens nesta área — clique para aproximar`;
+
   return L.divIcon({
     className: 'nmb-leaflet-cluster',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
-    html: `<div class="nmb-density-count" title="${count} itens nesta área — clique para aproximar" style="--nmb-density-color:${color};width:${size}px;height:${size}px"><span>${count}</span></div>`,
+    html: `<div class="nmb-density-count${heatEnabled ? ' is-heat-active' : ' is-heat-off'}" title="${title}" style="--nmb-density-color:${color};width:${size}px;height:${size}px"><span>${count}</span></div>`,
   });
 }
 
 function heatRadiusForZoom(zoom: number) {
-  if (zoom <= 11) return 31;
-  if (zoom <= 13) return 30;
-  if (zoom <= 15) return 28;
-  if (zoom <= 17) return 26;
-  return 24;
+  if (zoom <= 11) return 34;
+  if (zoom <= 13) return 32;
+  if (zoom <= 15) return 30;
+  if (zoom <= 17) return 28;
+  return 26;
 }
 
 type RGB = [number, number, number];
@@ -90,13 +94,24 @@ function removeHeatCanvases(pane: HTMLElement | undefined) {
   pane.querySelectorAll<HTMLCanvasElement>(`.${HEAT_CANVAS_CLASS}`).forEach((canvas) => canvas.remove());
 }
 
+function removeLegacyHeatLayers(map: L.Map) {
+  const legacyLayers: L.Layer[] = [];
+  map.eachLayer((layer) => {
+    if ((layer as any).__nmbHeatLayer) legacyLayers.push(layer);
+  });
+  legacyLayers.forEach((layer) => {
+    if (map.hasLayer(layer)) map.removeLayer(layer);
+  });
+}
+
 export default function MapClusterController({ heatEnabled = true }: Props) {
   const map = useMap();
   const clusterMarkers = useRef<L.Marker[]>([]);
   const hiddenMarkers = useRef<L.Marker[]>([]);
   const clusterFrame = useRef<number | null>(null);
 
-  // Agrupamento numérico: independente da camada de calor.
+  // Agrupamento numérico. Os números permanecem quando o calor está desligado,
+  // mas ficam neutros para não parecerem parte da camada de calor.
   useEffect(() => {
     const restoreHiddenMarkers = () => {
       for (const marker of hiddenMarkers.current) {
@@ -149,7 +164,7 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
           group.forEach(hideMarker);
 
           const marker = L.marker(center, {
-            icon: clusterIcon(group.length),
+            icon: clusterIcon(group.length, heatEnabled),
             zIndexOffset: 900,
             keyboard: true,
             title: `${group.length} itens nesta área`,
@@ -172,6 +187,7 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
 
     const onLayerChange = (event: L.LeafletEvent) => {
       if (event.layer && (event.layer as any).__nmbClusterMarker) return;
+      if (event.layer && (event.layer as any).__nmbHeatLayer) return;
       refreshClusters();
     };
 
@@ -185,19 +201,28 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
       map.off('layeradd layerremove', onLayerChange);
       clearClusters();
     };
-  }, [map]);
+  }, [map, heatEnabled]);
 
-  // Heatmap: quando desligado, não existe canvas nem listeners de desenho.
+  // Heatmap: desligar significa que o pane inteiro fica oculto, todo canvas é
+  // removido e qualquer círculo legado das versões anteriores também é apagado.
   useEffect(() => {
     let pane = map.getPane(HEAT_PANE);
     if (!pane) pane = map.createPane(HEAT_PANE);
     pane.style.zIndex = '340';
     pane.style.pointerEvents = 'none';
 
-    // Remove qualquer canvas deixado por uma montagem anterior/StrictMode.
+    removeLegacyHeatLayers(map);
     removeHeatCanvases(pane);
-    if (!heatEnabled) return;
 
+    if (!heatEnabled) {
+      pane.style.display = 'none';
+      return () => {
+        removeLegacyHeatLayers(map);
+        removeHeatCanvases(pane);
+      };
+    }
+
+    pane.style.display = '';
     const canvas = L.DomUtil.create('canvas', HEAT_CANVAS_CLASS, pane) as HTMLCanvasElement;
     canvas.style.position = 'absolute';
     canvas.style.pointerEvents = 'none';
@@ -206,10 +231,10 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
     let heatFrame: number | null = null;
 
     const drawHeat = () => {
-      if (!canvas.isConnected) return;
+      if (!canvas.isConnected || pane?.style.display === 'none') return;
       if (heatFrame != null) cancelAnimationFrame(heatFrame);
       heatFrame = requestAnimationFrame(() => {
-        if (!canvas.isConnected) return;
+        if (!canvas.isConnected || pane?.style.display === 'none') return;
 
         const size = map.getSize();
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.35);
@@ -241,10 +266,10 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
           if (!paddedBounds.contains(latLng)) continue;
           const point = map.latLngToContainerPoint(latLng);
           const gradient = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
-          gradient.addColorStop(0, 'rgba(0,0,0,0.24)');
-          gradient.addColorStop(0.28, 'rgba(0,0,0,0.18)');
-          gradient.addColorStop(0.58, 'rgba(0,0,0,0.09)');
-          gradient.addColorStop(0.82, 'rgba(0,0,0,0.025)');
+          gradient.addColorStop(0, 'rgba(0,0,0,0.30)');
+          gradient.addColorStop(0.3, 'rgba(0,0,0,0.22)');
+          gradient.addColorStop(0.6, 'rgba(0,0,0,0.11)');
+          gradient.addColorStop(0.84, 'rgba(0,0,0,0.03)');
           gradient.addColorStop(1, 'rgba(0,0,0,0)');
           context.fillStyle = gradient;
           context.fillRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
@@ -259,12 +284,12 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
             pixels[offset + 3] = 0;
             continue;
           }
-          const density = Math.max(0, Math.min(1, (alpha - 0.08) / 0.68));
+          const density = Math.max(0, Math.min(1, (alpha - 0.06) / 0.66));
           const [red, green, blue] = heatColor(density);
           pixels[offset] = red;
           pixels[offset + 1] = green;
           pixels[offset + 2] = blue;
-          pixels[offset + 3] = Math.round(255 * Math.min(0.58, 0.08 + alpha * 0.66));
+          pixels[offset + 3] = Math.round(255 * Math.min(0.64, 0.09 + alpha * 0.78));
         }
         context.putImageData(image, 0, 0);
       });
@@ -272,6 +297,7 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
 
     const onLayerChange = (event: L.LeafletEvent) => {
       if (event.layer && (event.layer as any).__nmbClusterMarker) return;
+      if (event.layer && (event.layer as any).__nmbHeatLayer) return;
       drawHeat();
     };
 
@@ -284,8 +310,9 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
       map.off('move zoomend resize', drawHeat);
       map.off('layeradd layerremove', onLayerChange);
       canvas.remove();
-      // Garante que nenhum canvas antigo sobreviva a uma troca rápida de estado/rota.
+      removeLegacyHeatLayers(map);
       removeHeatCanvases(pane);
+      pane.style.display = 'none';
     };
   }, [map, heatEnabled]);
 
