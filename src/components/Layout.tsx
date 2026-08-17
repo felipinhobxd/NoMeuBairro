@@ -13,6 +13,7 @@ import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Briefcase,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
   BarChart3, Search, ChevronRight, Building2, Sparkles, MapPinned, Reply, CheckCircle2, Eye, PhoneCall, CalendarCheck,
+  ShieldCheck, MoreHorizontal, Download,
 } from 'lucide-react';
 import { timeAgo, Button, Card, Input, useToast } from './UI';
 import type { AppNotification } from '../types';
@@ -337,8 +338,44 @@ export default function Layout({ children }: LayoutProps) {
   const { currentNeighborhood, isNeighborhoodSelected, clearSelection } = useNeighborhood();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   const isActive = (path: string) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+  const desktopNavItems = useMemo(() => (
+    isAdmin ? [...navItems, { path: '/admin', label: 'Admin', icon: ShieldCheck }] : navItems
+  ), [isAdmin]);
+  const mobilePrimaryNavItems = useMemo(() => navItems.filter(item => ['/', '/mapa', '/empregos', '/mural'].includes(item.path)), []);
+  const mobileMoreActive = ['/estatisticas', '/denuncias', '/perfil', '/admin'].some(path => isActive(path));
+
+  useEffect(() => {
+    let active = true;
+    if (!isAuthenticated || !user?.id) {
+      setIsAdmin(false);
+      return () => { active = false; };
+    }
+    void supabase
+      .from('app_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        setIsAdmin(!error && data?.role === 'admin');
+      });
+    return () => { active = false; };
+  }, [isAuthenticated, user?.id]);
+
+  useEffect(() => { setMobileMoreOpen(false); }, [location.pathname]);
+
+  const triggerHeaderAction = (ariaLabel: string) => {
+    const button = Array.from(document.querySelectorAll<HTMLButtonElement>('header button')).find(
+      item => item.getAttribute('aria-label') === ariaLabel,
+    );
+    button?.click();
+    setMobileMoreOpen(false);
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -352,28 +389,28 @@ export default function Layout({ children }: LayoutProps) {
   const displayNeighborhood = currentNeighborhood.name || 'Todos os bairros';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col overflow-x-clip bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300" role="banner">
-        <div className="max-w-[1440px] mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16 gap-4">
-            <div className="flex items-center gap-3 shrink-0">
+        <div className="max-w-[1680px] mx-auto px-2.5 sm:px-4 lg:px-5">
+          <div className="flex items-center justify-between h-16 gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 lg:flex-none">
               <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
                 <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
                 <div className="flex flex-col items-start hidden lg:flex"><span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span></div>
               </button>
-              <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden md:block" />
-              <button onClick={clearSelection} className="flex items-center gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all" title="Escolher bairro para filtrar">
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden lg:block" />
+              <button onClick={clearSelection} className="nmb-neighborhood-filter flex items-center gap-1.5 sm:gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all min-w-0" title="Escolher bairro para filtrar">
                 <div className="flex flex-col items-start">
                   <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Filtro</span>
-                  <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[140px] xl:max-w-none">{displayNeighborhood}</span>
+                  <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[34vw] sm:max-w-[150px] xl:max-w-none">{displayNeighborhood}</span>
                 </div>
                 <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
               </button>
             </div>
 
-            <nav className="hidden md:flex items-center gap-0.5 lg:gap-1 flex-1 justify-center min-w-0" role="navigation" aria-label="Navegação principal">
-              {navItems.map((item) => {
+            <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 flex-1 justify-center min-w-0" role="navigation" aria-label="Navegação principal">
+              {desktopNavItems.map((item) => {
                 const Icon = item.icon; const active = isActive(item.path);
                 return (
                   <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0', active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-current={active ? 'page' : undefined}>
@@ -383,8 +420,8 @@ export default function Layout({ children }: LayoutProps) {
               })}
             </nav>
 
-            <div className="flex items-center gap-1 lg:gap-2 shrink-0">
-              <button onClick={toggle} className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>{isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}</button>
+            <div className="nmb-header-actions flex items-center gap-1 lg:gap-2 shrink-0">
+              <button onClick={toggle} className="nmb-header-theme p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>{isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}</button>
               <NotificationBell />
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5 lg:gap-2">
@@ -399,7 +436,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      <main className="flex-1 pb-24 md:pb-0" id="main-content" role="main">
+      <main className="flex-1 pb-24 lg:pb-0 overflow-x-clip" id="main-content" role="main">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
         <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -416,17 +453,93 @@ export default function Layout({ children }: LayoutProps) {
         </footer>
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
-        <div className="flex items-center justify-around h-[72px] px-2 w-full">
-          {navItems.map((item) => {
+      {mobileMoreOpen && (
+        <div className="lg:hidden fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Mais opções">
+          <button
+            type="button"
+            className="absolute inset-0 w-full h-full bg-slate-950/55 backdrop-blur-[2px]"
+            onClick={() => setMobileMoreOpen(false)}
+            aria-label="Fechar menu"
+          />
+          <section className="absolute bottom-0 left-0 right-0 max-h-[82dvh] overflow-y-auto rounded-t-3xl bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 shadow-2xl safe-area-bottom animate-slide-up">
+            <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-4 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700 mx-auto mb-3" />
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-orange-100 dark:bg-orange-500/15 flex items-center justify-center text-orange-700 dark:text-orange-300 font-bold shrink-0">
+                    {user?.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : (user?.name?.charAt(0).toUpperCase() || 'N')}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{user?.name || 'No Meu Bairro'}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{isAdmin ? 'Administrador' : displayNeighborhood}</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setMobileMoreOpen(false)} className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar menu"><X className="w-5 h-5" /></button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { path: '/estatisticas', label: 'Dados', icon: BarChart3 },
+                  { path: '/denuncias', label: 'Denúncias', icon: ShieldAlert },
+                  { path: '/perfil', label: 'Perfil', icon: UserCircle },
+                  ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: ShieldCheck }] : []),
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path);
+                  return (
+                    <button
+                      key={item.path}
+                      type="button"
+                      onClick={() => { navigate(item.path); setMobileMoreOpen(false); }}
+                      className={cn(
+                        'min-h-[58px] rounded-2xl border px-3 flex items-center gap-3 text-left font-bold transition-colors',
+                        active
+                          ? 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/25 text-orange-800 dark:text-orange-300'
+                          : 'bg-slate-50 dark:bg-slate-800/70 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200',
+                      )}
+                    >
+                      <span className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shrink-0"><Icon className="w-4.5 h-4.5" /></span>
+                      <span className="text-sm truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => triggerHeaderAction('Buscar no site')} className="min-h-[50px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"><Search className="w-4.5 h-4.5" />Buscar</button>
+                <button type="button" onClick={() => triggerHeaderAction('Instalar aplicativo')} className="min-h-[50px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"><Download className="w-4.5 h-4.5" />Instalar app</button>
+                <button type="button" onClick={toggle} className="min-h-[50px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200">{isDark ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}{isDark ? 'Modo claro' : 'Modo escuro'}</button>
+                {isAuthenticated && user ? (
+                  <button type="button" onClick={() => { setMobileMoreOpen(false); void logout(); }} className="min-h-[50px] rounded-xl border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 px-3 flex items-center gap-2.5 text-sm font-bold text-red-700 dark:text-red-300"><LogOut className="w-4.5 h-4.5" />Sair</button>
+                ) : (
+                  <button type="button" onClick={() => { navigate('/login'); setMobileMoreOpen(false); }} className="min-h-[50px] rounded-xl border border-orange-200 dark:border-orange-500/25 bg-orange-50 dark:bg-orange-500/10 px-3 flex items-center gap-2.5 text-sm font-bold text-orange-700 dark:text-orange-300"><UserCircle className="w-4.5 h-4.5" />Entrar</button>
+                )}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
+        <div className="grid grid-cols-5 items-stretch h-[68px] px-1.5 w-full max-w-xl mx-auto">
+          {mobilePrimaryNavItems.map((item) => {
             const Icon = item.icon; const active = isActive(item.path);
             return (
-              <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-300 flex-1 relative active:scale-90', active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500')} aria-current={active ? 'page' : undefined}>
-                <div className={cn('p-2 rounded-xl transition-all duration-300', active && 'bg-emerald-50 dark:bg-emerald-500/10 scale-110 shadow-sm')}><Icon className="w-5 h-5 transition-transform duration-300" strokeWidth={active ? 2.5 : 2} /></div>
-                <span className="text-[10px] font-bold tracking-tight transition-all">{item.label}</span>
+              <button key={item.path} onClick={() => navigate(item.path)} className={cn('min-w-0 flex flex-col items-center justify-center gap-0.5 py-1 px-0.5 rounded-2xl transition-all duration-200 relative active:scale-95', active ? 'text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-500')} aria-current={active ? 'page' : undefined}>
+                <div className={cn('w-9 h-8 rounded-xl flex items-center justify-center transition-all duration-200', active && 'bg-orange-50 dark:bg-orange-500/10 shadow-sm')}><Icon className="w-5 h-5" strokeWidth={active ? 2.5 : 2} /></div>
+                <span className="text-[10px] leading-none font-bold tracking-tight truncate max-w-full">{item.label}</span>
               </button>
             );
           })}
+          <button type="button" onClick={() => setMobileMoreOpen(true)} className={cn('min-w-0 flex flex-col items-center justify-center gap-0.5 py-1 px-0.5 rounded-2xl transition-all duration-200 active:scale-95', mobileMoreActive ? 'text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-500')} aria-expanded={mobileMoreOpen} aria-label="Mais opções">
+            <div className={cn('w-9 h-8 rounded-xl flex items-center justify-center transition-all duration-200 relative', mobileMoreActive && 'bg-orange-50 dark:bg-orange-500/10 shadow-sm')}>
+              <MoreHorizontal className="w-5 h-5" />
+              {isAdmin && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />}
+            </div>
+            <span className="text-[10px] leading-none font-bold tracking-tight">Mais</span>
+          </button>
         </div>
       </nav>
       <ScrollToTop />

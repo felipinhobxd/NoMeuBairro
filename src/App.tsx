@@ -9,7 +9,6 @@ import BrazilWhatsappMask from './components/BrazilWhatsappMask';
 import RecoveryRedirect from './components/RecoveryRedirect';
 import InteractionGuard from './components/InteractionGuard';
 import DataRouteLoader from './components/DataRouteLoader';
-import AdminNavPortal from './components/AdminNavPortal';
 import ProductExperience from './components/ProductExperience';
 import MuralMapEnhancer from './components/MuralMapEnhancer';
 import DesktopUiPolish from './components/DesktopUiPolish';
@@ -123,7 +122,6 @@ export default function App() {
                       </Routes>
                     </Suspense>
                   </Layout>
-                  <AdminNavPortal />
                   <PanicButton />
                   <CookieConsent />
                 </HashRouter>

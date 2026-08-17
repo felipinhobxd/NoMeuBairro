@@ -1,6 +1,126 @@
 export default function DesktopUiPolish() {
   return (
     <style>{`
+
+      @media (max-width: 1023px) {
+        header[role="banner"] > div {
+          padding-left: 10px !important;
+          padding-right: 10px !important;
+        }
+
+        header[role="banner"] > div > div {
+          min-height: 62px !important;
+          height: 62px !important;
+          gap: 6px !important;
+        }
+
+        header[role="banner"] > div > div > div:first-child {
+          min-width: 0;
+          flex: 1 1 auto;
+          gap: 4px !important;
+        }
+
+        header[role="banner"] button[aria-label="Ir para a página inicial"] {
+          flex: 0 0 auto;
+        }
+
+        header[role="banner"] button[aria-label="Ir para a página inicial"] > div:first-child {
+          width: 38px !important;
+          height: 38px !important;
+        }
+
+        header[role="banner"] .nmb-neighborhood-filter {
+          min-width: 0;
+          max-width: min(43vw, 190px);
+          padding: 5px 6px !important;
+        }
+
+        header[role="banner"] .nmb-neighborhood-filter > div {
+          min-width: 0;
+        }
+
+        header[role="banner"] .nmb-neighborhood-filter span:last-child {
+          max-width: 100% !important;
+        }
+
+        header[role="banner"] .nmb-header-actions {
+          flex: 0 0 auto;
+          gap: 2px !important;
+        }
+
+        /* No celular/tablet, ações secundárias ficam no menu Mais. */
+        header[role="banner"] .nmb-header-theme,
+        header[role="banner"] button[aria-label="Buscar no site"],
+        header[role="banner"] button[aria-label="Instalar aplicativo"] {
+          display: none !important;
+        }
+
+        header[role="banner"] .nmb-header-actions button[aria-label="Notificações"],
+        header[role="banner"] .nmb-header-actions button[aria-label^="Perfil de"] {
+          width: 40px !important;
+          height: 40px !important;
+          min-width: 40px !important;
+          min-height: 40px !important;
+          padding: 0 !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        main[role="main"] {
+          overflow-x: clip;
+        }
+
+        main[role="main"] > div:first-child {
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+        }
+
+        nav[aria-label="Navegação mobile"] button {
+          min-height: 54px;
+          touch-action: manipulation;
+        }
+
+        [aria-label="Camadas do mapa"],
+        [aria-label="Categorias dos relatos"] {
+          scroll-snap-type: x proximity;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        [aria-label="Camadas do mapa"] > button,
+        [aria-label="Categorias dos relatos"] > button {
+          scroll-snap-align: start;
+        }
+      }
+
+      @media (max-width: 380px) {
+        header[role="banner"] > div {
+          padding-left: 7px !important;
+          padding-right: 7px !important;
+        }
+
+        header[role="banner"] button[aria-label="Ir para a página inicial"] > div:first-child {
+          width: 34px !important;
+          height: 34px !important;
+        }
+
+        header[role="banner"] .nmb-neighborhood-filter {
+          max-width: 38vw;
+        }
+
+        header[role="banner"] .nmb-neighborhood-filter span:first-child {
+          display: none;
+        }
+
+        header[role="banner"] .nmb-header-actions button[aria-label="Notificações"],
+        header[role="banner"] .nmb-header-actions button[aria-label^="Perfil de"] {
+          width: 36px !important;
+          height: 36px !important;
+          min-width: 36px !important;
+          min-height: 36px !important;
+        }
+      }
+
       @media (min-width: 768px) {
         .nmb-admin-mobile {
           display: none !important;

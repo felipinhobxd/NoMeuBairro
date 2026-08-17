@@ -263,7 +263,7 @@ export default function ProductExperience() {
   const [searchError, setSearchError] = useState('');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
-  const [isMobileTour, setIsMobileTour] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
+  const [isMobileTour, setIsMobileTour] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
   const [tourRect, setTourRect] = useState<TourRect | null>(null);
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
@@ -290,7 +290,7 @@ export default function ProductExperience() {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 767px)');
+    const media = window.matchMedia('(max-width: 1023px)');
     const sync = () => setIsMobileTour(media.matches);
     sync();
     media.addEventListener('change', sync);
