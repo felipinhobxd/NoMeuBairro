@@ -49,7 +49,11 @@ def _validate_production_config(app: Flask) -> None:
         if value in {"dev-secret-change-me", "jwt-secret-change-me"}:
             raise RuntimeError(f"{name} está usando uma chave de desenvolvimento.")
 
-    origins = [str(origin).strip() for origin in app.config.get("CORS_ORIGINS", []) if str(origin).strip()]
+    origins = [
+        str(origin).strip()
+        for origin in app.config.get("CORS_ORIGINS", [])
+        if str(origin).strip()
+    ]
     if not origins or "*" in origins:
         raise RuntimeError(
             "CORS_ORIGINS precisa listar explicitamente as origens permitidas em produção."
@@ -78,7 +82,7 @@ def create_app(config_name: str | None = None) -> Flask:
     Migrate(app, db)
     CORS(app, origins=app.config.get("CORS_ORIGINS", []))
 
-    # Rate Limiter (memória — para produção use Redis)
+    # Rate Limiter (memória — para produção com múltiplas instâncias, use Redis)
     limiter = Limiter(
         key_func=get_remote_address,
         default_limits=[app.config.get("RATE_LIMIT_DEFAULT", "100/hour")],
@@ -90,17 +94,22 @@ def create_app(config_name: str | None = None) -> Flask:
     for bp in all_blueprints:
         app.register_blueprint(bp)
 
-    # ─── Rate limits por blueprint ────────────────────────
-    with app.app_context():
-        for rule in app.url_map.iter_rules():
-            if "/api/auth/login" in rule.rule or "/api/auth/register" in rule.rule:
-                limiter.limit(app.config.get("RATE_LIMIT_AUTH", "5/minute"))(
-                    app.view_functions.get(rule.endpoint, lambda: None)
-                )
-            if "/api/denuncias" in rule.rule and rule.methods and "POST" in rule.methods:
-                limiter.limit(app.config.get("RATE_LIMIT_DENUNCIAS", "3/hour"))(
-                    app.view_functions.get(rule.endpoint, lambda: None)
-                )
+    # ─── Rate limits por endpoint ─────────────────────────
+    # Os decorators precisam substituir a função registrada no Flask; apenas
+    # chamar limiter.limit(...)(view) sem reatribuir deixava margem para que o
+    # wrapper não fosse o callable efetivamente executado.
+    for rule in list(app.url_map.iter_rules()):
+        view = app.view_functions.get(rule.endpoint)
+        if view is None:
+            continue
+        if "/api/auth/login" in rule.rule or "/api/auth/register" in rule.rule:
+            app.view_functions[rule.endpoint] = limiter.limit(
+                app.config.get("RATE_LIMIT_AUTH", "5/minute")
+            )(view)
+        elif "/api/denuncias" in rule.rule and rule.methods and "POST" in rule.methods:
+            app.view_functions[rule.endpoint] = limiter.limit(
+                app.config.get("RATE_LIMIT_DENUNCIAS", "3/hour")
+            )(view)
 
     # ─── Request Hooks ────────────────────────────────────
     @app.before_request
@@ -111,16 +120,38 @@ def create_app(config_name: str | None = None) -> Flask:
     def after_request(response):
         try:
             duration = (datetime.now(timezone.utc) - g.start_time).total_seconds() * 1000
+        except Exception:
+            duration = 0
+        if "/denuncias" not in request.path:
             logger.info(
-                "%s %s %s %.1fms",
+                "%s %s → %s (%.0fms)",
                 request.method,
                 request.path,
                 response.status_code,
                 duration,
             )
-        except Exception:
-            logger.exception("Falha ao registrar métrica da requisição")
+        else:
+            # Não registra conteúdo/identidade nas rotas sensíveis.
+            logger.info(
+                "[ANÔNIMO] %s /denuncias → %s (%.0fms)",
+                request.method,
+                response.status_code,
+                duration,
+            )
         return response
+
+    # ─── Error Handlers ───────────────────────────────────
+    @app.errorhandler(400)
+    def bad_request(_error):
+        return jsonify({"error": "Requisição inválida."}), 400
+
+    @app.errorhandler(401)
+    def unauthorized(_error):
+        return jsonify({"error": "Não autorizado. Faça login."}), 401
+
+    @app.errorhandler(403)
+    def forbidden(_error):
+        return jsonify({"error": "Acesso negado."}), 403
 
     @app.errorhandler(404)
     def not_found(_error):
@@ -128,20 +159,53 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.errorhandler(429)
     def rate_limited(_error):
-        return jsonify({"error": "Muitas requisições. Tente novamente mais tarde."}), 429
+        return jsonify({"error": "Muitas requisições. Tente novamente em alguns instantes."}), 429
 
     @app.errorhandler(500)
-    def internal_error(_error):
+    def server_error(error):
         db.session.rollback()
+        logger.error("Erro interno: %s", error)
         return jsonify({"error": "Erro interno do servidor."}), 500
 
-    @app.get("/health")
-    def health():
-        return jsonify({"status": "ok"}), 200
+    # ─── Health Check ─────────────────────────────────────
+    @app.route("/api/health", methods=["GET"])
+    def health_check():
+        try:
+            db.session.execute(db.text("SELECT 1"))
+            db_status = "ok"
+        except Exception:
+            db.session.rollback()
+            db_status = "error"
+        return jsonify({
+            "status": "ok" if db_status == "ok" else "degraded",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "database": db_status,
+            "version": "1.0.0",
+        }), 200 if db_status == "ok" else 503
+
+    # ─── Root ─────────────────────────────────────────────
+    @app.route("/", methods=["GET"])
+    def root():
+        return jsonify({
+            "name": "No Meu Bairro — API",
+            "bairro": "Vitória Régia",
+            "cidade": "Curitiba",
+            "version": "1.0.0",
+            "docs": "/api/health",
+        }), 200
 
     return app
 
 
+# ═══════════════════════════════════════════════════════════
+# ENTRY POINT — Flask CLI encontra o app aqui
+# ═══════════════════════════════════════════════════════════
+# Isto permite que `flask run`, `flask db migrate`, etc.
+# encontrem a app automaticamente via FLASK_APP=app.py
+
+env_name = os.environ.get("FLASK_ENV", "development")
+app = create_app(env_name)
+
 if __name__ == "__main__":
-    app = create_app(os.environ.get("FLASK_ENV", "development"))
+    logger.info("🏁 API rodando em http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=app.debug)
