@@ -19,9 +19,46 @@
         <div class="vw-plugin-top-wrapper"></div>
       </div>
     </div>
-    <script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
     <script>
-      new window.VLibras.Widget('https://vlibras.gov.br/app');
+      (function () {
+        var initialized = false;
+
+        function initVLibras() {
+          if (initialized || !window.VLibras || !window.VLibras.Widget) return;
+          initialized = true;
+          new window.VLibras.Widget('https://vlibras.gov.br/app');
+        }
+
+        function loadVLibras() {
+          if (window.VLibras && window.VLibras.Widget) {
+            initVLibras();
+            return;
+          }
+
+          var existing = document.querySelector('script[data-vlibras-widget]');
+          if (existing) {
+            existing.addEventListener('load', initVLibras, { once: true });
+            return;
+          }
+
+          var script = document.createElement('script');
+          script.src = 'https://vlibras.gov.br/app/vlibras-plugin.js';
+          script.async = true;
+          script.crossOrigin = 'anonymous';
+          script.setAttribute('data-vlibras-widget', 'true');
+          script.addEventListener('load', initVLibras, { once: true });
+          script.addEventListener('error', function () {
+            console.error('Não foi possível carregar o VLibras. Verifique bloqueadores de conteúdo do navegador.');
+          }, { once: true });
+          document.head.appendChild(script);
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', loadVLibras, { once: true });
+        } else {
+          loadVLibras();
+        }
+      })();
     </script>
   </body>
 </html>
