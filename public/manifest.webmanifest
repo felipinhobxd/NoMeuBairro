@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "No Meu Bairro",
   "short_name": "Meu Bairro",
   "description": "Plataforma comunitária de Curitiba para relatos, mapa, dados, empregos e eventos.",
@@ -8,6 +9,7 @@
   "background_color": "#f8fafc",
   "theme_color": "#059669",
   "lang": "pt-BR",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",
