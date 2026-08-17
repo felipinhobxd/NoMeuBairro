@@ -284,18 +284,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
-    const stored = await storePostImage(data.imageUrl, 'anonymous');
-    if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
     const editToken = createAnonymousEditToken();
-    const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'create', tipo: data.tipo, description: data.description, location: data.location || 'Local Privado', imageUrl: stored.url, latitude: data.latitude, longitude: data.longitude, editToken } });
+    const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', {
+      body: {
+        action: 'create',
+        tipo: data.tipo,
+        description: data.description,
+        location: data.location || 'Local Privado',
+        imageData: data.imageUrl || null,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        editToken,
+      },
+    });
     if (error || !result?.ok || !result?.postId) {
-      // Para uploads autenticados/permitidos, evita deixar arquivo se a criação falhar.
-      await deleteStoredPostImage(stored.url);
       return { error: { message: result?.error || error?.message || 'Não foi possível enviar a denúncia.' } };
     }
     saveAnonControl(result.postId, editToken);
     const { data: row } = await supabase.from('posts').select('id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,created_at,updated_at,comments_count').eq('id', result.postId).maybeSingle();
-    if (row) { const nextPost = mapPost({ ...row, author_id: null, is_anonymous: true, post_supports: [{ count: 0 }] }); postsLoadedRef.current = true; setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT)); }
+    if (row) {
+      const nextPost = mapPost({ ...row, author_id: null, is_anonymous: true, post_supports: [{ count: 0 }] });
+      postsLoadedRef.current = true;
+      setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
+    }
     return { error: null };
   }, [saveAnonControl]);
 
