@@ -6,8 +6,8 @@ import hashlib
 from datetime import datetime, timezone
 
 import jwt
-from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2 import PasswordHasher, Type
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from flask import request, jsonify, current_app
 
 # ─── Argon2id Password Hasher ──────────────────────────────
@@ -17,7 +17,7 @@ ph = PasswordHasher(
     parallelism=8,
     hash_len=32,
     salt_len=16,
-    type="ID",  # Argon2id
+    type=Type.ID,  # Argon2id
 )
 
 
@@ -27,10 +27,10 @@ def hash_password(plain: str) -> str:
 
 
 def verify_password(hash_str: str, plain: str) -> bool:
-    """Verifica senha contra hash Argon2id."""
+    """Verifica senha contra hash Argon2id sem transformar hash inválido em erro 500."""
     try:
         return ph.verify(hash_str, plain)
-    except VerifyMismatchError:
+    except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
 
 
@@ -84,7 +84,6 @@ def auth_required(f):
         if payload.get("type") != "access":
             return jsonify({"error": "Tipo de token inválido."}), 401
 
-        # Inject user info into request
         request.current_user_id = payload["sub"]
         request.current_user_name = payload.get("name", "")
 
