@@ -34,15 +34,15 @@ interface DataContextType {
   addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
-  supportPost: (postId: string) => Promise<void>;
-  addComment: (postId: string, content: string, parentId?: string) => Promise<void>;
-  deleteComment: (commentId: string) => Promise<void>;
+  supportPost: (postId: string) => Promise<ActionResult>;
+  addComment: (postId: string, content: string, parentId?: string) => Promise<ActionResult>;
+  deleteComment: (commentId: string) => Promise<ActionResult>;
   deletePost: (postId: string) => Promise<ActionResult>;
   updatePostStatus: (postId: string, status: PostStatus) => Promise<ActionResult>;
-  deleteEvent: (eventId: string) => Promise<void>;
-  toggleAttendance: (eventId: string) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<ActionResult>;
+  toggleAttendance: (eventId: string) => Promise<ActionResult>;
   getEventAttendees: (eventId: string) => Promise<any[]>;
-  reportContent: (data: { postId?: string; commentId?: string; eventId?: string; reason: string }) => Promise<void>;
+  reportContent: (data: { postId?: string; commentId?: string; eventId?: string; reason: string }) => Promise<ActionResult>;
   updateReportStatus: (reportId: string, status: 'resolved' | 'ignored') => Promise<void>;
   markNotificationAsRead: (notificationId: string) => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;
@@ -299,26 +299,47 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, [saveAnonControl]);
 
-  const supportPost = useCallback(async (postId: string) => {
-    if (!user || processingRef.current.has(postId)) return; processingRef.current.add(postId);
+  const supportPost = useCallback(async (postId: string): Promise<ActionResult> => {
+    if (!user) return { ok: false, error: 'Entre na sua conta para apoiar um relato.' };
+    if (processingRef.current.has(postId)) return { ok: false, error: 'Aguarde a ação anterior terminar.' };
+    processingRef.current.add(postId);
     try {
-      const { data: existing } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle();
-      if (existing) { const { error } = await supabase.from('post_supports').delete().eq('id', existing.id); if (!error) setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: Math.max(0, post.supports - 1) } : post)); }
-      else { const { error } = await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id }); if (!error) setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: post.supports + 1 } : post)); }
-    } finally { processingRef.current.delete(postId); }
+      const { data: existing, error: lookupError } = await supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle();
+      if (lookupError) return { ok: false, error: lookupError.message };
+      if (existing) {
+        const { error } = await supabase.from('post_supports').delete().eq('id', existing.id);
+        if (error) return { ok: false, error: error.message };
+        setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: Math.max(0, post.supports - 1) } : post));
+      } else {
+        const { error } = await supabase.from('post_supports').insert({ post_id: postId, user_id: user.id });
+        if (error) return { ok: false, error: error.message };
+        setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: post.supports + 1 } : post));
+      }
+      return { ok: true };
+    } finally {
+      processingRef.current.delete(postId);
+    }
   }, [user]);
 
-  const addComment = useCallback(async (postId: string, content: string, parentId?: string) => {
-    if (!user || !content.trim()) return;
+  const addComment = useCallback(async (postId: string, content: string, parentId?: string): Promise<ActionResult> => {
+    if (!user) return { ok: false, error: 'Entre na sua conta para comentar.' };
+    if (!content.trim()) return { ok: false, error: 'Escreva um comentário antes de enviar.' };
     const { data: inserted, error } = await supabase.from('comments').insert({ post_id: postId, author_id: user.id, parent_id: parentId, content: content.trim() }).select('id,post_id,author_id,content,parent_id,created_at').single();
-    if (error || !inserted) return;
+    if (error || !inserted) return { ok: false, error: error?.message || 'Não foi possível adicionar o comentário.' };
     const nextComment: Comment = { id: inserted.id, postId: inserted.post_id, authorId: inserted.author_id, authorName: user.name || 'Morador', authorAvatarUrl: user.avatarUrl, content: inserted.content, parentId: inserted.parent_id || undefined, createdAt: inserted.created_at };
-    loadedCommentPostsRef.current.add(postId); setComments(prev => [...prev.filter(comment => comment.id !== nextComment.id), nextComment]); setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
+    loadedCommentPostsRef.current.add(postId);
+    setComments(prev => [...prev.filter(comment => comment.id !== nextComment.id), nextComment]);
+    setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
+    return { ok: true };
   }, [user]);
 
-  const deleteComment = useCallback(async (commentId: string) => {
-    const target = comments.find(comment => comment.id === commentId); const { error } = await supabase.from('comments').delete().eq('id', commentId);
-    if (!error) { setComments(prev => prev.filter(comment => comment.id !== commentId)); if (target?.postId) setPosts(prev => prev.map(post => post.id === target.postId ? { ...post, commentsCount: Math.max(0, post.commentsCount - 1) } : post)); }
+  const deleteComment = useCallback(async (commentId: string): Promise<ActionResult> => {
+    const target = comments.find(comment => comment.id === commentId);
+    const { error } = await supabase.from('comments').delete().eq('id', commentId);
+    if (error) return { ok: false, error: error.message };
+    setComments(prev => prev.filter(comment => comment.id !== commentId));
+    if (target?.postId) setPosts(prev => prev.map(post => post.id === target.postId ? { ...post, commentsCount: Math.max(0, post.commentsCount - 1) } : post));
+    return { ok: true };
   }, [comments]);
 
   const deletePost = useCallback(async (postId: string): Promise<ActionResult> => {
@@ -345,12 +366,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post)); return { ok: true };
   }, [posts, getAnonTokens]);
 
-  const deleteEvent = useCallback(async (eventId: string) => { const { error } = await supabase.from('events').delete().eq('id', eventId); if (!error) setEvents(prev => prev.filter(event => event.id !== eventId)); }, []);
+  const deleteEvent = useCallback(async (eventId: string): Promise<ActionResult> => { const { error } = await supabase.from('events').delete().eq('id', eventId); if (error) return { ok: false, error: error.message }; setEvents(prev => prev.filter(event => event.id !== eventId)); return { ok: true }; }, []);
 
-  const toggleAttendance = useCallback(async (eventId: string) => {
-    const userId = user?.id; if (!userId) return; if (attendanceLoadedUserRef.current !== userId) await loadMyAttendance(); const isAttending = attendanceIdsRef.current.has(eventId);
-    if (isAttending) { const { error } = await supabase.from('event_attendance').delete().eq('event_id', eventId).eq('user_id', userId); if (!error) { const next = new Set(attendanceIdsRef.current); next.delete(eventId); setAttendanceIds(next); setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: Math.max(0, (event.attendanceCount || 0) - 1) } : event)); } }
-    else { const { error } = await supabase.from('event_attendance').insert({ event_id: eventId, user_id: userId }); if (!error) { const next = new Set(attendanceIdsRef.current); next.add(eventId); setAttendanceIds(next); setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: (event.attendanceCount || 0) + 1 } : event)); } }
+  const toggleAttendance = useCallback(async (eventId: string): Promise<ActionResult> => {
+    const userId = user?.id;
+    if (!userId) return { ok: false, error: 'Entre na sua conta para confirmar presença.' };
+    if (attendanceLoadedUserRef.current !== userId) await loadMyAttendance();
+    const isAttending = attendanceIdsRef.current.has(eventId);
+    if (isAttending) {
+      const { error } = await supabase.from('event_attendance').delete().eq('event_id', eventId).eq('user_id', userId);
+      if (error) return { ok: false, error: error.message };
+      const next = new Set(attendanceIdsRef.current); next.delete(eventId); setAttendanceIds(next);
+      setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: Math.max(0, (event.attendanceCount || 0) - 1) } : event));
+    } else {
+      const { error } = await supabase.from('event_attendance').insert({ event_id: eventId, user_id: userId });
+      if (error) return { ok: false, error: error.message };
+      const next = new Set(attendanceIdsRef.current); next.add(eventId); setAttendanceIds(next);
+      setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: (event.attendanceCount || 0) + 1 } : event));
+    }
+    return { ok: true };
   }, [user?.id, loadMyAttendance, setAttendanceIds]);
 
   const getEventAttendees = useCallback(async (eventId: string) => { const { data, error } = await supabase.from('event_attendance').select('id,event_id,user_id,users:user_id(name,avatar_url)').eq('event_id', eventId).limit(100); if (error) return []; return (data || []).map((a: any) => ({ id: a.id, eventId: a.event_id, userId: a.user_id, userName: a.users?.name || 'Morador', userAvatarUrl: a.users?.avatar_url })); }, []);
@@ -362,7 +396,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return { data: inserted, error } as any;
   }, [user]);
 
-  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; eventId?: string; reason: string }) => { await supabase.from('content_reports').insert({ reporter_id: user?.id || null, post_id: data.postId, comment_id: data.commentId, event_id: data.eventId, reason: data.reason }); }, [user]);
+  const reportContent = useCallback(async (data: { postId?: string; commentId?: string; eventId?: string; reason: string }): Promise<ActionResult> => { if (!user?.id) return { ok: false, error: 'Entre ou crie uma conta para denunciar este conteúdo.' }; const { error } = await supabase.from('content_reports').insert({ reporter_id: user.id, post_id: data.postId, comment_id: data.commentId, event_id: data.eventId, reason: data.reason.trim() }); if (error) return { ok: false, error: error.message }; return { ok: true }; }, [user?.id]);
   const updateReportStatus = useCallback(async (reportId: string, status: 'resolved' | 'ignored') => { await supabase.from('content_reports').update({ status, archived_at: new Date().toISOString(), archived_by: user?.id }).eq('id', reportId); }, [user]);
   const markNotificationAsRead = useCallback(async (notificationId: string) => { if (!user) return; const target = notifications.find(n => n.id === notificationId); if (target?.isRead) return; const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId).eq('user_id', user.id); if (!error) setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)); }, [user, notifications]);
   const markNotificationsAsRead = useCallback(async () => { if (!user) return; const { error } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false); if (!error) setNotifications(prev => prev.map(n => ({ ...n, isRead: true }))); }, [user]);

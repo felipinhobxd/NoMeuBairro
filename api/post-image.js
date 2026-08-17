@@ -39,9 +39,13 @@ export default async function handler(req, res) {
 
     const match = imageData.match(/^data:([^;,]+)?;base64,(.+)$/);
     if (!match) return res.status(404).end();
-    const mime = match[1] || 'image/jpeg';
+    const mime = String(match[1] || 'image/jpeg').toLowerCase();
+    const allowedMimes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowedMimes.has(mime)) return res.status(415).end();
     const bytes = Buffer.from(match[2], 'base64');
+    if (bytes.length > 5 * 1024 * 1024) return res.status(413).end();
     res.setHeader('Content-Type', mime);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Length', String(bytes.length));
     res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=31536000, immutable');
     return res.status(200).send(bytes);

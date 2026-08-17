@@ -170,8 +170,9 @@ export default function Mural() {
     } else toast('Erro ao publicar evento. Verifique sua conexão.', 'error');
   };
 
-  const handleDelete = useCallback((id: string) => {
-    void deleteEvent(id);
+  const handleDelete = useCallback(async (id: string) => {
+    const result = await deleteEvent(id);
+    if (!result.ok) { toast(result.error || 'Não foi possível remover o evento.', 'error'); return; }
     setConfirmDeleteId(null);
     toast('Evento removido.', 'info');
   }, [deleteEvent, toast]);
@@ -181,7 +182,8 @@ export default function Mural() {
       navigate('/login');
       return;
     }
-    await toggleAttendance(eventId);
+    const result = await toggleAttendance(eventId);
+    if (!result.ok) { toast(result.error || 'Não foi possível atualizar sua presença.', 'error'); return; }
     toast('Presença atualizada!');
   };
 
@@ -204,7 +206,8 @@ export default function Mural() {
     if (!showReport || !reportReason.trim()) return;
     if (!isAuthenticated || !user) { navigate('/login'); return; }
     const reason = reportDetail.trim() ? `${reportReason}: ${reportDetail.trim()}` : reportReason;
-    await reportContent({ eventId: showReport.eventId, reason });
+    const result = await reportContent({ eventId: showReport.eventId, reason });
+    if (!result.ok) { toast(result.error || 'Não foi possível enviar a denúncia.', 'error'); return; }
     setShowReport(null);
     setReportReason('');
     setReportDetail('');

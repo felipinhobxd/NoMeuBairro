@@ -382,7 +382,7 @@ export default function Layout({ children }: LayoutProps) {
     document.title = currentNeighborhood.name ? `No Meu Bairro — ${currentNeighborhood.name}` : 'No Meu Bairro — Todos os bairros';
   }, [location.pathname, currentNeighborhood]);
 
-  if (!isNeighborhoodSelected) {
+  if (!isNeighborhoodSelected && !['/privacidade', '/termos'].includes(location.pathname)) {
     return <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col"><NeighborhoodPicker /></div>;
   }
 
