@@ -52,7 +52,7 @@ type InstallInstructions = {
   note?: string;
 };
 
-const ONBOARDING_KEY = 'nmb-onboarding-v5';
+const ONBOARDING_KEY = 'nmb-onboarding-v6';
 const INSTALL_DISMISS_KEY = 'nmb-pwa-install-dismissed-at';
 const INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -76,7 +76,7 @@ const tourSteps: TourStep[] = [
     kind: 'target',
     target: 'create-post',
     title: 'Publicar relato',
-    description: 'Quer publicar um problema ou relato? Use este botão “+”.',
+    description: 'O botão “+” fica sempre visível. Para publicar, basta entrar ou criar uma conta; se estiver deslogado, ele leva você direto ao acesso.',
     icon: Plus,
     accent: 'from-emerald-500 to-green-600',
   },
@@ -108,7 +108,7 @@ const tourSteps: TourStep[] = [
     kind: 'target',
     target: 'mural',
     title: 'Mural',
-    description: 'Feiras, campanhas, reuniões, esporte e outros eventos ficam aqui.',
+    description: 'Feiras, campanhas, reuniões, esporte e outros eventos ficam aqui. Você pode explorar sem conta; para publicar ou participar, basta entrar ou criar uma conta.',
     icon: CalendarDays,
     accent: 'from-violet-500 to-purple-600',
   },
@@ -157,7 +157,7 @@ const mobileTourSteps: TourStep[] = [
     kind: 'target',
     target: 'create-post',
     title: 'Publicar relato',
-    description: 'Para publicar um problema ou relato, toque no botão “+”.',
+    description: 'O “+” fica sempre disponível. Se você ainda não entrou, toque nele e faça login ou crie uma conta para publicar.',
     icon: Plus,
     accent: 'from-emerald-500 to-green-600',
   },
@@ -181,7 +181,7 @@ const mobileTourSteps: TourStep[] = [
     kind: 'target',
     target: 'mural',
     title: 'Mural',
-    description: 'Feiras, campanhas, reuniões e outros eventos ficam aqui.',
+    description: 'Feiras, campanhas, reuniões e outros eventos ficam aqui. Para publicar ou participar do Mural, entre ou crie uma conta.',
     icon: CalendarDays,
     accent: 'from-violet-500 to-purple-600',
   },
@@ -391,7 +391,6 @@ export default function ProductExperience() {
   const activeTourSteps = useMemo(() => {
     const source = isMobileTour ? mobileTourSteps : tourSteps;
     return source.filter((step) => {
-      if (step.target === 'create-post' && !isAuthenticated) return false;
       if (step.target === 'admin' && !isAdmin) return false;
       return true;
     });

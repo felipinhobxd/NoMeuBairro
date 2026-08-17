@@ -8,6 +8,7 @@ const HCAPTCHA_SITEKEY = 'a306b7dc-5146-4ae0-b146-eefac760b3c2';
 const RECOVERY_FLAG = 'nmb-password-recovery';
 const RECOVERY_STARTED_AT = 'nmb-password-recovery-at';
 const RECOVERY_MAX_AGE_MS = 20 * 60 * 1000;
+const POST_LOGIN_ACTION_KEY = 'nmb-after-login-action';
 
 function clearRecoveryState() {
   try {
@@ -85,6 +86,10 @@ export default function Login() {
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaKey, setCaptchaKey] = useState(0);
   const normalizedEmail = email.trim().toLowerCase();
+  const [postLoginAction] = useState(() => {
+    try { return sessionStorage.getItem(POST_LOGIN_ACTION_KEY) || ''; } catch { return ''; }
+  });
+  const residentDestination = () => postLoginAction === 'create-post' ? '/' : '/perfil';
 
   useEffect(() => {
     const syncMode = () => {
@@ -250,7 +255,7 @@ export default function Login() {
           setPassword('');
           return;
         }
-        nav(companyMode ? '/empresa' : '/perfil');
+        nav(companyMode ? '/empresa' : residentDestination());
         return;
       }
 
@@ -282,7 +287,7 @@ export default function Login() {
         nav('/empresa');
         return;
       }
-      nav('/perfil');
+      nav(residentDestination());
     } catch (err) {
       resetCaptcha();
       setError(err instanceof Error ? friendlyAuthError(err.message) : 'Ocorreu um erro. Tente novamente.');
@@ -306,7 +311,9 @@ export default function Login() {
         ? 'Defina uma nova senha para sua conta.'
         : companyMode
           ? 'Publique e gerencie suas vagas.'
-          : 'Entre para participar da comunidade.';
+          : postLoginAction === 'create-post'
+            ? 'Entre ou crie uma conta para publicar seu relato.'
+            : 'Entre para participar da comunidade.';
 
   const renderPassword = (placeholder: string, autoComplete: string, value: string, onChange: (value: string) => void) => (
     <div className="relative">
