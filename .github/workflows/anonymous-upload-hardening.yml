@@ -1,0 +1,31 @@
+name: Apply anonymous upload hardening
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/anonymous_upload_patch.py'
+      - '.github/workflows/anonymous-upload-hardening.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python3 .github/anonymous_upload_patch.py
+      - name: Validate patch
+        run: git diff --check
+      - name: Commit patch
+        run: |
+          git config user.name "No Meu Bairro Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "security: route anonymous images through edge function"
+          git push origin HEAD:main
