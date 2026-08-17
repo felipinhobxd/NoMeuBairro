@@ -9,6 +9,7 @@ import BrazilWhatsappMask from './components/BrazilWhatsappMask';
 import RecoveryRedirect from './components/RecoveryRedirect';
 import InteractionGuard from './components/InteractionGuard';
 import DataRouteLoader from './components/DataRouteLoader';
+import AdminNavPortal from './components/AdminNavPortal';
 import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import { PanicButton, CookieConsent } from './components/Safety';
@@ -112,6 +113,7 @@ export default function App() {
                       </Routes>
                     </Suspense>
                   </Layout>
+                  <AdminNavPortal />
                   <PanicButton />
                   <CookieConsent />
                 </HashRouter>
