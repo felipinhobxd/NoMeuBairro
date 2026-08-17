@@ -236,8 +236,7 @@ function addKernel(
   }
 }
 
-function groupMarkersByDistance(map: L.Map, markers: L.Marker[]) {
-  const zoom = map.getZoom();
+function groupMarkersByDistance(map: L.Map, markers: L.Marker[], zoom = map.getZoom()) {
   const threshold = clusterDistanceForZoom(zoom);
   const thresholdSquared = threshold * threshold;
   const cellSize = threshold;
@@ -332,57 +331,76 @@ export default function MapClusterController({ points = [] }: Props) {
       hiddenMarkers.current.push(marker);
     };
 
-    const refreshClusters = () => {
+    let pendingZoom = map.getZoom();
+
+    const renderClusters = (zoom: number) => {
+      clearClusters();
+      const sourceMarkers = getClusterSourceMarkers(map);
+      if (sourceMarkers.length < 2) return;
+
+      const groups = groupMarkersByDistance(map, sourceMarkers, zoom);
+
+      for (const group of groups) {
+        if (group.length < 2) continue;
+        const latLngs = group.map(marker => marker.getLatLng());
+        const bounds = L.latLngBounds(latLngs);
+        const center = bounds.getCenter();
+        group.forEach(hideMarker);
+
+        const marker = L.marker(center, {
+          icon: clusterIcon(group.length),
+          zIndexOffset: 900,
+          keyboard: true,
+          title: `${group.length} itens nesta área`,
+        });
+        (marker as any).__nmbClusterMarker = true;
+        marker.on('click', () => {
+          const first = latLngs[0];
+          const samePoint = latLngs.every(point => Math.abs(point.lat - first.lat) < 1e-8 && Math.abs(point.lng - first.lng) < 1e-8);
+          if (samePoint) {
+            map.setView(center, Math.min(20, Math.ceil(zoom) + 2), { animate: false });
+          } else {
+            map.fitBounds(bounds, { padding: [72, 72], maxZoom: Math.min(20, Math.ceil(zoom) + 3), animate: false });
+          }
+        });
+        marker.addTo(map);
+        clusterMarkers.current.push(marker);
+      }
+    };
+
+    const refreshClusters = (zoom = map.getZoom(), immediate = false) => {
+      pendingZoom = zoom;
       if (clusterFrame.current != null) cancelAnimationFrame(clusterFrame.current);
+
+      if (immediate) {
+        clusterFrame.current = null;
+        renderClusters(pendingZoom);
+        return;
+      }
+
       clusterFrame.current = requestAnimationFrame(() => {
-        clearClusters();
-        const sourceMarkers = getClusterSourceMarkers(map);
-        if (sourceMarkers.length < 2) return;
-
-        const zoom = map.getZoom();
-        const groups = groupMarkersByDistance(map, sourceMarkers);
-
-        for (const group of groups) {
-          if (group.length < 2) continue;
-          const latLngs = group.map(marker => marker.getLatLng());
-          const bounds = L.latLngBounds(latLngs);
-          const center = bounds.getCenter();
-          group.forEach(hideMarker);
-
-          const marker = L.marker(center, {
-            icon: clusterIcon(group.length),
-            zIndexOffset: 900,
-            keyboard: true,
-            title: `${group.length} itens nesta área`,
-          });
-          (marker as any).__nmbClusterMarker = true;
-          marker.on('click', () => {
-            const first = latLngs[0];
-            const samePoint = latLngs.every(point => Math.abs(point.lat - first.lat) < 1e-8 && Math.abs(point.lng - first.lng) < 1e-8);
-            if (samePoint) {
-              map.setView(center, Math.min(20, zoom + 2), { animate: true });
-            } else {
-              map.fitBounds(bounds, { padding: [72, 72], maxZoom: Math.min(20, zoom + 3), animate: true });
-            }
-          });
-          marker.addTo(map);
-          clusterMarkers.current.push(marker);
-        }
+        clusterFrame.current = null;
+        renderClusters(pendingZoom);
       });
     };
+
+    const onZoom = () => refreshClusters(map.getZoom());
+    const onZoomAnim = (event: any) => refreshClusters(Number(event.zoom ?? map.getZoom()));
 
     const onLayerChange = (event: L.LeafletEvent) => {
       if (event.layer && ((event.layer as any).__nmbClusterMarker || (event.layer as any).__nmbHeatLayer)) return;
       refreshClusters();
     };
 
-    map.on('zoomend resize', refreshClusters);
+    map.on('zoom zoomend resize', onZoom);
+    map.on('zoomanim', onZoomAnim);
     map.on('layeradd layerremove', onLayerChange);
-    refreshClusters();
+    refreshClusters(map.getZoom(), true);
 
     return () => {
       if (clusterFrame.current != null) cancelAnimationFrame(clusterFrame.current);
-      map.off('zoomend resize', refreshClusters);
+      map.off('zoom zoomend resize', onZoom);
+      map.off('zoomanim', onZoomAnim);
       map.off('layeradd layerremove', onLayerChange);
       clearClusters();
     };
@@ -491,11 +509,7 @@ export default function MapClusterController({ points = [] }: Props) {
       });
     };
 
-    const onZoomStart = () => {
-      // Evita esticar um frame antigo durante a animação de zoom.
-      canvas.style.opacity = '0';
-    };
-    const onZoomEnd = () => drawHeat();
+    const onZoom = () => drawHeat();
     const onMoveEnd = () => drawHeat();
     const onResize = () => drawHeat();
     const onLayerChange = (event: L.LeafletEvent) => {
@@ -504,8 +518,7 @@ export default function MapClusterController({ points = [] }: Props) {
       drawHeat();
     };
 
-    map.on('zoomstart', onZoomStart);
-    map.on('zoomend', onZoomEnd);
+    map.on('zoom zoomend', onZoom);
     map.on('moveend', onMoveEnd);
     map.on('resize', onResize);
     map.on('layeradd layerremove', onLayerChange);
@@ -513,8 +526,7 @@ export default function MapClusterController({ points = [] }: Props) {
 
     return () => {
       if (heatFrame != null) cancelAnimationFrame(heatFrame);
-      map.off('zoomstart', onZoomStart);
-      map.off('zoomend', onZoomEnd);
+      map.off('zoom zoomend', onZoom);
       map.off('moveend', onMoveEnd);
       map.off('resize', onResize);
       map.off('layeradd layerremove', onLayerChange);
