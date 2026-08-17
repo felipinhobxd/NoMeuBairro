@@ -21,8 +21,12 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Apply compatible npm security fixes
-        run: npm audit fix --no-audit --no-fund
+      - name: Upgrade patched Vite release
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-dev vite@7.3.6
+      - name: Apply compatible transitive security fixes
+        run: npm audit fix --package-lock-only --no-audit --no-fund
+      - name: Install exact audited tree
+        run: npm ci --no-audit --no-fund
       - name: Re-audit all npm dependencies
         run: npm audit --audit-level=high
       - name: Verify frontend build
