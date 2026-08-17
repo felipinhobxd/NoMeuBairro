@@ -11,7 +11,7 @@ export default function AdminNavPortal() {
   const location = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
   const [desktopTarget, setDesktopTarget] = useState<HTMLElement | null>(null);
-  const [mobileTarget, setMobileTarget] = useState<HTMLElement | null>(null);
+  const [mobileHeaderTarget, setMobileHeaderTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -37,8 +37,17 @@ export default function AdminNavPortal() {
 
   useEffect(() => {
     const syncTargets = () => {
-      setDesktopTarget(document.querySelector<HTMLElement>('header nav[aria-label="Navegação principal"]'));
-      setMobileTarget(document.querySelector<HTMLElement>('nav[aria-label="Navegação mobile"] > div'));
+      const desktopNav = document.querySelector<HTMLElement>('header nav[aria-label="Navegação principal"]');
+      const themeButton = document.querySelector<HTMLButtonElement>('header button[aria-label^="Ativar modo"]');
+      setDesktopTarget(desktopNav);
+      setMobileHeaderTarget(themeButton?.parentElement ?? null);
+
+      // Em larguras intermediárias os rótulos ocupavam espaço demais quando Admin existia.
+      // Mantemos o texto no DOM para acessibilidade e fornecemos tooltip para cada item.
+      desktopNav?.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+        const label = (button.textContent || '').replace(/\s+/g, ' ').trim();
+        if (label && !button.title) button.title = label;
+      });
     };
 
     syncTargets();
@@ -55,16 +64,17 @@ export default function AdminNavPortal() {
     <button
       type="button"
       onClick={() => navigate('/admin')}
-      className={`flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-semibold transition-all duration-200 shrink-0 ${
+      className={`nmb-admin-nav hidden md:flex items-center justify-center gap-1.5 min-h-10 px-2.5 2xl:px-3 rounded-xl text-[13px] font-bold transition-all duration-200 shrink-0 ${
         active
-          ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300'
-          : 'text-orange-700 hover:text-orange-800 hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-500/10'
+          ? 'bg-orange-600 text-white shadow-sm'
+          : 'text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-500/10'
       }`}
       aria-current={active ? 'page' : undefined}
-      title="Área administrativa"
+      aria-label="Administração"
+      title="Administração"
     >
-      <ShieldCheck className="w-4 h-4" />
-      <span className="hidden xl:inline">Admin</span>
+      <ShieldCheck className="w-4 h-4 shrink-0" />
+      <span className="nmb-admin-nav-label">Admin</span>
     </button>
   );
 
@@ -72,22 +82,23 @@ export default function AdminNavPortal() {
     <button
       type="button"
       onClick={() => navigate('/admin')}
-      className={`flex flex-col items-center justify-center gap-1 py-1 px-1 rounded-2xl transition-all duration-300 flex-1 relative active:scale-90 ${
-        active ? 'text-orange-600 dark:text-orange-300' : 'text-orange-500 dark:text-orange-400'
+      className={`nmb-admin-mobile md:hidden p-2 rounded-xl transition-all duration-200 ${
+        active
+          ? 'bg-orange-600 text-white shadow-sm'
+          : 'text-orange-600 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-500/10'
       }`}
       aria-current={active ? 'page' : undefined}
+      aria-label="Administração"
+      title="Administração"
     >
-      <div className={`p-2 rounded-xl transition-all duration-300 ${active ? 'bg-orange-50 dark:bg-orange-500/10 scale-110 shadow-sm' : ''}`}>
-        <ShieldCheck className="w-5 h-5 transition-transform duration-300" strokeWidth={active ? 2.5 : 2} />
-      </div>
-      <span className="text-[10px] font-bold tracking-tight transition-all">Admin</span>
+      <ShieldCheck className="w-[18px] h-[18px]" strokeWidth={active ? 2.5 : 2} />
     </button>
   );
 
   return (
     <>
       {desktopTarget ? createPortal(desktopButton, desktopTarget) : null}
-      {mobileTarget ? createPortal(mobileButton, mobileTarget) : null}
+      {mobileHeaderTarget ? createPortal(mobileButton, mobileHeaderTarget) : null}
     </>
   );
 }
