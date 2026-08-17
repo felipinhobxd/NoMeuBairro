@@ -4,9 +4,10 @@ import 'leaflet/dist/leaflet.css';
 import { useData } from '../contexts/DataContext';
 import { curitibaNeighborhoods, useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card } from '../components/UI';
+import MapClusterController from '../components/MapClusterController';
 import {
   Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot,
-  Layers3, MapPin, ExternalLink, Loader2, LocateFixed,
+  Layers3, MapPin, ExternalLink, Loader2, LocateFixed, Flame, Eye, EyeOff,
 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import type { PostCategory, CommunityEvent } from '../types';
@@ -62,10 +63,10 @@ type MapJob = {
 
 type Positioned<T> = { item: T; lat: number; lng: number; approximate: boolean };
 
-const layerMeta: Record<LayerKey, { label: string; emoji: string; color: string }> = {
-  reports: { label: 'Relatos', emoji: '📍', color: '#ea580c' },
-  events: { label: 'Eventos', emoji: '📅', color: '#7c3aed' },
-  jobs: { label: 'Empregos', emoji: '💼', color: '#2563eb' },
+const layerMeta: Record<LayerKey, { label: string; emoji: string; color: string; description: string }> = {
+  reports: { label: 'Relatos', emoji: '📍', color: '#ea580c', description: 'Problemas e relatos da comunidade' },
+  events: { label: 'Eventos', emoji: '📅', color: '#7c3aed', description: 'Eventos publicados no Mural' },
+  jobs: { label: 'Empregos', emoji: '💼', color: '#2563eb', description: 'Vagas com localização disponível' },
 };
 
 const normalizeText = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -115,9 +116,18 @@ function createCategoryIcon(category: PostCategory) {
   return createEmojiIcon(cfg.emoji, categoryColors[category] ?? categoryColors.outros, 56);
 }
 
-function FocusPoint({ lat, lng, zoom = 18 }: { lat: number; lng: number; zoom?: number }) {
+function FocusPoint({ lat, lng, zoom = 18, popupZIndex }: { lat: number; lng: number; zoom?: number; popupZIndex?: number }) {
   const map = useMap();
-  useEffect(() => { map.setView([lat, lng], zoom, { animate: false }); }, [map, lat, lng, zoom]);
+  useEffect(() => {
+    map.setView([lat, lng], zoom, { animate: false });
+    if (popupZIndex == null) return;
+    const timer = window.setTimeout(() => {
+      map.eachLayer((layer) => {
+        if (layer instanceof L.Marker && Number(layer.options.zIndexOffset || 0) === popupZIndex) layer.openPopup();
+      });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [map, lat, lng, zoom, popupZIndex]);
   return null;
 }
 
@@ -126,9 +136,9 @@ function RecenterButton({ points }: { points: [number, number][] }) {
   if (points.length === 0) return null;
   return (
     <button
-      onClick={() => map.fitBounds(L.latLngBounds(points), { padding: [60, 60], animate: false, maxZoom: 16 })}
+      onClick={() => map.fitBounds(L.latLngBounds(points), { padding: [60, 60], animate: true, maxZoom: 16 })}
       type="button"
-      className="absolute bottom-5 right-4 z-[1000] bg-white dark:bg-slate-800 p-3 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-orange-700 transition-colors"
+      className="absolute bottom-5 right-4 z-[1000] w-11 h-11 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:text-orange-700 hover:border-orange-300 transition-all active:scale-95 flex items-center justify-center"
       title="Enquadrar itens visíveis"
       aria-label="Enquadrar itens visíveis"
     >
@@ -138,8 +148,15 @@ function RecenterButton({ points }: { points: [number, number][] }) {
 }
 
 function eventPosition(event: CommunityEvent): Positioned<CommunityEvent> | null {
-  if (event.latitude != null && event.longitude != null) return { item: event, lat: Number(event.latitude), lng: Number(event.longitude), approximate: false };
-  const fallback = approximatePosition(event.location, event.id);
+  if (event.latitude != null && event.longitude != null) {
+    return {
+      item: event,
+      lat: Number(event.latitude),
+      lng: Number(event.longitude),
+      approximate: Boolean(event.locationPrecision && event.locationPrecision !== 'exact'),
+    };
+  }
+  const fallback = approximatePosition(`${event.location || ''} ${event.neighborhood || ''}`, event.id);
   return fallback ? { item: event, ...fallback } : null;
 }
 
@@ -161,7 +178,8 @@ export default function Mapa() {
   const { currentNeighborhood } = useNeighborhood();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
-  const [layers, setLayers] = useState<Set<LayerKey>>(() => new Set(['reports']));
+  const [layers, setLayers] = useState<Set<LayerKey>>(() => new Set(['reports', 'events', 'jobs']));
+  const [heatEnabled, setHeatEnabled] = useState(true);
   const [jobs, setJobs] = useState<MapJob[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [jobsLoading, setJobsLoading] = useState(false);
@@ -173,11 +191,14 @@ export default function Mapa() {
   const [focusedPostId] = useState<string | null>(() => {
     try { return sessionStorage.getItem('anb-map-focus-post'); } catch { return null; }
   });
+  const [focusedEventId] = useState<string | null>(() => {
+    try { return sessionStorage.getItem('anb-map-focus-event'); } catch { return null; }
+  });
 
   const reportPositions = useMemo(() => (posts || []).flatMap((post) => {
     if (filter !== 'all' && post.category !== filter) return [];
-    if (post.latitude != null && post.longitude != null) return [{ item: post, lat: Number(post.latitude), lng: Number(post.longitude), approximate: false }];
-    const fallback = approximatePosition(post.location, post.id);
+    if (post.latitude != null && post.longitude != null) return [{ item: post, lat: Number(post.latitude), lng: Number(post.longitude), approximate: Boolean(post.locationPrecision && post.locationPrecision !== 'exact') }];
+    const fallback = approximatePosition(`${post.location || ''} ${post.neighborhood || ''}`, post.id);
     return fallback ? [{ item: post, ...fallback }] : [];
   }), [posts, filter]);
 
@@ -190,6 +211,7 @@ export default function Mapa() {
   const visibleJobPositions = useMemo(() => jobPositions.filter(withinNearbyRadius), [jobPositions, nearMe, userPosition]);
 
   const focusedPost = useMemo(() => focusedPostId ? reportPositions.find((entry) => entry.item.id === focusedPostId) ?? null : null, [reportPositions, focusedPostId]);
+  const focusedEvent = useMemo(() => focusedEventId ? eventPositions.find((entry) => entry.item.id === focusedEventId) ?? null : null, [eventPositions, focusedEventId]);
 
   const categoryMarkerIcons = useMemo(() => {
     const out = {} as Record<PostCategory, L.Icon>;
@@ -207,6 +229,13 @@ export default function Mapa() {
     setNearMe(false);
     try { sessionStorage.removeItem('anb-map-focus-post'); } catch {}
   }, [focusedPostId]);
+
+  useEffect(() => {
+    if (!focusedEventId) return;
+    setLayers((previous) => new Set(previous).add('events'));
+    setNearMe(false);
+    try { sessionStorage.removeItem('anb-map-focus-event'); } catch {}
+  }, [focusedEventId]);
 
   useEffect(() => {
     if (!layers.has('jobs') || jobsLoaded || jobsLoading) return;
@@ -298,6 +327,7 @@ export default function Mapa() {
     jobs: visibleJobPositions.length,
   };
 
+  const itemCount = visiblePoints.length - (nearMe && userPosition ? 1 : 0);
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
 
   const openJob = (jobId: string) => {
@@ -311,74 +341,104 @@ export default function Mapa() {
   };
 
   return (
-    <div className="min-h-[620px] h-[calc(100dvh-140px)] flex flex-col gap-3 sm:gap-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
-              <span className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center"><MapIcon className="w-5 h-5 text-orange-700 dark:text-orange-300" /></span>
-              Mapa Comunitário
-            </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Combine relatos, eventos e vagas no mesmo mapa.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={toggleNearMe}
-              disabled={locationLoading}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all disabled:opacity-60 ${nearMe ? 'bg-teal-700 text-white border-teal-700' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'}`}
-            >
-              {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
-              {nearMe ? 'Perto de mim: 3 km' : 'Perto de mim'}
-            </button>
-            <button
-              type="button"
-              onClick={showAllLayers}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'}`}
-            >
-              <Layers3 className="w-4 h-4" /> Mostrar tudo
-            </button>
-          </div>
+    <div className="min-h-[650px] h-[calc(100dvh-132px)] flex flex-col gap-4">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center shrink-0"><MapIcon className="w-5 h-5 text-orange-700 dark:text-orange-300" /></span>
+            Mapa Comunitário
+          </h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Áreas mais movimentadas ficam mais quentes conforme relatos, eventos e vagas se acumulam.</p>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1" aria-label="Camadas do mapa">
-          {(Object.keys(layerMeta) as LayerKey[]).map((layer) => {
-            const active = layers.has(layer);
-            const meta = layerMeta[layer];
-            const layerLoading = layer === 'jobs' && jobsLoading;
-            return (
-              <button
-                key={layer}
-                type="button"
-                aria-pressed={active}
-                onClick={() => toggleLayer(layer)}
-                className={`min-h-11 shrink-0 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-sm font-bold transition-all ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm border-slate-300 dark:border-slate-600' : 'bg-slate-100/80 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-transparent'}`}
-              >
-                <span className="w-7 h-7 rounded-lg flex items-center justify-center text-base" style={{ backgroundColor: `${meta.color}18`, color: meta.color }}>{layerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.emoji}</span>
-                {meta.label}
-                {layer === 'jobs' && jobsError ? <span className="text-[10px] font-black text-red-600">ERRO</span> : active && !layerLoading && <span className="text-xs font-black text-slate-500 dark:text-slate-300">{layerCounts[layer]}</span>}
-              </button>
-            );
-          })}
+        <div className="grid grid-cols-2 sm:flex gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setHeatEnabled(value => !value)}
+            className={`min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all ${heatEnabled ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/20' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
+            aria-pressed={heatEnabled}
+          >
+            {heatEnabled ? <Flame className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {heatEnabled ? 'Calor ativo' : 'Mostrar calor'}
+          </button>
+          <button
+            type="button"
+            onClick={toggleNearMe}
+            disabled={locationLoading}
+            className={`min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all disabled:opacity-60 ${nearMe ? 'bg-teal-700 text-white border-teal-700 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-teal-300'}`}
+          >
+            {locationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LocateFixed className="w-4 h-4" />}
+            {nearMe ? 'Raio de 3 km' : 'Perto de mim'}
+          </button>
+          <button
+            type="button"
+            onClick={showAllLayers}
+            className={`col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-orange-300'}`}
+          >
+            <Layers3 className="w-4 h-4" /> Mostrar tudo
+          </button>
+        </div>
+      </div>
+
+      <Card className="!p-3 sm:!p-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 lg:pb-0" aria-label="Camadas do mapa">
+            {(Object.keys(layerMeta) as LayerKey[]).map((layer) => {
+              const active = layers.has(layer);
+              const meta = layerMeta[layer];
+              const layerLoading = layer === 'jobs' && jobsLoading;
+              return (
+                <button
+                  key={layer}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleLayer(layer)}
+                  className={`min-h-11 shrink-0 inline-flex items-center gap-2 px-3.5 rounded-xl border text-sm font-bold transition-all ${active ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm border-slate-900 dark:border-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-slate-300'}`}
+                  title={meta.description}
+                >
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center text-base" style={{ backgroundColor: active ? 'rgba(255,255,255,.13)' : `${meta.color}18`, color: active ? 'inherit' : meta.color }}>{layerLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : meta.emoji}</span>
+                  {meta.label}
+                  {layer === 'jobs' && jobsError ? <span className="text-[10px] font-black text-red-500">ERRO</span> : active && !layerLoading && <span className={`text-[11px] font-black px-1.5 py-0.5 rounded-md ${active ? 'bg-white/15 dark:bg-slate-900/10' : 'bg-slate-200 dark:bg-slate-800'}`}>{layerCounts[layer]}</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden lg:block w-px h-9 bg-slate-200 dark:bg-slate-700" />
+
+          {heatEnabled && (
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+              <Flame className="w-4 h-4 text-orange-600" />
+              <span>Intensidade</span>
+              <span className="w-4 h-4 rounded-full bg-green-500/70" title="Baixa" />
+              <span className="w-4 h-4 rounded-full bg-yellow-500/70" title="Média" />
+              <span className="w-4 h-4 rounded-full bg-orange-500/80" title="Alta" />
+              <span className="w-4 h-4 rounded-full bg-red-600/80" title="Muito alta" />
+            </div>
+          )}
         </div>
 
         {layers.has('reports') && (
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1" aria-label="Categorias dos relatos">
-            <button onClick={() => setFilter('all')} type="button" className={`px-3.5 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${filter === 'all' ? 'bg-orange-700 text-white' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}>Todos os relatos</button>
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 overflow-x-auto no-scrollbar" aria-label="Categorias dos relatos">
+            <button onClick={() => setFilter('all')} type="button" className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${filter === 'all' ? 'bg-orange-700 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}>Todos os relatos</button>
             {(Object.keys(categoryIcons) as PostCategory[]).map((category) => {
               const Icon = lucideCategories[category];
-              return <button key={category} onClick={() => setFilter(category)} type="button" className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold transition-all shrink-0 ${filter === category ? 'bg-orange-700 text-white shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}><Icon className="w-3.5 h-3.5" />{categoryIcons[category].label}</button>;
+              return <button key={category} onClick={() => setFilter(category)} type="button" className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all shrink-0 ${filter === category ? 'bg-orange-700 text-white shadow-sm' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'}`}><Icon className="w-3.5 h-3.5" />{categoryIcons[category].label}</button>;
             })}
           </div>
         )}
-        {locationError && <p className="text-xs font-semibold text-red-600 dark:text-red-400">{locationError}</p>}
-      </div>
+      </Card>
 
-      <Card className="flex-1 min-h-[360px] !p-0 overflow-hidden relative border-slate-200 dark:border-slate-800 shadow-xl">
+      {locationError && <p className="-mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{locationError}</p>}
+
+      <Card className="flex-1 min-h-[390px] !p-0 overflow-hidden relative !border-slate-200 dark:!border-slate-800 shadow-xl">
         <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {focusedPost && <FocusPoint lat={focusedPost.lat} lng={focusedPost.lng} />}
-          {!focusedPost && nearMe && userPosition && <FocusPoint lat={userPosition.lat} lng={userPosition.lng} zoom={14} />}
+
+          {focusedEvent && <FocusPoint lat={focusedEvent.lat} lng={focusedEvent.lng} zoom={18} popupZIndex={1100} />}
+          {!focusedEvent && focusedPost && <FocusPoint lat={focusedPost.lat} lng={focusedPost.lng} zoom={18} popupZIndex={1000} />}
+          {!focusedEvent && !focusedPost && nearMe && userPosition && <FocusPoint lat={userPosition.lat} lng={userPosition.lng} zoom={14} />}
+
           {nearMe && userPosition && (
             <Marker position={[userPosition.lat, userPosition.lng]} icon={userIcon} zIndexOffset={1200}>
               <Popup><div className="text-sm font-bold text-slate-900">Você está aproximadamente aqui</div><p className="text-xs text-slate-500 mt-1">Sua localização é usada apenas nesta tela e não é salva.</p></Popup>
@@ -403,15 +463,20 @@ export default function Mapa() {
 
           {layers.has('events') && visibleEventPositions.map(({ item: event, lat, lng, approximate }) => {
             const meta = eventLabels[event.type] ?? eventLabels.outros;
+            const isFocused = focusedEvent?.item.id === event.id;
             return (
-              <Marker key={`event-${event.id}`} position={[lat, lng]} icon={eventIcon} riseOnHover zIndexOffset={420}>
-                <Popup minWidth={260} className="custom-popup">
+              <Marker key={`event-${event.id}`} position={[lat, lng]} icon={eventIcon} riseOnHover zIndexOffset={isFocused ? 1100 : 420}>
+                <Popup minWidth={280} className="custom-popup">
                   <div className="p-1">
-                    <div className="flex items-center gap-2 mb-2"><span className="text-lg">{meta.emoji}</span><span className="text-[11px] font-bold uppercase tracking-wider text-violet-700">{meta.label}</span></div>
+                    <div className="flex items-center gap-2 mb-2"><span className="text-lg">{meta.emoji}</span><span className="text-[11px] font-bold uppercase tracking-wider text-violet-700">{meta.label}</span>{isFocused && <span className="ml-auto text-[10px] font-black px-2 py-0.5 rounded-md bg-violet-100 text-violet-700">EVENTO SELECIONADO</span>}</div>
                     <h3 className="font-bold text-slate-900 mb-1">{event.title}</h3>
                     <p className="text-xs text-slate-600 line-clamp-3 mb-2">{event.description}</p>
                     <p className="text-xs font-semibold text-slate-600 mb-2">📅 {new Date(`${event.date}T12:00:00`).toLocaleDateString('pt-BR')}</p>
-                    <p className="text-xs text-slate-500 mb-3">📍 {event.location}{approximate ? ' · posição aproximada' : ''}</p>
+                    <div className="rounded-lg bg-violet-50 px-3 py-2 mb-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-violet-600 mb-0.5">Endereço do evento</p>
+                      <p className="text-xs font-semibold text-slate-700">📍 {event.location || 'Localização não informada'}</p>
+                      {approximate && <p className="text-[10px] text-slate-500 mt-1">Posição aproximada no mapa.</p>}
+                    </div>
                     <button onClick={() => openEvent(event.id)} type="button" className="w-full py-2.5 bg-violet-700 hover:bg-violet-800 text-white text-xs font-bold rounded-lg transition-colors">Ver no Mural <ExternalLink className="w-3.5 h-3.5 inline ml-1" /></button>
                   </div>
                 </Popup>
@@ -441,13 +506,15 @@ export default function Mapa() {
             </Marker>
           ))}
 
+          <MapClusterController heatEnabled={heatEnabled} />
           <RecenterButton points={visiblePoints} />
         </MapContainer>
 
-        <div className="absolute top-3 right-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 hidden lg:block min-w-[180px]">
-          <h4 className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2"><Info className="w-3.5 h-3.5" /> Visível no mapa</h4>
-          <div className="space-y-2">
+        <div className="absolute top-3 right-3 z-[1000] bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3.5 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 hidden lg:block min-w-[205px]">
+          <h4 className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Info className="w-3.5 h-3.5" /> Visível no mapa</h4>
+          <div className="space-y-2.5">
             {(Object.keys(layerMeta) as LayerKey[]).filter((layer) => layers.has(layer)).map((layer) => <div key={layer} className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${layerMeta[layer].color}18` }}>{layerMeta[layer].emoji}</span><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{layerMeta[layer].label}</span><span className="text-xs font-black text-slate-500 ml-auto">{layerCounts[layer]}</span></div>)}
+            {heatEnabled && <div className="pt-2 border-t border-slate-100 dark:border-slate-800"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500" /> Mapa de calor</p><div className="h-2.5 rounded-full bg-gradient-to-r from-green-500 via-yellow-400 via-orange-500 to-red-600" /><div className="flex justify-between mt-1 text-[9px] font-semibold text-slate-400"><span>poucos</span><span>muitos</span></div></div>}
             {nearMe && <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 pt-1">Filtrando em até 3 km de você.</p>}
             {layers.size === 0 && <p className="text-xs text-slate-500">Ative uma camada acima.</p>}
           </div>
@@ -455,11 +522,12 @@ export default function Mapa() {
       </Card>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
-        <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-600" /><strong className="text-slate-900 dark:text-white">{visiblePoints.length - (nearMe && userPosition ? 1 : 0)}</strong><span>itens visíveis</span></div>
+        <div className="flex items-center gap-2"><Eye className="w-3.5 h-3.5 text-orange-600" /><strong className="text-slate-900 dark:text-white">{itemCount}</strong><span>itens visíveis</span></div>
+        {heatEnabled && <span className="font-semibold text-orange-700 dark:text-orange-300">Cores mais quentes = maior concentração de itens</span>}
         {nearMe && <span className="font-semibold text-teal-700 dark:text-teal-300">Perto de mim ativo · sua posição não é armazenada</span>}
         {jobsLoading && <div className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando vagas...</div>}
         {jobsError && <p className="font-semibold text-red-600 dark:text-red-400">Não foi possível carregar as vagas. Desative e ative Empregos para tentar novamente.</p>}
-        <p className="hidden sm:block">Você pode combinar várias camadas. Marcadores aproximados são identificados no detalhe.</p>
+        <p className="hidden md:block ml-auto text-slate-400">Os números indicam quantos itens estão agrupados naquela área.</p>
       </div>
     </div>
   );
