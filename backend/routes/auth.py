@@ -34,11 +34,10 @@ class LoginSchema(Schema):
 @auth_bp.route("/register", methods=["POST"])
 def register():
     """Registra um novo usuário. Senha hasheada com Argon2id."""
-    data = request.get_json()
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Corpo da requisição vazio."}), 400
 
-    # Validar input
     schema = RegisterSchema()
     try:
         validated = schema.load(data)
@@ -49,11 +48,9 @@ def register():
     email = validated["email"].strip().lower()
     password = validated["password"]
 
-    # Verificar email único
     if User.query.filter_by(email=email).first():
-        return jsonify({"error": "Este e-mail já está cadastrado."}), 409
+        return jsonify({"error": "Não foi possível criar a conta com estes dados."}), 409
 
-    # Criar usuário
     user = User(
         name=name,
         email=email,
@@ -62,7 +59,6 @@ def register():
     db.session.add(user)
     db.session.commit()
 
-    # Gerar tokens
     access_token = generate_access_token(str(user.id), user.name)
     refresh_token = generate_refresh_token(str(user.id))
 
@@ -77,8 +73,8 @@ def register():
 # ─── POST /api/auth/login ──────────────────────────────────
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    """Autentica usuário e retorna JWT."""
-    data = request.get_json()
+    """Autentica usuário e retorna JWT sem revelar se o e-mail existe."""
+    data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Corpo da requisição vazio."}), 400
 
@@ -92,16 +88,12 @@ def login():
     password = validated["password"]
 
     user = User.query.filter_by(email=email).first()
-    if not user:
-        return jsonify({"error": "E-mail não encontrado. Crie uma conta primeiro."}), 404
+    if not user or not verify_password(user.password_hash, password):
+        return jsonify({"error": "E-mail ou senha inválidos."}), 401
 
     if not user.is_active:
-        return jsonify({"error": "Conta desativada."}), 403
+        return jsonify({"error": "Conta indisponível."}), 403
 
-    if not verify_password(user.password_hash, password):
-        return jsonify({"error": "Senha incorreta."}), 401
-
-    # Gerar tokens
     access_token = generate_access_token(str(user.id), user.name)
     refresh_token = generate_refresh_token(str(user.id))
 
@@ -150,7 +142,7 @@ def get_badges():
 def refresh():
     """Renova o access token usando um refresh token válido."""
     from middleware import decode_token
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     refresh_token = data.get("refreshToken")
     if not refresh_token:
         return jsonify({"error": "Refresh token ausente."}), 401
@@ -160,8 +152,8 @@ def refresh():
         return jsonify({"error": "Refresh token inválido ou expirado."}), 401
 
     user = User.query.get(payload["sub"])
-    if not user:
-        return jsonify({"error": "Usuário não encontrado."}), 404
+    if not user or not user.is_active:
+        return jsonify({"error": "Refresh token inválido ou expirado."}), 401
 
     new_access = generate_access_token(str(user.id), user.name)
     return jsonify({"accessToken": new_access}), 200
