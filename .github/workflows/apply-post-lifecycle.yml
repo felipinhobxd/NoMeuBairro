@@ -1,4 +1,4 @@
-name: Apply post lifecycle upgrade
+name: Apply product upgrade
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Apply lifecycle patch
+      - name: Apply product patch
         run: python .github/scripts/apply_post_lifecycle.py
 
       - name: Install dependencies
@@ -39,10 +39,10 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/components/UI.tsx src/contexts/DataContext.tsx src/pages/Feed.tsx src/pages/PostDetails.tsx src/pages/Estatisticas.tsx database/20260817_post_lifecycle_history.sql
+          git add src/pages/Feed.tsx src/pages/PostDetails.tsx src/utils/share.ts
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "feat: complete post lifecycle tracking"
+          git commit -m "feat: add post sharing and detail links"
           git push origin HEAD:main
