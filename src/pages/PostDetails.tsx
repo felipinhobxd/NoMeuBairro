@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight } from 'lucide-react';
+import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo } from '../components/UI';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
-import type { Comment, Post } from '../types';
+import type { Comment, Post, PostStatus } from '../types';
+
+type StatusHistoryItem = { id: string; old_status?: PostStatus | null; new_status: PostStatus; source: string; changed_at: string };
+const lifecycleLabels: Record<PostStatus, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' };
+const lifecycleClasses: Record<PostStatus, string> = {
+  pending: 'bg-amber-500',
+  in_progress: 'bg-blue-500',
+  resolved: 'bg-emerald-600',
+};
 
 function ThreadComment({
   comment,
@@ -107,7 +115,7 @@ export default function PostDetails() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
-  const { supportPost, addComment, commentsByPost, loadComments, deleteComment } = useData();
+  const { supportPost, addComment, commentsByPost, loadComments, deleteComment, updatePostStatus, isMyPost } = useData();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [commentsLoading, setCommentsLoading] = useState(true);
@@ -116,6 +124,9 @@ export default function PostDetails() {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [deletingComment, setDeletingComment] = useState<string | null>(null);
+  const [statusHistory, setStatusHistory] = useState<StatusHistoryItem[]>([]);
+  const [canModerate, setCanModerate] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<PostStatus | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -136,8 +147,14 @@ export default function PostDetails() {
       const supportPromise = user?.id
         ? supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle()
         : Promise.resolve({ data: null } as any);
+      const historyPromise = supabase
+        .from('post_status_history')
+        .select('id,old_status,new_status,source,changed_at')
+        .eq('post_id', postId)
+        .order('changed_at', { ascending: false })
+        .limit(30);
 
-      const [postResult, , supportResult] = await Promise.all([postPromise, commentsPromise, supportPromise]);
+      const [postResult, , supportResult, historyResult] = await Promise.all([postPromise, commentsPromise, supportPromise, historyPromise]);
       if (!mounted) return;
 
       const data = postResult.data;
@@ -165,12 +182,23 @@ export default function PostDetails() {
         });
       } else setPost(null);
       setSupported(Boolean(supportResult?.data));
+      setStatusHistory((historyResult?.data || []) as StatusHistoryItem[]);
       setCommentsLoading(false);
       setLoading(false);
     };
     void load();
     return () => { mounted = false; };
   }, [postId, user?.id, loadComments]);
+
+  useEffect(() => {
+    let active = true;
+    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }
+    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {
+      if (!active) return;
+      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');
+    });
+    return () => { active = false; };
+  }, [user?.id]);
 
   const postComments = post ? (commentsByPost[post.id] ?? []) : [];
   const rootComments = useMemo(() => postComments.filter(comment => !comment.parentId), [postComments]);
@@ -209,6 +237,20 @@ export default function PostDetails() {
     }
   };
 
+  const handleStatusChange = async (status: PostStatus) => {
+    if (!postId || !post || updatingStatus || post.status === status) return;
+    setUpdatingStatus(status);
+    try {
+      const result = await updatePostStatus(postId, status);
+      if (!result.ok) return;
+      setPost(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : prev);
+      const { data } = await supabase.from('post_status_history').select('id,old_status,new_status,source,changed_at').eq('post_id', postId).order('changed_at', { ascending: false }).limit(30);
+      if (data) setStatusHistory(data as StatusHistoryItem[]);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
   if (loading) return <div className="py-16 text-center text-slate-400">Carregando post...</div>;
   if (!post) return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -219,6 +261,7 @@ export default function PostDetails() {
 
   const anonymous = post.authorId === 'anonymous';
   const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
+  const canManageStatus = isMyPost(post) || canModerate;
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -250,6 +293,25 @@ export default function PostDetails() {
           {post.location && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" /> {post.location}</span>}
         </div>
 
+        {canManageStatus && (
+          <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"><Settings2 className="w-4 h-4 text-slate-500" /></div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Atualizar andamento</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Mantenha a comunidade informada sobre a situação deste relato.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              {(['pending', 'in_progress', 'resolved'] as PostStatus[]).map(status => (
+                <button key={status} type="button" onClick={() => void handleStatusChange(status)} disabled={post.status === status || updatingStatus !== null} className={`min-h-11 rounded-xl px-2 py-2 text-[11px] sm:text-xs font-bold transition-all ${post.status === status ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-emerald-400'} disabled:opacity-70`}>
+                  {updatingStatus === status ? 'Salvando...' : lifecycleLabels[status]}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
           <button onClick={handleSupport} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${supported ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
             <Heart className={supported ? 'w-5 h-5 fill-current' : 'w-5 h-5'} /> Apoiar {post.supports > 0 ? `(${post.supports})` : ''}
@@ -258,6 +320,31 @@ export default function PostDetails() {
             <MessageSquare className="w-5 h-5" /> Comentar {post.commentsCount > 0 ? `(${post.commentsCount})` : ''}
           </button>
         </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2"><Clock3 className="w-5 h-5 text-emerald-600" /><h2 className="text-lg font-bold text-slate-900 dark:text-white">Histórico do relato</h2></div>
+            <p className="text-xs text-slate-500 mt-1">As mudanças de situação ficam registradas para dar mais transparência ao acompanhamento.</p>
+          </div>
+        </div>
+        {statusHistory.length === 0 ? (
+          <p className="text-sm text-slate-400">Ainda não há mudanças registradas.</p>
+        ) : (
+          <div className="space-y-0">
+            {statusHistory.map((item, index) => (
+              <div key={item.id} className="relative flex gap-3 pb-4 last:pb-0">
+                {index < statusHistory.length - 1 && <span className="absolute left-[7px] top-4 bottom-0 w-px bg-slate-200 dark:bg-slate-700" />}
+                <span className={`relative mt-1 w-3.5 h-3.5 rounded-full ring-4 ring-white dark:ring-slate-900 shrink-0 ${lifecycleClasses[item.new_status]}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{lifecycleLabels[item.new_status]}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{new Date(item.changed_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card id="post-comments" className="scroll-mt-24">

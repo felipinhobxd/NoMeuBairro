@@ -368,14 +368,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const updatePostStatus = useCallback(async (postId: string, status: PostStatus): Promise<ActionResult> => {
     const target = posts.find(post => post.id === postId);
-    if (target?.authorId === 'anonymous') {
-      const token = getAnonTokens()[postId] || ''; const { data, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'update_status', postId, status, editToken: token } });
-      if (error || !data?.ok) return { ok: false, error: data?.error || error?.message || 'Não foi possível atualizar o status.' };
-      setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post)); return { ok: true };
+    let isAnonymous = target?.authorId === 'anonymous';
+    if (!target) {
+      const { data: row, error: lookupError } = await supabase.from('posts').select('is_anonymous').eq('id', postId).maybeSingle();
+      if (lookupError) return { ok: false, error: lookupError.message };
+      isAnonymous = Boolean(row?.is_anonymous);
     }
-    const { error } = await supabase.from('posts').update({ status }).eq('id', postId); if (error) return { ok: false, error: error.message };
-    setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post)); return { ok: true };
-  }, [posts, getAnonTokens]);
+
+    const anonToken = getAnonTokens()[postId] || '';
+    const canUseAnonymousControl = isAnonymous && (Boolean(anonToken) || managedAnonIds.has(postId));
+    if (canUseAnonymousControl) {
+      const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'update_status', postId, status, editToken: anonToken } });
+      if (error || !result?.ok) return { ok: false, error: result?.error || error?.message || 'Não foi possível atualizar o status.' };
+      setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));
+      return { ok: true };
+    }
+
+    const { error } = await supabase.from('posts').update({ status }).eq('id', postId);
+    if (error) return { ok: false, error: error.message };
+    setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));
+    return { ok: true };
+  }, [posts, getAnonTokens, managedAnonIds]);
 
   const deleteEvent = useCallback(async (eventId: string): Promise<ActionResult> => { const { error } = await supabase.from('events').delete().eq('id', eventId); if (error) return { ok: false, error: error.message }; setEvents(prev => prev.filter(event => event.id !== eventId)); return { ok: true }; }, []);
 

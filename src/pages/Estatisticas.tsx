@@ -156,7 +156,7 @@ export default function Estatisticas() {
           <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-6"><Clock className="w-4 h-4 text-orange-700" /> Situação dos relatos</h3>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Pendente', count: stats.pending, cls: 'bg-amber-500' },
+              { label: 'Aberto', count: stats.pending, cls: 'bg-amber-500' },
               { label: 'Em andamento', count: stats.inProgress, cls: 'bg-blue-500' },
               { label: 'Resolvido', count: stats.resolved, cls: 'bg-green-600' },
             ].map((item) => (
