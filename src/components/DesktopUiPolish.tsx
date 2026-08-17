@@ -22,6 +22,7 @@ export default function DesktopUiPolish() {
         header[role="banner"] > div > div > div:first-child {
           min-width: 0;
           gap: 9px !important;
+          align-items: center;
         }
 
         header[role="banner"] > div > div > div:first-child > button:last-child {
@@ -39,6 +40,7 @@ export default function DesktopUiPolish() {
           min-width: 0;
           flex: 1 1 auto;
           justify-content: center;
+          align-items: center;
           gap: 3px;
           padding: 4px;
           overflow: hidden;
@@ -59,24 +61,52 @@ export default function DesktopUiPolish() {
           padding-left: 9px !important;
           padding-right: 9px !important;
           justify-content: center;
+          align-items: center;
+          line-height: 1;
+        }
+
+        header[role="banner"] nav[aria-label="Navegação principal"] > button svg,
+        header[role="banner"] > div > div > div:last-child button svg {
+          display: block;
+          flex: 0 0 auto;
         }
 
         header[role="banner"] > div > div > div:last-child {
           position: relative;
           z-index: 3;
-          gap: 4px !important;
+          gap: 5px !important;
           flex: 0 0 auto;
+          align-items: center;
+          min-height: 40px;
         }
 
-        /* Importante: não definir display aqui. Isso quebrava md:hidden e criava
-           um segundo botão Admin no desktop, por cima do controle de tema. */
-        header[role="banner"] > div > div > div:last-child > button {
+        /* Apenas controles de ícone recebem caixa quadrada. Antes essa regra também
+           pegava “Entrar”, comprimindo o texto e empurrando busca/download. */
+        header[role="banner"] > div > div > div:last-child > button[aria-label]:not(.nmb-admin-mobile) {
           width: 38px;
           height: 38px;
-          padding: 0;
+          min-width: 38px;
+          min-height: 38px;
+          padding: 0 !important;
           border-radius: 12px;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
+          line-height: 0;
+        }
+
+        /* Botões com texto, como Entrar, preservam largura natural. */
+        header[role="banner"] > div > div > div:last-child > button:not([aria-label]) {
+          width: auto !important;
+          min-width: max-content;
+          height: 38px;
+          min-height: 38px;
+          padding-left: 12px !important;
+          padding-right: 12px !important;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
         }
 
         header[role="banner"] .nmb-admin-mobile {
@@ -88,7 +118,30 @@ export default function DesktopUiPolish() {
           height: 34px !important;
           line-height: 34px !important;
           font-weight: 800 !important;
+          text-align: center !important;
         }
+      }
+
+      /* Camadas e categorias do mapa usam a mesma linha-base visual. */
+      [aria-label="Camadas do mapa"] > button,
+      [aria-label="Categorias dos relatos"] > button {
+        min-height: 44px;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+        vertical-align: middle;
+      }
+
+      [aria-label="Camadas do mapa"] > button > span,
+      [aria-label="Categorias dos relatos"] > button > span {
+        line-height: 1 !important;
+      }
+
+      [aria-label="Camadas do mapa"] > button svg,
+      [aria-label="Categorias dos relatos"] > button svg {
+        display: block;
+        flex: 0 0 auto;
       }
 
       /* Desktop compacto/notebook: preserva todos os destinos, mas usa ícones
