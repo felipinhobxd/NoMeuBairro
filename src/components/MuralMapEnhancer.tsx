@@ -26,9 +26,12 @@ export default function MuralMapEnhancer() {
         const card = document.getElementById(`ev-${event.id}`);
         if (!card) continue;
 
-        // O link antigo ia apenas para a visão geral. Escondemos para deixar uma única ação correta.
+        // Oculta somente a ação antiga do card. O botão novo fica dentro de
+        // [data-nmb-mural-address] e não pode ser ocultado pelo observer.
         for (const button of Array.from(card.querySelectorAll<HTMLButtonElement>('button'))) {
-          if ((button.textContent || '').replace(/\s+/g, ' ').trim() === 'Ver no mapa') button.style.display = 'none';
+          const isEnhancedButton = Boolean(button.closest('[data-nmb-mural-address]'));
+          const text = (button.textContent || '').replace(/\s+/g, ' ').trim();
+          if (!isEnhancedButton && text === 'Ver no mapa') button.style.display = 'none';
         }
         next[event.id] = card;
       }
@@ -65,23 +68,30 @@ export default function MuralMapEnhancer() {
         const area = event.locality && event.neighborhood
           ? `${event.locality} · ${event.neighborhood}`
           : event.locality || event.neighborhood;
+        const hasCoordinates = event.latitude != null && event.longitude != null;
 
         return createPortal(
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center gap-3" data-nmb-mural-address>
-            <div className="flex items-start gap-3 min-w-0 flex-1 rounded-xl bg-slate-50 dark:bg-slate-800/60 px-3 py-2.5">
-              <div className="w-9 h-9 rounded-lg bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 flex items-center justify-center shrink-0">
+          <div className="nmb-mural-map-row mt-4 pt-3 border-t border-slate-100 dark:border-slate-800" data-nmb-mural-address>
+            <div className="nmb-mural-address-card">
+              <div className="nmb-mural-address-icon">
                 <MapPin className="w-4 h-4" />
               </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Endereço informado</p>
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 break-words mt-0.5">{event.location}</p>
-                {area && <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5">{area}</p>}
+              <div className="min-w-0 flex-1">
+                <p className="nmb-mural-address-kicker">Endereço informado</p>
+                <p className="nmb-mural-address-text">{event.location}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  {area && <p className="nmb-mural-address-area">{area}</p>}
+                  <span className={`nmb-location-precision ${hasCoordinates ? 'is-exact' : 'is-approximate'}`}>
+                    {hasCoordinates ? 'Localizado no mapa' : 'Posição aproximada'}
+                  </span>
+                </div>
               </div>
             </div>
             <button
               type="button"
               onClick={() => openExactMap(eventId)}
-              className="min-h-11 shrink-0 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-violet-700 hover:bg-violet-800 text-white text-xs font-black shadow-sm transition-all active:scale-95"
+              className="nmb-mural-map-button"
+              data-nmb-exact-map
             >
               <Navigation className="w-4 h-4" />
               Ver no mapa
