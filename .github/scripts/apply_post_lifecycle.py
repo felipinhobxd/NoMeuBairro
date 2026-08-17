@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -17,250 +16,148 @@ def write(path: str, text: str) -> None:
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     count = text.count(old)
     if count != 1:
-        raise RuntimeError(f'{label}: expected exactly 1 match, found {count}')
+        raise RuntimeError(f'{label}: expected 1 match, found {count}')
     return text.replace(old, new, 1)
 
 
-# 1) Shared status wording: the persisted enum stays `pending` for compatibility,
-# but the product language is now "Aberto".
-ui_path = 'src/components/UI.tsx'
-ui = read(ui_path)
-ui = replace_once(
-    ui,
-    "pending: { label: 'Pendente', cls:",
-    "pending: { label: 'Aberto', cls:",
-    'UI pending label',
-)
-write(ui_path, ui)
+share_utility = r'''export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
 
-stats_path = 'src/pages/Estatisticas.tsx'
-stats = read(stats_path)
-stats = replace_once(
-    stats,
-    "{ label: 'Pendente', count: stats.pending, cls: 'bg-amber-500' },",
-    "{ label: 'Aberto', count: stats.pending, cls: 'bg-amber-500' },",
-    'Stats pending label',
-)
-write(stats_path, stats)
+type SharePayload = {
+  title: string;
+  text?: string;
+  url: string;
+};
 
-# 2) Feed: moderators can manage lifecycle, and wording becomes clearer.
+function absoluteUrl(url: string) {
+  if (typeof window === 'undefined') return url;
+  try { return new URL(url, window.location.origin).toString(); }
+  catch { return url; }
+}
+
+async function copyText(value: string) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  if (typeof document === 'undefined') throw new Error('Clipboard indisponível');
+  const input = document.createElement('textarea');
+  input.value = value;
+  input.setAttribute('readonly', '');
+  input.style.position = 'fixed';
+  input.style.opacity = '0';
+  document.body.appendChild(input);
+  input.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(input);
+  if (!ok) throw new Error('Não foi possível copiar');
+}
+
+export async function shareContent(payload: SharePayload): Promise<ShareResult> {
+  const url = absoluteUrl(payload.url);
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: payload.title, text: payload.text, url });
+      return 'shared';
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled';
+      // Fall through to clipboard when native sharing is unavailable or fails.
+    }
+  }
+  try {
+    await copyText(url);
+    return 'copied';
+  } catch {
+    return 'failed';
+  }
+}
+'''
+write('src/utils/share.ts', share_utility)
+
+# Feed: make each relato directly openable and shareable.
 feed_path = 'src/pages/Feed.tsx'
 feed = read(feed_path)
 feed = replace_once(
     feed,
-    "import { cn } from '../utils/cn';\n",
-    "import { cn } from '../utils/cn';\nimport { supabase } from '../utils/supabase';\n",
-    'Feed supabase import',
+    "  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw,\n",
+    "  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2,\n",
+    'Feed sharing icons',
 )
 feed = replace_once(
     feed,
-    "{ id: 'all', label: 'Todos' }, { id: 'pending', label: 'Pendente' },",
-    "{ id: 'all', label: 'Todos' }, { id: 'pending', label: 'Aberto' },",
-    'Feed status filter label',
+    "import { supabase } from '../utils/supabase';\n",
+    "import { supabase } from '../utils/supabase';\nimport { shareContent } from '../utils/share';\n",
+    'Feed share utility import',
 )
 feed = replace_once(
     feed,
-    "  const [fi, setFi] = useState('');\n",
-    "  const [fi, setFi] = useState('');\n  const [canModerate, setCanModerate] = useState(false);\n",
-    'Feed moderator state',
-)
-intent_effect = """  useEffect(() => {\n    if (!isAuthenticated || !user) return;\n    try {\n      if (sessionStorage.getItem(CREATE_POST_INTENT_KEY) === 'create-post') {\n        sessionStorage.removeItem(CREATE_POST_INTENT_KEY);\n        setShowCreate(true);\n      }\n    } catch {}\n  }, [isAuthenticated, user]);\n"""
-moderator_effect = intent_effect + """\n  useEffect(() => {\n    let active = true;\n    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }\n    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {\n      if (!active) return;\n      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');\n    });\n    return () => { active = false; };\n  }, [user?.id]);\n"""
-feed = replace_once(feed, intent_effect, moderator_effect, 'Feed moderator effect')
-feed = replace_once(
-    feed,
-    "const labels: Record<string, string> = { pending: 'Pendente', in_progress: 'Em andamento', resolved: 'Resolvido' };",
-    "const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' };",
-    'Feed toast status label',
+    "  const handleStatusChange = useCallback(async (postId: string, status: PostStatus) => { const result = await updatePostStatus(postId, status); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o status.', 'error'); return; } const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' }; toast(`Status atualizado para \\\"${labels[status]}\\\".`); }, [updatePostStatus, toast]);\n",
+    "  const handleStatusChange = useCallback(async (postId: string, status: PostStatus) => { const result = await updatePostStatus(postId, status); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o status.', 'error'); return; } const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' }; toast(`Status atualizado para \\\"${labels[status]}\\\".`); }, [updatePostStatus, toast]);\n  const handleSharePost = useCallback(async (post: { id: string; title: string; description: string }) => { const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` }); if (result === 'copied') toast('Link do relato copiado!'); else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error'); }, [toast]);\n",
+    'Feed share handler',
 )
 feed = replace_once(
     feed,
-    "            const resolvedArea = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;\n            return <Card",
-    "            const resolvedArea = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;\n            const canManageStatus = isMyPost(post) || canModerate;\n            return <Card",
-    'Feed canManageStatus',
+    "              <h3 className=\"text-base font-semibold text-slate-900 dark:text-white mb-1\">{post.title}</h3>",
+    "              <Link to={`/post/${post.id}`} className=\"block rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40\"><h3 className=\"text-base font-semibold text-slate-900 dark:text-white mb-1 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors\">{post.title}</h3></Link>",
+    'Feed clickable post title',
 )
-feed = replace_once(
-    feed,
-    "</button>{isMyPost(post) && <div className=\"flex items-center gap-1.5 ml-auto overflow-x-auto no-scrollbar pb-1\">",
-    "</button>{canManageStatus && <div className=\"flex items-center gap-1.5 ml-auto overflow-x-auto no-scrollbar pb-1\">",
-    'Feed status manager visibility',
-)
-feed = replace_once(
-    feed,
-    ">Pendente</button>}{post.status !== 'in_progress'",
-    ">Aberto</button>}{post.status !== 'in_progress'",
-    'Feed open button label',
-)
+old_actions = "<div className=\"flex items-center gap-2 mt-2\"><button onClick={() => setShowReport({ postId: post.id })} className=\"flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-500/10 transition-all\"><AlertTriangle className=\"w-3.5 h-3.5\" />Denunciar</button>{canManageStatus &&"
+new_actions = "<div className=\"flex items-center gap-1 sm:gap-2 mt-2 flex-wrap\"><button onClick={() => setShowReport({ postId: post.id })} className=\"flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-500/10 transition-all\"><AlertTriangle className=\"w-3.5 h-3.5\" />Denunciar</button><Link to={`/post/${post.id}`} className=\"flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all\"><ExternalLink className=\"w-3.5 h-3.5\" />Abrir</Link><button type=\"button\" onClick={() => void handleSharePost(post)} className=\"flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all\"><Share2 className=\"w-3.5 h-3.5\" />Compartilhar</button>{canManageStatus &&"
+feed = replace_once(feed, old_actions, new_actions, 'Feed detail/share actions')
 write(feed_path, feed)
 
-# 3) DataContext: anonymous owners continue using the protected Edge Function,
-# while moderators can update anonymous posts directly through RLS.
-data_path = 'src/contexts/DataContext.tsx'
-data = read(data_path)
-pattern = re.compile(
-    r"  const updatePostStatus = useCallback\(async \(postId: string, status: PostStatus\): Promise<ActionResult> => \{.*?\n  \}, \[posts, getAnonTokens\]\);",
-    re.S,
-)
-replacement = """  const updatePostStatus = useCallback(async (postId: string, status: PostStatus): Promise<ActionResult> => {\n    const target = posts.find(post => post.id === postId);\n    let isAnonymous = target?.authorId === 'anonymous';\n    if (!target) {\n      const { data: row, error: lookupError } = await supabase.from('posts').select('is_anonymous').eq('id', postId).maybeSingle();\n      if (lookupError) return { ok: false, error: lookupError.message };\n      isAnonymous = Boolean(row?.is_anonymous);\n    }\n\n    const anonToken = getAnonTokens()[postId] || '';\n    const canUseAnonymousControl = isAnonymous && (Boolean(anonToken) || managedAnonIds.has(postId));\n    if (canUseAnonymousControl) {\n      const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'update_status', postId, status, editToken: anonToken } });\n      if (error || !result?.ok) return { ok: false, error: result?.error || error?.message || 'Não foi possível atualizar o status.' };\n      setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));\n      return { ok: true };\n    }\n\n    const { error } = await supabase.from('posts').update({ status }).eq('id', postId);\n    if (error) return { ok: false, error: error.message };\n    setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));\n    return { ok: true };\n  }, [posts, getAnonTokens, managedAnonIds]);"""
-data, count = pattern.subn(replacement, data, count=1)
-if count != 1:
-    raise RuntimeError(f'DataContext updatePostStatus: expected 1 block, found {count}')
-write(data_path, data)
-
-# 4) Post details: lifecycle controls + persistent history timeline.
+# PostDetails: native share on mobile, clipboard fallback on desktop, and useful document title.
 details_path = 'src/pages/PostDetails.tsx'
 details = read(details_path)
 details = replace_once(
     details,
-    "import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight } from 'lucide-react';",
     "import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2 } from 'lucide-react';",
-    'PostDetails icons',
+    "import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2 } from 'lucide-react';",
+    'PostDetails share icon',
 )
 details = replace_once(
     details,
-    "import type { Comment, Post } from '../types';",
-    "import type { Comment, Post, PostStatus } from '../types';\n\ntype StatusHistoryItem = { id: string; old_status?: PostStatus | null; new_status: PostStatus; source: string; changed_at: string };\nconst lifecycleLabels: Record<PostStatus, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' };\nconst lifecycleClasses: Record<PostStatus, string> = {\n  pending: 'bg-amber-500',\n  in_progress: 'bg-blue-500',\n  resolved: 'bg-emerald-600',\n};",
-    'PostDetails lifecycle types',
+    "import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo } from '../components/UI';",
+    "import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo, useToast } from '../components/UI';",
+    'PostDetails toast import',
 )
 details = replace_once(
     details,
-    "  const { supportPost, addComment, commentsByPost, loadComments, deleteComment } = useData();",
-    "  const { supportPost, addComment, commentsByPost, loadComments, deleteComment, updatePostStatus, isMyPost } = useData();",
-    'PostDetails data actions',
+    "import { supabase } from '../utils/supabase';\n",
+    "import { supabase } from '../utils/supabase';\nimport { shareContent } from '../utils/share';\n",
+    'PostDetails share import',
 )
 details = replace_once(
     details,
-    "  const [deletingComment, setDeletingComment] = useState<string | null>(null);\n",
-    "  const [deletingComment, setDeletingComment] = useState<string | null>(null);\n  const [statusHistory, setStatusHistory] = useState<StatusHistoryItem[]>([]);\n  const [canModerate, setCanModerate] = useState(false);\n  const [updatingStatus, setUpdatingStatus] = useState<PostStatus | null>(null);\n",
-    'PostDetails lifecycle state',
+    "  const { isAuthenticated, user } = useAuth();\n",
+    "  const { isAuthenticated, user } = useAuth();\n  const { toast } = useToast();\n",
+    'PostDetails toast hook',
 )
+role_effect = """  useEffect(() => {\n    let active = true;\n    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }\n    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {\n      if (!active) return;\n      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');\n    });\n    return () => { active = false; };\n  }, [user?.id]);\n"""
 details = replace_once(
     details,
-    "      const supportPromise = user?.id\n        ? supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle()\n        : Promise.resolve({ data: null } as any);\n\n      const [postResult, , supportResult] = await Promise.all([postPromise, commentsPromise, supportPromise]);",
-    "      const supportPromise = user?.id\n        ? supabase.from('post_supports').select('id').eq('post_id', postId).eq('user_id', user.id).maybeSingle()\n        : Promise.resolve({ data: null } as any);\n      const historyPromise = supabase\n        .from('post_status_history')\n        .select('id,old_status,new_status,source,changed_at')\n        .eq('post_id', postId)\n        .order('changed_at', { ascending: false })\n        .limit(30);\n\n      const [postResult, , supportResult, historyResult] = await Promise.all([postPromise, commentsPromise, supportPromise, historyPromise]);",
-    'PostDetails history query',
+    role_effect,
+    role_effect + """\n  useEffect(() => {\n    if (!post) return;\n    const previousTitle = document.title;\n    document.title = `${post.title} | No Meu Bairro`;\n    return () => { document.title = previousTitle; };\n  }, [post?.id, post?.title]);\n""",
+    'PostDetails document title',
 )
+status_handler_end = """  const handleStatusChange = async (status: PostStatus) => {\n    if (!postId || !post || updatingStatus || post.status === status) return;\n    setUpdatingStatus(status);\n    try {\n      const result = await updatePostStatus(postId, status);\n      if (!result.ok) return;\n      setPost(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : prev);\n      const { data } = await supabase.from('post_status_history').select('id,old_status,new_status,source,changed_at').eq('post_id', postId).order('changed_at', { ascending: false }).limit(30);\n      if (data) setStatusHistory(data as StatusHistoryItem[]);\n    } finally {\n      setUpdatingStatus(null);\n    }\n  };\n"""
 details = replace_once(
     details,
-    "      setSupported(Boolean(supportResult?.data));\n      setCommentsLoading(false);",
-    "      setSupported(Boolean(supportResult?.data));\n      setStatusHistory((historyResult?.data || []) as StatusHistoryItem[]);\n      setCommentsLoading(false);",
-    'PostDetails history state load',
+    status_handler_end,
+    status_handler_end + """\n  const handleShare = async () => {\n    if (!post) return;\n    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` });\n    if (result === 'copied') toast('Link do relato copiado!');\n    else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error');\n  };\n""",
+    'PostDetails share handler',
 )
-main_effect_end = "  }, [postId, user?.id, loadComments]);\n"
-details = replace_once(
-    details,
-    main_effect_end,
-    main_effect_end + """\n  useEffect(() => {\n    let active = true;\n    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }\n    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {\n      if (!active) return;\n      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');\n    });\n    return () => { active = false; };\n  }, [user?.id]);\n""",
-    'PostDetails moderator effect',
-)
-handle_delete_end = """  const handleDeleteComment = async (commentId: string) => {\n    if (!postId || deletingComment) return;\n    if (!isAuthenticated) { navigate('/login'); return; }\n    if (!confirm('Excluir este comentário?')) return;\n    setDeletingComment(commentId);\n    try {\n      await deleteComment(commentId);\n      setPost(prev => prev ? { ...prev, commentsCount: Math.max(0, prev.commentsCount - 1) } : prev);\n      if (replyingTo === commentId) setReplyingTo(null);\n    } finally {\n      setDeletingComment(null);\n    }\n  };\n"""
-status_handler = handle_delete_end + """\n  const handleStatusChange = async (status: PostStatus) => {\n    if (!postId || !post || updatingStatus || post.status === status) return;\n    setUpdatingStatus(status);\n    try {\n      const result = await updatePostStatus(postId, status);\n      if (!result.ok) return;\n      setPost(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : prev);\n      const { data } = await supabase.from('post_status_history').select('id,old_status,new_status,source,changed_at').eq('post_id', postId).order('changed_at', { ascending: false }).limit(30);\n      if (data) setStatusHistory(data as StatusHistoryItem[]);\n    } finally {\n      setUpdatingStatus(null);\n    }\n  };\n"""
-details = replace_once(details, handle_delete_end, status_handler, 'PostDetails status handler')
-details = replace_once(
-    details,
-    "  const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;\n",
-    "  const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;\n  const canManageStatus = isMyPost(post) || canModerate;\n",
-    'PostDetails canManageStatus',
-)
-controls = """        {canManageStatus && (\n          <div className=\"mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4\">\n            <div className=\"flex items-start gap-3\">\n              <div className=\"w-9 h-9 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-700 shrink-0\"><Settings2 className=\"w-4 h-4 text-slate-500\" /></div>\n              <div className=\"min-w-0 flex-1\">\n                <p className=\"text-sm font-bold text-slate-900 dark:text-white\">Atualizar andamento</p>\n                <p className=\"text-xs text-slate-500 dark:text-slate-400 mt-0.5\">Mantenha a comunidade informada sobre a situação deste relato.</p>\n              </div>\n            </div>\n            <div className=\"grid grid-cols-3 gap-2 mt-3\">\n              {(['pending', 'in_progress', 'resolved'] as PostStatus[]).map(status => (\n                <button key={status} type=\"button\" onClick={() => void handleStatusChange(status)} disabled={post.status === status || updatingStatus !== null} className={`min-h-11 rounded-xl px-2 py-2 text-[11px] sm:text-xs font-bold transition-all ${post.status === status ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-emerald-400'} disabled:opacity-70`}>\n                  {updatingStatus === status ? 'Salvando...' : lifecycleLabels[status]}\n                </button>\n              ))}\n            </div>\n          </div>\n        )}\n\n"""
 details = replace_once(
     details,
     "        <div className=\"grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800\">",
-    controls + "        <div className=\"grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800\">",
-    'PostDetails controls insertion',
+    "        <div className=\"grid grid-cols-3 gap-2 sm:gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800\">",
+    'PostDetails action grid',
 )
-history_card = """      <Card>\n        <div className=\"flex items-start justify-between gap-3 mb-4\">\n          <div>\n            <div className=\"flex items-center gap-2\"><Clock3 className=\"w-5 h-5 text-emerald-600\" /><h2 className=\"text-lg font-bold text-slate-900 dark:text-white\">Histórico do relato</h2></div>\n            <p className=\"text-xs text-slate-500 mt-1\">As mudanças de situação ficam registradas para dar mais transparência ao acompanhamento.</p>\n          </div>\n        </div>\n        {statusHistory.length === 0 ? (\n          <p className=\"text-sm text-slate-400\">Ainda não há mudanças registradas.</p>\n        ) : (\n          <div className=\"space-y-0\">\n            {statusHistory.map((item, index) => (\n              <div key={item.id} className=\"relative flex gap-3 pb-4 last:pb-0\">\n                {index < statusHistory.length - 1 && <span className=\"absolute left-[7px] top-4 bottom-0 w-px bg-slate-200 dark:bg-slate-700\" />}\n                <span className={`relative mt-1 w-3.5 h-3.5 rounded-full ring-4 ring-white dark:ring-slate-900 shrink-0 ${lifecycleClasses[item.new_status]}`} />\n                <div className=\"min-w-0\">\n                  <p className=\"text-sm font-bold text-slate-800 dark:text-slate-200\">{lifecycleLabels[item.new_status]}</p>\n                  <p className=\"text-xs text-slate-400 mt-0.5\">{new Date(item.changed_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</p>\n                </div>\n              </div>\n            ))}\n          </div>\n        )}\n      </Card>\n\n"""
 details = replace_once(
     details,
-    "      <Card id=\"post-comments\" className=\"scroll-mt-24\">",
-    history_card + "      <Card id=\"post-comments\" className=\"scroll-mt-24\">",
-    'PostDetails history card insertion',
+    "          <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className=\"flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-sm font-bold transition-all\">\n            <MessageSquare className=\"w-5 h-5\" /> Comentar {post.commentsCount > 0 ? `(${post.commentsCount})` : ''}\n          </button>\n",
+    "          <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className=\"flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-xs sm:text-sm font-bold transition-all\">\n            <MessageSquare className=\"w-5 h-5\" /> <span>Comentar <span className=\"hidden sm:inline\">{post.commentsCount > 0 ? `(${post.commentsCount})` : ''}</span></span>\n          </button>\n          <button type=\"button\" onClick={() => void handleShare()} className=\"flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 text-xs sm:text-sm font-bold transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20\">\n            <Share2 className=\"w-5 h-5\" /> Compartilhar\n          </button>\n",
+    'PostDetails share button',
 )
 write(details_path, details)
 
-# 5) Keep the database change versioned beside the code.
-migration = r'''-- Post lifecycle tracking: Aberto -> Em andamento -> Resolvido
--- The persisted enum keeps `pending` for backwards compatibility; the UI calls it "Aberto".
-
-create table if not exists public.post_status_history (
-  id uuid primary key default gen_random_uuid(),
-  post_id uuid not null references public.posts(id) on delete cascade,
-  old_status public.post_status,
-  new_status public.post_status not null,
-  changed_by uuid references public.users(id) on delete set null,
-  source text not null default 'system',
-  changed_at timestamptz not null default now(),
-  constraint post_status_history_source_check check (
-    source = any (array['created'::text,'author'::text,'anonymous_owner'::text,'moderation'::text,'system'::text,'baseline'::text])
-  )
-);
-
-create index if not exists idx_post_status_history_post_changed
-  on public.post_status_history (post_id, changed_at desc);
-
-alter table public.post_status_history enable row level security;
-
-revoke all on table public.post_status_history from anon, authenticated;
-grant select (id, post_id, old_status, new_status, source, changed_at)
-  on public.post_status_history to anon, authenticated;
-
-drop policy if exists post_status_history_select on public.post_status_history;
-create policy post_status_history_select
-  on public.post_status_history
-  for select
-  to public
-  using (true);
-
-create or replace function public.log_post_status_history()
-returns trigger
-language plpgsql
-security definer
-set search_path = 'public'
-as $$
-declare
-  v_source text;
-begin
-  v_source := case
-    when auth.uid() is not null and public.is_moderator() then 'moderation'
-    when auth.uid() is not null and new.author_id = auth.uid() then 'author'
-    when new.is_anonymous is true then 'anonymous_owner'
-    else 'system'
-  end;
-
-  if tg_op = 'INSERT' then
-    insert into public.post_status_history(post_id, old_status, new_status, changed_by, source, changed_at)
-    values (new.id, null, new.status, auth.uid(), 'created', coalesce(new.created_at, now()));
-  elsif old.status is distinct from new.status then
-    insert into public.post_status_history(post_id, old_status, new_status, changed_by, source)
-    values (new.id, old.status, new.status, auth.uid(), v_source);
-  end if;
-
-  return new;
-end;
-$$;
-
-revoke all on function public.log_post_status_history() from public, anon, authenticated;
-
-drop trigger if exists trg_log_post_status_history on public.posts;
-create trigger trg_log_post_status_history
-after insert or update of status on public.posts
-for each row execute function public.log_post_status_history();
-
-insert into public.post_status_history(post_id, old_status, new_status, changed_by, source, changed_at)
-select p.id, null, p.status, null, 'baseline', p.created_at
-from public.posts p
-where not exists (
-  select 1 from public.post_status_history h where h.post_id = p.id
-);
-
-drop policy if exists posts_update on public.posts;
-create policy posts_update
-  on public.posts
-  for update
-  to authenticated
-  using ((select auth.uid()) = author_id or public.is_moderator())
-  with check ((select auth.uid()) = author_id or public.is_moderator());
-'''
-write('database/20260817_post_lifecycle_history.sql', migration)
-
-print('Post lifecycle upgrade applied successfully.')
+print('Post sharing upgrade applied successfully.')
