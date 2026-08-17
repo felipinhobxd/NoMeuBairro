@@ -1,0 +1,48 @@
+name: Apply post lifecycle upgrade
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/scripts/apply_post_lifecycle.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply lifecycle patch
+        run: python .github/scripts/apply_post_lifecycle.py
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit upgrade
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/UI.tsx src/contexts/DataContext.tsx src/pages/Feed.tsx src/pages/PostDetails.tsx src/pages/Estatisticas.tsx database/20260817_post_lifecycle_history.sql
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "feat: complete post lifecycle tracking"
+          git push origin HEAD:main
