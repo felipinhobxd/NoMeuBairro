@@ -1,8 +1,17 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
+import { supabase } from '../utils/supabase';
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
+
+function canonicalPath() {
+  const hashPath = window.location.hash.replace(/^#/, '').split('?')[0] || '/';
+  if (/^\/post\//.test(hashPath)) return '/post/:id';
+  if (/^\/perfil\//.test(hashPath)) return '/perfil/:id';
+  if (/^\/empresa\//.test(hashPath)) return '/empresa/:id';
+  return hashPath;
+}
 
 export default class AppErrorBoundary extends Component<Props, State> {
   state: State = { hasError: false };
@@ -13,6 +22,13 @@ export default class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Erro de renderização capturado pelo NoMeuBairro:', error, info);
+    void supabase.rpc('log_client_error', {
+      p_message: error.message || 'Erro de renderização',
+      p_stack: error.stack || null,
+      p_component_stack: info.componentStack || null,
+      p_path: canonicalPath(),
+      p_user_agent: navigator.userAgent,
+    }).catch(() => {});
   }
 
   private reload = () => {

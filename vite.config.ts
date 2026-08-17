@@ -24,9 +24,42 @@ const fixFeedCommentDelete = {
   },
 };
 
+const addMapClustering = {
+  name: 'add-map-clustering',
+  enforce: 'pre' as const,
+  transform(code: string, id: string) {
+    const normalizedId = id.replace(/\\/g, '/');
+    if (!normalizedId.endsWith('/src/pages/Mapa.tsx')) return null;
+    if (code.includes('<MapClusterController />')) return null;
+
+    const tileLayer = "          <TileLayer attribution='&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors'";
+    if (!code.includes(tileLayer)) return null;
+
+    return {
+      code: `import MapClusterController from '../components/MapClusterController';\n${code.replace(tileLayer, `          <MapClusterController />\n${tileLayer}`)}`,
+      map: null,
+    };
+  },
+};
+
+const allowPublicLegalPages = {
+  name: 'allow-public-legal-pages',
+  enforce: 'pre' as const,
+  transform(code: string, id: string) {
+    const normalizedId = id.replace(/\\/g, '/');
+    if (!normalizedId.endsWith('/src/components/Layout.tsx')) return null;
+    const current = 'if (!isNeighborhoodSelected) {';
+    if (!code.includes(current)) return null;
+    return {
+      code: code.replace(current, "if (!isNeighborhoodSelected && !['/privacidade', '/termos'].includes(location.pathname)) {"),
+      map: null,
+    };
+  },
+};
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [fixFeedCommentDelete, react(), tailwindcss()],
+  plugins: [fixFeedCommentDelete, addMapClustering, allowPublicLegalPages, react(), tailwindcss()],
   base: './',
   resolve: {
     alias: {

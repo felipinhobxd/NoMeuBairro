@@ -10,6 +10,7 @@ import RecoveryRedirect from './components/RecoveryRedirect';
 import InteractionGuard from './components/InteractionGuard';
 import DataRouteLoader from './components/DataRouteLoader';
 import AdminNavPortal from './components/AdminNavPortal';
+import ProductExperience from './components/ProductExperience';
 import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import { PanicButton, CookieConsent } from './components/Safety';
@@ -68,6 +69,8 @@ const CompanyPublicProfile = lazyWithRetry(() => import('./pages/CompanyPublicPr
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'notificacoes');
 const PostDetails = lazyWithRetry(() => import('./pages/PostDetails'), 'post');
 const Admin = lazyWithRetry(() => import('./pages/Admin'), 'admin');
+const Privacy = lazyWithRetry(() => import('./pages/Privacy'), 'privacidade');
+const Terms = lazyWithRetry(() => import('./pages/Terms'), 'termos');
 
 function RouteFallback() {
   return (
@@ -93,6 +96,7 @@ export default function App() {
                   <DataRouteLoader />
                   <BrazilWhatsappMask />
                   <InteractionGuard />
+                  <ProductExperience />
                   <Layout>
                     <Suspense fallback={<RouteFallback />}>
                       <Routes>
@@ -110,6 +114,8 @@ export default function App() {
                         <Route path="/notificacoes" element={<Notifications />} />
                         <Route path="/post/:postId" element={<PostDetails />} />
                         <Route path="/admin" element={<Admin />} />
+                        <Route path="/privacidade" element={<Privacy />} />
+                        <Route path="/termos" element={<Terms />} />
                       </Routes>
                     </Suspense>
                   </Layout>
