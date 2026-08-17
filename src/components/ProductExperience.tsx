@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3, Briefcase, CalendarDays, CheckCircle2, Download, LayoutGrid,
-  Map as MapIcon, MapPin, MessageSquare, Plus, Search, Share2, ShieldAlert, Sparkles, UserCircle, X,
+  Map as MapIcon, MapPin, MessageSquare, MoreHorizontal, Plus, Search, Share2, ShieldAlert, ShieldCheck, Sparkles, UserCircle, X,
 } from 'lucide-react';
 import { curitibaNeighborhoods, neighborhoodSearchText, useNeighborhood } from '../contexts/NeighborhoodContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +26,7 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-type TourKey = 'feed' | 'create-post' | 'mapa' | 'dados' | 'empregos' | 'mural' | 'denuncias' | 'perfil';
+type TourKey = 'feed' | 'create-post' | 'mapa' | 'dados' | 'empregos' | 'mural' | 'denuncias' | 'perfil' | 'more' | 'admin';
 
 type TourStep = {
   kind: 'intro' | 'target' | 'done';
@@ -52,7 +52,7 @@ type InstallInstructions = {
   note?: string;
 };
 
-const ONBOARDING_KEY = 'nmb-onboarding-v4';
+const ONBOARDING_KEY = 'nmb-onboarding-v5';
 const INSTALL_DISMISS_KEY = 'nmb-pwa-install-dismissed-at';
 const INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -137,6 +137,103 @@ const tourSteps: TourStep[] = [
   },
 ];
 
+const mobileTourSteps: TourStep[] = [
+  {
+    kind: 'intro',
+    title: 'Aprenda tocando',
+    description: 'Vou destacar a interface real. Toque nos botões indicados e, em poucos passos, você já sabe onde fica tudo.',
+    icon: Sparkles,
+    accent: 'from-emerald-500 to-teal-600',
+  },
+  {
+    kind: 'target',
+    target: 'feed',
+    title: 'Feed',
+    description: 'Relatos e problemas publicados pela comunidade ficam aqui.',
+    icon: LayoutGrid,
+    accent: 'from-orange-500 to-amber-600',
+  },
+  {
+    kind: 'target',
+    target: 'create-post',
+    title: 'Publicar relato',
+    description: 'Para publicar um problema ou relato, toque no botão “+”.',
+    icon: Plus,
+    accent: 'from-emerald-500 to-green-600',
+  },
+  {
+    kind: 'target',
+    target: 'mapa',
+    title: 'Mapa',
+    description: 'Veja relatos, eventos e vagas espalhados pela cidade.',
+    icon: MapIcon,
+    accent: 'from-sky-500 to-blue-600',
+  },
+  {
+    kind: 'target',
+    target: 'empregos',
+    title: 'Empregos',
+    description: 'Vagas e oportunidades da região ficam neste atalho.',
+    icon: Briefcase,
+    accent: 'from-blue-600 to-indigo-600',
+  },
+  {
+    kind: 'target',
+    target: 'mural',
+    title: 'Mural',
+    description: 'Feiras, campanhas, reuniões e outros eventos ficam aqui.',
+    icon: CalendarDays,
+    accent: 'from-violet-500 to-purple-600',
+  },
+  {
+    kind: 'target',
+    target: 'more',
+    title: 'Mais',
+    description: 'Aqui ficam Dados, Denúncias, Perfil e também Busca, Instalar app, tema e Sair. Administradores também encontram o Admin aqui.',
+    icon: MoreHorizontal,
+    accent: 'from-slate-600 to-slate-800',
+  },
+  {
+    kind: 'target',
+    target: 'dados',
+    title: 'Dados',
+    description: 'Veja números do bairro e os assuntos que mais aparecem.',
+    icon: BarChart3,
+    accent: 'from-cyan-500 to-sky-600',
+  },
+  {
+    kind: 'target',
+    target: 'denuncias',
+    title: 'Denúncias',
+    description: 'Canal anônimo para situações sérias, como violência, abuso, assédio, exploração, crime ambiental ou fraude.',
+    icon: ShieldAlert,
+    accent: 'from-rose-500 to-red-600',
+  },
+  {
+    kind: 'target',
+    target: 'perfil',
+    title: 'Perfil',
+    description: 'Sua conta e suas atividades ficam aqui.',
+    icon: UserCircle,
+    accent: 'from-emerald-600 to-green-700',
+  },
+  {
+    kind: 'target',
+    target: 'admin',
+    title: 'Admin',
+    description: 'Como administrador, use esta área para moderação, histórico, uso e erros do site.',
+    icon: ShieldCheck,
+    accent: 'from-amber-500 to-orange-600',
+  },
+  {
+    kind: 'done',
+    title: 'Pronto!',
+    description: 'Os atalhos do dia a dia ficam embaixo. As opções secundárias ficam em “Mais”. Você pode rever este guia quando quiser.',
+    icon: CheckCircle2,
+    accent: 'from-emerald-500 to-teal-600',
+  },
+];
+
 const tourLabels: Partial<Record<TourKey, string>> = {
   feed: 'Feed',
   mapa: 'Mapa',
@@ -145,6 +242,8 @@ const tourLabels: Partial<Record<TourKey, string>> = {
   mural: 'Mural',
   denuncias: 'Denúncias',
   perfil: 'Perfil',
+  more: 'Mais',
+  admin: 'Admin',
 };
 
 const searchMeta: Record<string, { label: string; icon: LucideIcon; badge: string }> = {
@@ -170,14 +269,31 @@ function findTourTarget(key: TourKey, isMobile: boolean) {
     return document.querySelector<HTMLButtonElement>('button[aria-label="Criar novo relato"]');
   }
 
-  const nav = document.querySelector<HTMLElement>(
-    isMobile
-      ? 'nav[aria-label="Navegação mobile"]'
-      : 'header nav[aria-label="Navegação principal"]',
-  );
-  if (!nav) return null;
   const label = tourLabels[key];
   if (!label) return null;
+
+  if (isMobile) {
+    if (key === 'more') {
+      return document.querySelector<HTMLButtonElement>('nav[aria-label="Navegação mobile"] button[aria-label="Mais opções"]');
+    }
+
+    if (['dados', 'denuncias', 'perfil', 'admin'].includes(key)) {
+      const sheet = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Mais opções"]');
+      if (!sheet) return null;
+      return Array.from(sheet.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+        (button.textContent || '').replace(/\s+/g, ' ').trim() === label,
+      ) || null;
+    }
+
+    const nav = document.querySelector<HTMLElement>('nav[aria-label="Navegação mobile"]');
+    if (!nav) return null;
+    return Array.from(nav.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+      (button.textContent || '').replace(/\s+/g, ' ').trim().includes(label),
+    ) || null;
+  }
+
+  const nav = document.querySelector<HTMLElement>('header nav[aria-label="Navegação principal"]');
+  if (!nav) return null;
   return Array.from(nav.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
     (button.textContent || '').replace(/\s+/g, ' ').trim().includes(label),
   ) || null;
@@ -252,7 +368,7 @@ function getInstallInstructions(): InstallInstructions {
 export default function ProductExperience() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { isNeighborhoodSelected, setNeighborhood } = useNeighborhood();
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
   const [footerTarget, setFooterTarget] = useState<HTMLElement | null>(null);
@@ -269,13 +385,41 @@ export default function ProductExperience() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isStandalone, setIsStandalone] = useState(() => isStandaloneMode());
+  const [isAdmin, setIsAdmin] = useState(false);
   const errorFingerprints = useRef(new Map<string, number>());
 
-  const activeTourSteps = useMemo(
-    () => tourSteps.filter((step) => step.target !== 'create-post' || isAuthenticated),
-    [isAuthenticated],
-  );
+  const activeTourSteps = useMemo(() => {
+    const source = isMobileTour ? mobileTourSteps : tourSteps;
+    return source.filter((step) => {
+      if (step.target === 'create-post' && !isAuthenticated) return false;
+      if (step.target === 'admin' && !isAdmin) return false;
+      return true;
+    });
+  }, [isAuthenticated, isMobileTour, isAdmin]);
   const currentStep = activeTourSteps[onboardingStep];
+
+  useEffect(() => {
+    if (onboardingStep >= activeTourSteps.length) setOnboardingStep(Math.max(0, activeTourSteps.length - 1));
+  }, [activeTourSteps.length, onboardingStep]);
+
+  useEffect(() => {
+    let active = true;
+    if (!isAuthenticated || !user?.id) {
+      setIsAdmin(false);
+      return () => { active = false; };
+    }
+    void supabase
+      .from('app_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        setIsAdmin(!error && data?.role === 'admin');
+      });
+    return () => { active = false; };
+  }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
     const syncTargets = () => {
@@ -462,6 +606,13 @@ export default function ProductExperience() {
     const attach = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
+        if (isMobileTour && ['dados', 'denuncias', 'perfil', 'admin'].includes(currentStep.target!)) {
+          const sheet = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Mais opções"]');
+          if (!sheet) {
+            const moreButton = document.querySelector<HTMLButtonElement>('nav[aria-label="Navegação mobile"] button[aria-label="Mais opções"]');
+            if (moreButton?.getAttribute('aria-expanded') !== 'true') moreButton?.click();
+          }
+        }
         const nextTarget = findTourTarget(currentStep.target!, isMobileTour);
         if (nextTarget !== activeTarget) {
           activeTarget?.removeEventListener('click', onTargetClick, true);
@@ -796,7 +947,7 @@ export default function ProductExperience() {
             </div>
             <div className="mt-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-center">
               <p className="text-xs font-black text-emerald-700 dark:text-emerald-300">
-                {isMobileTour ? 'Toque no botão destacado para continuar' : 'Clique no botão destacado para continuar'}
+                {isMobileTour ? (currentStep.target === 'more' ? 'Toque em Mais para abrir as outras opções' : 'Toque no botão destacado para continuar') : 'Clique no botão destacado para continuar'}
               </p>
             </div>
             <div className="mt-2 flex items-center justify-between">
