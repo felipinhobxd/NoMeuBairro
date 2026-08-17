@@ -1,11 +1,107 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo } from '../components/UI';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
-import type { Post } from '../types';
+import type { Comment, Post } from '../types';
+
+function ThreadComment({
+  comment,
+  allComments,
+  replyingTo,
+  onReply,
+  onDelete,
+  deletingComment,
+  currentUserId,
+  postAuthorId,
+  depth = 0,
+}: {
+  comment: Comment;
+  allComments: Comment[];
+  replyingTo: string | null;
+  onReply: (comment: Comment) => void;
+  onDelete: (commentId: string) => void;
+  deletingComment: string | null;
+  currentUserId?: string;
+  postAuthorId: string;
+  depth?: number;
+}) {
+  const children = allComments.filter(item => item.parentId === comment.id);
+  const canDelete = currentUserId === comment.authorId || currentUserId === postAuthorId;
+  const nested = depth > 0;
+
+  return (
+    <div className={nested ? 'ml-4 sm:ml-7 border-l-2 border-slate-100 dark:border-slate-700 pl-3 sm:pl-4' : ''}>
+      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-900 dark:text-white">{comment.authorName}</span>
+              <span className="text-[10px] text-slate-400">{timeAgo(comment.createdAt)}</span>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line break-words">{comment.content}</p>
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => onReply(comment)}
+                className={replyingTo === comment.id
+                  ? 'text-[11px] font-bold text-emerald-700 dark:text-emerald-400'
+                  : 'text-[11px] font-bold text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400'}
+              >
+                Responder
+              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(comment.id)}
+                  disabled={deletingComment === comment.id}
+                  className="text-[11px] font-bold text-slate-400 hover:text-red-600 disabled:opacity-50"
+                >
+                  {deletingComment === comment.id ? 'Excluindo...' : 'Excluir'}
+                </button>
+              )}
+            </div>
+          </div>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(comment.id)}
+              disabled={deletingComment === comment.id}
+              className="hidden sm:inline-flex p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50"
+              title="Excluir comentário"
+              aria-label="Excluir comentário"
+            >
+              {deletingComment === comment.id
+                ? <span className="block w-4 h-4 border-2 border-slate-300 border-t-red-500 rounded-full animate-spin" />
+                : <Trash2 className="w-4 h-4" />}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {children.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {children.map(child => (
+            <ThreadComment
+              key={child.id}
+              comment={child}
+              allComments={allComments}
+              replyingTo={replyingTo}
+              onReply={onReply}
+              onDelete={onDelete}
+              deletingComment={deletingComment}
+              currentUserId={currentUserId}
+              postAuthorId={postAuthorId}
+              depth={depth + 1}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PostDetails() {
   const { postId } = useParams();
@@ -17,6 +113,7 @@ export default function PostDetails() {
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [supported, setSupported] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [deletingComment, setDeletingComment] = useState<string | null>(null);
 
@@ -75,6 +172,10 @@ export default function PostDetails() {
     return () => { mounted = false; };
   }, [postId, user?.id, loadComments]);
 
+  const postComments = post ? (commentsByPost[post.id] ?? []) : [];
+  const rootComments = useMemo(() => postComments.filter(comment => !comment.parentId), [postComments]);
+  const replyTarget = replyingTo ? postComments.find(comment => comment.id === replyingTo) : undefined;
+
   const handleSupport = async () => {
     if (!postId) return;
     if (!isAuthenticated) { navigate('/login'); return; }
@@ -88,9 +189,10 @@ export default function PostDetails() {
     const text = commentText.trim();
     if (!postId || !text) return;
     if (!isAuthenticated) { navigate('/login'); return; }
-    await addComment(postId, text);
+    await addComment(postId, text, replyingTo || undefined);
     setPost(prev => prev ? { ...prev, commentsCount: prev.commentsCount + 1 } : prev);
     setCommentText('');
+    setReplyingTo(null);
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -101,6 +203,7 @@ export default function PostDetails() {
     try {
       await deleteComment(commentId);
       setPost(prev => prev ? { ...prev, commentsCount: Math.max(0, prev.commentsCount - 1) } : prev);
+      if (replyingTo === commentId) setReplyingTo(null);
     } finally {
       setDeletingComment(null);
     }
@@ -115,7 +218,6 @@ export default function PostDetails() {
   );
 
   const anonymous = post.authorId === 'anonymous';
-  const postComments = commentsByPost[post.id] ?? [];
   const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
 
   return (
@@ -161,27 +263,47 @@ export default function PostDetails() {
       <Card id="post-comments" className="scroll-mt-24">
         <div className="flex items-center gap-2 mb-4"><MessageSquare className="w-5 h-5 text-emerald-600" /><h2 className="text-lg font-bold text-slate-900 dark:text-white">Comentários</h2></div>
         <div className="space-y-3">
-          {commentsLoading ? <p className="text-sm text-slate-400">Carregando comentários...</p> : postComments.length === 0 ? <p className="text-sm text-slate-400">Nenhum comentário ainda.</p> : postComments.map(comment => {
-            const canDelete = user?.id === comment.authorId || user?.id === post.authorId;
-            return (
-              <div key={comment.id} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70">
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-900 dark:text-white">{comment.authorName}</span><span className="text-[10px] text-slate-400">{timeAgo(comment.createdAt)}</span></div>
-                    <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line">{comment.content}</p>
-                  </div>
-                  {canDelete && (
-                    <button type="button" onClick={() => void handleDeleteComment(comment.id)} disabled={deletingComment === comment.id} className="p-2 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-50" title="Excluir comentário" aria-label="Excluir comentário">
-                      {deletingComment === comment.id ? <span className="block w-4 h-4 border-2 border-slate-300 border-t-red-500 rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {commentsLoading ? (
+            <p className="text-sm text-slate-400">Carregando comentários...</p>
+          ) : rootComments.length === 0 ? (
+            <p className="text-sm text-slate-400">Nenhum comentário ainda.</p>
+          ) : (
+            rootComments.map(comment => (
+              <ThreadComment
+                key={comment.id}
+                comment={comment}
+                allComments={postComments}
+                replyingTo={replyingTo}
+                onReply={selected => {
+                  if (!isAuthenticated) { navigate('/login'); return; }
+                  setReplyingTo(current => current === selected.id ? null : selected.id);
+                }}
+                onDelete={commentId => void handleDeleteComment(commentId)}
+                deletingComment={deletingComment}
+                currentUserId={user?.id}
+                postAuthorId={post.authorId}
+              />
+            ))
+          )}
         </div>
+
+        {replyingTo && replyTarget && (
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
+            <CornerDownRight className="w-4 h-4 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">Respondendo a <strong>{replyTarget.authorName}</strong></span>
+            <button type="button" onClick={() => setReplyingTo(null)} className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-500/20" aria-label="Cancelar resposta"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+
         <div className="mt-4 flex items-start gap-2">
-          <textarea value={commentText} onChange={e => setCommentText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleComment(); } }} placeholder={isAuthenticated ? 'Escreva um comentário...' : 'Entre na sua conta para comentar'} rows={2} className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
+          <textarea
+            value={commentText}
+            onChange={e => setCommentText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleComment(); } }}
+            placeholder={!isAuthenticated ? 'Entre na sua conta para comentar' : replyingTo && replyTarget ? `Responder a ${replyTarget.authorName}...` : 'Escreva um comentário...'}
+            rows={2}
+            className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+          />
           <button onClick={() => void handleComment()} disabled={!commentText.trim()} className="p-2.5 rounded-xl bg-emerald-600 text-white disabled:opacity-40 hover:bg-emerald-700"><Send className="w-5 h-5" /></button>
         </div>
       </Card>
