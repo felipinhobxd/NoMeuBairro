@@ -1,0 +1,147 @@
+name: Apply map data upgrade
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/auto-map-data-upgrade.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply source patches
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Feed/DataContext: carregar os 100 exemplos + conteúdo real sem cortar em 30.
+          data = Path('src/contexts/DataContext.tsx')
+          text = data.read_text()
+          old = 'const POST_LIMIT = 30;'
+          if old not in text:
+              raise SystemExit('POST_LIMIT esperado não encontrado')
+          text = text.replace(old, 'const POST_LIMIT = 150;', 1)
+          data.write_text(text)
+
+          # Mapa: remover toggle legado, usar heat points diretos e melhorar visão geral.
+          mapa = Path('src/pages/Mapa.tsx')
+          text = mapa.read_text()
+          text = text.replace(
+              "import MapClusterController from '../components/MapClusterController';",
+              "import MapClusterController, { type HeatPoint } from '../components/MapClusterController';",
+              1,
+          )
+          text = text.replace('  Layers3, MapPin, ExternalLink, Loader2, LocateFixed, Flame, Eye, EyeOff,', '  Layers3, MapPin, ExternalLink, Loader2, LocateFixed, Flame, Eye,', 1)
+          text = text.replace("  const [heatEnabled, setHeatEnabled] = useState(true);\n", '', 1)
+
+          heat_button = '''          <button
+            type="button"
+            onClick={() => setHeatEnabled(value => !value)}
+            className={`min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all ${heatEnabled ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/20' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
+            aria-pressed={heatEnabled}
+          >
+            {heatEnabled ? <Flame className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {heatEnabled ? 'Calor ativo' : 'Mostrar calor'}
+          </button>
+'''
+          if heat_button not in text:
+              raise SystemExit('Botão legado do calor não encontrado')
+          text = text.replace(heat_button, '', 1)
+          text = text.replace('        <div className="grid grid-cols-2 sm:flex gap-2 shrink-0">', '        <div className="flex flex-wrap gap-2 shrink-0">', 1)
+          text = text.replace('className={`col-span-2 min-h-11 inline-flex', 'className={`min-h-11 inline-flex', 1)
+
+          intensity = '''          <div className="hidden lg:block w-px h-9 bg-slate-200 dark:bg-slate-700" />
+
+          {heatEnabled && (
+            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+              <Flame className="w-4 h-4 text-orange-600" />
+              <span>Intensidade</span>
+              <span className="w-4 h-4 rounded-full bg-green-500/70" title="Baixa" />
+              <span className="w-4 h-4 rounded-full bg-yellow-500/70" title="Média" />
+              <span className="w-4 h-4 rounded-full bg-orange-500/80" title="Alta" />
+              <span className="w-4 h-4 rounded-full bg-red-600/80" title="Muito alta" />
+            </div>
+          )}
+'''
+          if intensity not in text:
+              raise SystemExit('Legenda de intensidade não encontrada')
+          text = text.replace(intensity, '', 1)
+
+          anchor = '''  const visiblePoints = useMemo(() => {
+    const result: [number, number][] = [];
+    if (layers.has('reports')) result.push(...visibleReportPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('events')) result.push(...visibleEventPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (layers.has('jobs')) result.push(...visibleJobPositions.map((entry) => [entry.lat, entry.lng] as [number, number]));
+    if (nearMe && userPosition) result.push([userPosition.lat, userPosition.lng]);
+    return result;
+  }, [layers, visibleReportPositions, visibleEventPositions, visibleJobPositions, nearMe, userPosition]);
+'''
+          heat_points = anchor + '''
+  const heatPoints = useMemo<HeatPoint[]>(() => {
+    const result: HeatPoint[] = [];
+    if (layers.has('reports')) {
+      result.push(...visibleReportPositions.map(({ item, lat, lng, approximate }) => ({
+        id: `post-${item.id}`, lat, lng, approximate, weight: approximate ? 0.58 : 1,
+      })));
+    }
+    if (layers.has('events')) {
+      result.push(...visibleEventPositions.map(({ item, lat, lng, approximate }) => ({
+        id: `event-${item.id}`, lat, lng, approximate, weight: approximate ? 0.58 : 1,
+      })));
+    }
+    if (layers.has('jobs')) {
+      result.push(...visibleJobPositions.map(({ item, lat, lng, approximate }) => ({
+        id: `job-${item.id}`, lat, lng, approximate, weight: approximate ? 0.58 : 1,
+      })));
+    }
+    return result;
+  }, [layers, visibleReportPositions, visibleEventPositions, visibleJobPositions]);
+'''
+          if anchor not in text:
+              raise SystemExit('Âncora visiblePoints não encontrada')
+          text = text.replace(anchor, heat_points, 1)
+
+          text = text.replace(
+              "  const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];",
+              "  const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];\n  const defaultZoom = currentNeighborhood.name ? 14 : 12;",
+              1,
+          )
+          text = text.replace('center={defaultCenter} zoom={14}', 'center={defaultCenter} zoom={defaultZoom}', 1)
+          text = text.replace('<MapClusterController heatEnabled={heatEnabled} />', '<MapClusterController points={heatPoints} />', 1)
+          text = text.replace('{heatEnabled && <div className="pt-2 border-t border-slate-100 dark:border-slate-800">', '{true && <div className="pt-2 border-t border-slate-100 dark:border-slate-800">', 1)
+          text = text.replace('{heatEnabled && <span className="font-semibold text-orange-700 dark:text-orange-300">', '{true && <span className="font-semibold text-orange-700 dark:text-orange-300">', 1)
+          if 'heatEnabled' in text or 'setHeatEnabled' in text or 'EyeOff' in text:
+              raise SystemExit('Ainda há referência ao toggle de calor no Mapa.tsx')
+          mapa.write_text(text)
+
+          # Remover o MutationObserver que apenas escondia o botão/legenda antigos.
+          polish = Path('src/components/DesktopUiPolish.tsx')
+          text = polish.read_text()
+          text = text.replace("import { useEffect } from 'react';\n\n", '', 1)
+          text, count = re.subn(r"  useEffect\(\(\) => \{.*?\n  \}, \[\]\);\n\n", '', text, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('Hack legado do mapa não encontrado em DesktopUiPolish')
+          polish.write_text(text)
+
+          # Este workflow é temporário e se remove no mesmo commit que aplica os patches.
+          Path('.github/workflows/auto-map-data-upgrade.yml').unlink()
+          PY
+
+          git config user.name "No Meu Bairro Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/contexts/DataContext.tsx src/pages/Mapa.tsx src/components/DesktopUiPolish.tsx .github/workflows/auto-map-data-upgrade.yml
+          git diff --cached --check
+          git commit -m "feat: load demo feed and wire precise heatmap data"
+          git push origin HEAD:main
