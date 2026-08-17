@@ -1,0 +1,38 @@
+name: Fix CSS escapes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/fix_css_escapes.py'
+      - '.github/workflows/fix-css-escapes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Apply CSS fix
+        run: python3 .github/fix_css_escapes.py
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: Commit CSS fix
+        run: |
+          git config user.name "No Meu Bairro Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/index.css
+          git diff --cached --check
+          git commit -m "fix: correct escaped utility selectors"
+          git push origin HEAD:main
