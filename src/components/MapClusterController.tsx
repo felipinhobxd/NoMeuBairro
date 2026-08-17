@@ -3,6 +3,7 @@ import L from 'leaflet';
 import { useMap } from 'react-leaflet';
 
 const HEAT_PANE = 'nmb-density-heat';
+const HEAT_CANVAS_CLASS = 'nmb-heat-canvas';
 
 type Props = {
   heatEnabled?: boolean;
@@ -71,28 +72,32 @@ function heatColor(value: number): RGB {
   return HEAT_STOPS[HEAT_STOPS.length - 1][1];
 }
 
+function getSourceMarkers(map: L.Map) {
+  const sourceMarkers: L.Marker[] = [];
+  map.eachLayer((layer) => {
+    if (!(layer instanceof L.Marker)) return;
+    if ((layer as any).__nmbClusterMarker) return;
+    const zIndex = Number(layer.options.zIndexOffset || 0);
+    // Localização do usuário e itens em foco permanecem individuais.
+    if (zIndex >= 1000) return;
+    sourceMarkers.push(layer);
+  });
+  return sourceMarkers;
+}
+
+function removeHeatCanvases(pane: HTMLElement | undefined) {
+  if (!pane) return;
+  pane.querySelectorAll<HTMLCanvasElement>(`.${HEAT_CANVAS_CLASS}`).forEach((canvas) => canvas.remove());
+}
+
 export default function MapClusterController({ heatEnabled = true }: Props) {
   const map = useMap();
   const clusterMarkers = useRef<L.Marker[]>([]);
   const hiddenMarkers = useRef<L.Marker[]>([]);
-  const heatSourceMarkers = useRef<L.Marker[]>([]);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const refreshFrame = useRef<number | null>(null);
-  const heatFrame = useRef<number | null>(null);
+  const clusterFrame = useRef<number | null>(null);
 
+  // Agrupamento numérico: independente da camada de calor.
   useEffect(() => {
-    let pane = map.getPane(HEAT_PANE);
-    if (!pane) pane = map.createPane(HEAT_PANE);
-    pane.style.zIndex = '340';
-    pane.style.pointerEvents = 'none';
-
-    const canvas = L.DomUtil.create('canvas', 'nmb-heat-canvas', pane) as HTMLCanvasElement;
-    canvas.style.position = 'absolute';
-    canvas.style.pointerEvents = 'none';
-    canvas.style.opacity = heatEnabled ? '1' : '0';
-    canvas.style.transition = 'opacity 140ms ease';
-    canvasRef.current = canvas;
-
     const restoreHiddenMarkers = () => {
       for (const marker of hiddenMarkers.current) {
         marker.setOpacity(1);
@@ -117,99 +122,17 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
       hiddenMarkers.current.push(marker);
     };
 
-    const drawHeat = () => {
-      if (heatFrame.current != null) cancelAnimationFrame(heatFrame.current);
-      heatFrame.current = requestAnimationFrame(() => {
-        const heatCanvas = canvasRef.current;
-        if (!heatCanvas) return;
-        heatCanvas.style.opacity = heatEnabled ? '1' : '0';
-
-        const size = map.getSize();
-        const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.35);
-        const width = Math.max(1, Math.round(size.x * pixelRatio));
-        const height = Math.max(1, Math.round(size.y * pixelRatio));
-
-        if (heatCanvas.width !== width) heatCanvas.width = width;
-        if (heatCanvas.height !== height) heatCanvas.height = height;
-        heatCanvas.style.width = `${size.x}px`;
-        heatCanvas.style.height = `${size.y}px`;
-
-        const topLeft = map.containerPointToLayerPoint([0, 0]);
-        L.DomUtil.setPosition(heatCanvas, topLeft);
-
-        const context = heatCanvas.getContext('2d', { willReadFrequently: true });
-        if (!context) return;
-        context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-        context.clearRect(0, 0, size.x, size.y);
-
-        if (!heatEnabled || heatSourceMarkers.current.length === 0) return;
-
-        const zoom = map.getZoom();
-        const radius = heatRadiusForZoom(zoom);
-        const paddedBounds = map.getBounds().pad(0.18);
-
-        // Primeiro geramos apenas um campo de densidade em alfa. A composição natural
-        // faz vários pontos próximos acumularem intensidade, sem criar círculos rígidos.
-        for (const marker of heatSourceMarkers.current) {
-          const latLng = marker.getLatLng();
-          if (!paddedBounds.contains(latLng)) continue;
-          const point = map.latLngToContainerPoint(latLng);
-          const gradient = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
-          gradient.addColorStop(0, 'rgba(0,0,0,0.24)');
-          gradient.addColorStop(0.28, 'rgba(0,0,0,0.18)');
-          gradient.addColorStop(0.58, 'rgba(0,0,0,0.09)');
-          gradient.addColorStop(0.82, 'rgba(0,0,0,0.025)');
-          gradient.addColorStop(1, 'rgba(0,0,0,0)');
-          context.fillStyle = gradient;
-          context.fillRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
-        }
-
-        // Depois colorimos o campo: baixa densidade verde, passando por amarelo e
-        // laranja até vermelho. O alpha final fica limitado para o mapa continuar legível.
-        context.setTransform(1, 0, 0, 1, 0, 0);
-        const image = context.getImageData(0, 0, width, height);
-        const pixels = image.data;
-        for (let offset = 0; offset < pixels.length; offset += 4) {
-          const alpha = pixels[offset + 3] / 255;
-          if (alpha < 0.018) {
-            pixels[offset + 3] = 0;
-            continue;
-          }
-          const density = Math.max(0, Math.min(1, (alpha - 0.08) / 0.68));
-          const [red, green, blue] = heatColor(density);
-          pixels[offset] = red;
-          pixels[offset + 1] = green;
-          pixels[offset + 2] = blue;
-          pixels[offset + 3] = Math.round(255 * Math.min(0.58, 0.08 + alpha * 0.66));
-        }
-        context.putImageData(image, 0, 0);
-      });
-    };
-
-    const refreshClustersAndHeat = () => {
-      if (refreshFrame.current != null) cancelAnimationFrame(refreshFrame.current);
-      refreshFrame.current = requestAnimationFrame(() => {
+    const refreshClusters = () => {
+      if (clusterFrame.current != null) cancelAnimationFrame(clusterFrame.current);
+      clusterFrame.current = requestAnimationFrame(() => {
         clearClusters();
-
-        const sourceMarkers: L.Marker[] = [];
-        map.eachLayer((layer) => {
-          if (!(layer instanceof L.Marker)) return;
-          if ((layer as any).__nmbClusterMarker) return;
-          const zIndex = Number(layer.options.zIndexOffset || 0);
-          // Localização do usuário e itens em foco permanecem individuais e não entram no calor.
-          if (zIndex >= 1000) return;
-          sourceMarkers.push(layer);
-        });
-        heatSourceMarkers.current = sourceMarkers;
-        drawHeat();
+        const sourceMarkers = getSourceMarkers(map);
         if (sourceMarkers.length < 2) return;
 
         const zoom = map.getZoom();
         const cellSize = gridSizeForZoom(zoom);
         const groups = new Map<string, L.Marker[]>();
 
-        // O agrupamento numérico usa coordenadas globais, então arrastar o mapa não
-        // muda arbitrariamente quais itens pertencem ao mesmo grupo.
         for (const marker of sourceMarkers) {
           const worldPoint = map.project(marker.getLatLng(), zoom);
           const key = `${Math.floor(worldPoint.x / cellSize)}:${Math.floor(worldPoint.y / cellSize)}`;
@@ -249,26 +172,120 @@ export default function MapClusterController({ heatEnabled = true }: Props) {
 
     const onLayerChange = (event: L.LeafletEvent) => {
       if (event.layer && (event.layer as any).__nmbClusterMarker) return;
-      refreshClustersAndHeat();
+      refreshClusters();
     };
 
-    // Durante o pan redesenhamos somente o canvas. Os grupos numéricos continuam
-    // presos às coordenadas geográficas e são recalculados apenas no fim do zoom.
-    map.on('move', drawHeat);
-    map.on('zoomend resize', refreshClustersAndHeat);
+    map.on('zoomend resize', refreshClusters);
     map.on('layeradd layerremove', onLayerChange);
-    refreshClustersAndHeat();
+    refreshClusters();
 
     return () => {
-      if (refreshFrame.current != null) cancelAnimationFrame(refreshFrame.current);
-      if (heatFrame.current != null) cancelAnimationFrame(heatFrame.current);
-      map.off('move', drawHeat);
-      map.off('zoomend resize', refreshClustersAndHeat);
+      if (clusterFrame.current != null) cancelAnimationFrame(clusterFrame.current);
+      map.off('zoomend resize', refreshClusters);
       map.off('layeradd layerremove', onLayerChange);
       clearClusters();
-      heatSourceMarkers.current = [];
-      if (canvasRef.current?.parentElement) canvasRef.current.parentElement.removeChild(canvasRef.current);
-      canvasRef.current = null;
+    };
+  }, [map]);
+
+  // Heatmap: quando desligado, não existe canvas nem listeners de desenho.
+  useEffect(() => {
+    let pane = map.getPane(HEAT_PANE);
+    if (!pane) pane = map.createPane(HEAT_PANE);
+    pane.style.zIndex = '340';
+    pane.style.pointerEvents = 'none';
+
+    // Remove qualquer canvas deixado por uma montagem anterior/StrictMode.
+    removeHeatCanvases(pane);
+    if (!heatEnabled) return;
+
+    const canvas = L.DomUtil.create('canvas', HEAT_CANVAS_CLASS, pane) as HTMLCanvasElement;
+    canvas.style.position = 'absolute';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.opacity = '1';
+
+    let heatFrame: number | null = null;
+
+    const drawHeat = () => {
+      if (!canvas.isConnected) return;
+      if (heatFrame != null) cancelAnimationFrame(heatFrame);
+      heatFrame = requestAnimationFrame(() => {
+        if (!canvas.isConnected) return;
+
+        const size = map.getSize();
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.35);
+        const width = Math.max(1, Math.round(size.x * pixelRatio));
+        const height = Math.max(1, Math.round(size.y * pixelRatio));
+
+        if (canvas.width !== width) canvas.width = width;
+        if (canvas.height !== height) canvas.height = height;
+        canvas.style.width = `${size.x}px`;
+        canvas.style.height = `${size.y}px`;
+
+        const topLeft = map.containerPointToLayerPoint([0, 0]);
+        L.DomUtil.setPosition(canvas, topLeft);
+
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) return;
+        context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        context.clearRect(0, 0, size.x, size.y);
+
+        const sourceMarkers = getSourceMarkers(map);
+        if (sourceMarkers.length === 0) return;
+
+        const zoom = map.getZoom();
+        const radius = heatRadiusForZoom(zoom);
+        const paddedBounds = map.getBounds().pad(0.18);
+
+        for (const marker of sourceMarkers) {
+          const latLng = marker.getLatLng();
+          if (!paddedBounds.contains(latLng)) continue;
+          const point = map.latLngToContainerPoint(latLng);
+          const gradient = context.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+          gradient.addColorStop(0, 'rgba(0,0,0,0.24)');
+          gradient.addColorStop(0.28, 'rgba(0,0,0,0.18)');
+          gradient.addColorStop(0.58, 'rgba(0,0,0,0.09)');
+          gradient.addColorStop(0.82, 'rgba(0,0,0,0.025)');
+          gradient.addColorStop(1, 'rgba(0,0,0,0)');
+          context.fillStyle = gradient;
+          context.fillRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
+        }
+
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        const image = context.getImageData(0, 0, width, height);
+        const pixels = image.data;
+        for (let offset = 0; offset < pixels.length; offset += 4) {
+          const alpha = pixels[offset + 3] / 255;
+          if (alpha < 0.018) {
+            pixels[offset + 3] = 0;
+            continue;
+          }
+          const density = Math.max(0, Math.min(1, (alpha - 0.08) / 0.68));
+          const [red, green, blue] = heatColor(density);
+          pixels[offset] = red;
+          pixels[offset + 1] = green;
+          pixels[offset + 2] = blue;
+          pixels[offset + 3] = Math.round(255 * Math.min(0.58, 0.08 + alpha * 0.66));
+        }
+        context.putImageData(image, 0, 0);
+      });
+    };
+
+    const onLayerChange = (event: L.LeafletEvent) => {
+      if (event.layer && (event.layer as any).__nmbClusterMarker) return;
+      drawHeat();
+    };
+
+    map.on('move zoomend resize', drawHeat);
+    map.on('layeradd layerremove', onLayerChange);
+    drawHeat();
+
+    return () => {
+      if (heatFrame != null) cancelAnimationFrame(heatFrame);
+      map.off('move zoomend resize', drawHeat);
+      map.off('layeradd layerremove', onLayerChange);
+      canvas.remove();
+      // Garante que nenhum canvas antigo sobreviva a uma troca rápida de estado/rota.
+      removeHeatCanvases(pane);
     };
   }, [map, heatEnabled]);
 
