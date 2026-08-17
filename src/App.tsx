@@ -60,7 +60,7 @@ const Mapa = lazyWithRetry(() => import('./pages/Mapa'), 'mapa');
 const Estatisticas = lazyWithRetry(() => import('./pages/Estatisticas'), 'estatisticas');
 const Login = lazyWithRetry(() => import('./pages/Login'), 'login');
 const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'), 'perfil');
-const PublicProfile = lazyWithRetry(() => import('./pages/PublicProfile'), 'perfil-publico');
+const PublicProfile = lazyWithRetry(() => import('./pages/PublicProfileRoute'), 'perfil-publico');
 const Empregos = lazyWithRetry(() => import('./pages/Empregos'), 'empregos');
 const CompanyDashboard = lazyWithRetry(() => import('./pages/CompanyDashboard'), 'empresa');
 const CompanyPublicProfile = lazyWithRetry(() => import('./pages/CompanyPublicProfile'), 'empresa-publica');
