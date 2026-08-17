@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2 } from 'lucide-react';
+import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo } from '../components/UI';
+import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo, useToast } from '../components/UI';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
+import { shareContent } from '../utils/share';
 import type { Comment, Post, PostStatus } from '../types';
 
 type StatusHistoryItem = { id: string; old_status?: PostStatus | null; new_status: PostStatus; source: string; changed_at: string };
@@ -115,6 +116,7 @@ export default function PostDetails() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
   const { supportPost, addComment, commentsByPost, loadComments, deleteComment, updatePostStatus, isMyPost } = useData();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
@@ -200,6 +202,13 @@ export default function PostDetails() {
     return () => { active = false; };
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!post) return;
+    const previousTitle = document.title;
+    document.title = `${post.title} | No Meu Bairro`;
+    return () => { document.title = previousTitle; };
+  }, [post?.id, post?.title]);
+
   const postComments = post ? (commentsByPost[post.id] ?? []) : [];
   const rootComments = useMemo(() => postComments.filter(comment => !comment.parentId), [postComments]);
   const replyTarget = replyingTo ? postComments.find(comment => comment.id === replyingTo) : undefined;
@@ -249,6 +258,13 @@ export default function PostDetails() {
     } finally {
       setUpdatingStatus(null);
     }
+  };
+
+  const handleShare = async () => {
+    if (!post) return;
+    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` });
+    if (result === 'copied') toast('Link do relato copiado!');
+    else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error');
   };
 
   if (loading) return <div className="py-16 text-center text-slate-400">Carregando post...</div>;
@@ -312,12 +328,15 @@ export default function PostDetails() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
           <button onClick={handleSupport} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${supported ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
             <Heart className={supported ? 'w-5 h-5 fill-current' : 'w-5 h-5'} /> Apoiar {post.supports > 0 ? `(${post.supports})` : ''}
           </button>
-          <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-sm font-bold transition-all">
-            <MessageSquare className="w-5 h-5" /> Comentar {post.commentsCount > 0 ? `(${post.commentsCount})` : ''}
+          <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className="flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-xs sm:text-sm font-bold transition-all">
+            <MessageSquare className="w-5 h-5" /> <span>Comentar <span className="hidden sm:inline">{post.commentsCount > 0 ? `(${post.commentsCount})` : ''}</span></span>
+          </button>
+          <button type="button" onClick={() => void handleShare()} className="flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 text-xs sm:text-sm font-bold transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20">
+            <Share2 className="w-5 h-5" /> Compartilhar
           </button>
         </div>
       </Card>
