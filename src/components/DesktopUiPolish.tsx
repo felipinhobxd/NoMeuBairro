@@ -1,4 +1,43 @@
+import { useEffect } from 'react';
+
 export default function DesktopUiPolish() {
+  useEffect(() => {
+    let frame = 0;
+
+    const syncMapHeatUi = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        document.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
+          const label = (button.textContent || '').replace(/\s+/g, ' ').trim();
+          if (label !== 'Calor ativo' && label !== 'Mostrar calor') return;
+          button.style.display = 'none';
+          button.setAttribute('aria-hidden', 'true');
+          button.tabIndex = -1;
+        });
+
+        document.querySelectorAll<HTMLSpanElement>('span').forEach((span) => {
+          if ((span.textContent || '').trim() !== 'Intensidade') return;
+          const legend = span.parentElement;
+          if (!legend) return;
+          legend.style.display = 'none';
+          const divider = legend.previousElementSibling as HTMLElement | null;
+          if (divider?.className.includes('w-px')) divider.style.display = 'none';
+        });
+      });
+    };
+
+    syncMapHeatUi();
+    const observer = new MutationObserver(syncMapHeatUi);
+    observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('hashchange', syncMapHeatUi);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener('hashchange', syncMapHeatUi);
+    };
+  }, []);
+
   return (
     <style>{`
       @media (min-width: 768px) {
