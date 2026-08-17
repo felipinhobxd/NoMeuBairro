@@ -1,15 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import { useMap } from 'react-leaflet';
 
 const HEAT_PANE = 'nmb-density-heat';
 const HEAT_CANVAS_CLASS = 'nmb-heat-canvas';
 const MAX_VISUAL_DENSITY = 8;
-const COLOR_LUT_SIZE = 512;
+const COLOR_LUT_SIZE = 768;
+
+export type HeatPoint = {
+  id: string;
+  lat: number;
+  lng: number;
+  /** Peso relativo. Pontos exatos normalmente usam 1 e posições aproximadas < 1. */
+  weight?: number;
+  approximate?: boolean;
+};
 
 type Props = {
-  // Mantido por compatibilidade com a página atual. O calor agora é permanente.
-  heatEnabled?: boolean;
+  points?: HeatPoint[];
 };
 
 type RGB = [number, number, number];
@@ -19,11 +27,16 @@ type Kernel = {
   values: Float32Array;
 };
 
+type ProjectedMarker = {
+  marker: L.Marker;
+  point: L.Point;
+};
+
 const HEAT_STOPS: Array<[number, RGB]> = [
-  [0, [34, 197, 94]],
-  [0.28, [132, 204, 22]],
-  [0.48, [234, 179, 8]],
-  [0.7, [249, 115, 22]],
+  [0, [22, 163, 74]],
+  [0.24, [101, 194, 32]],
+  [0.46, [234, 179, 8]],
+  [0.68, [249, 115, 22]],
   [1, [220, 38, 38]],
 ];
 
@@ -55,37 +68,37 @@ function createColorLut() {
     const density = (index / (COLOR_LUT_SIZE - 1)) * MAX_VISUAL_DENSITY;
     const offset = index * 4;
 
-    if (density < 0.045) {
+    // Remove a cauda quase invisível do kernel para não criar névoa verde pelo mapa inteiro.
+    if (density < 0.085) {
       lut[offset + 3] = 0;
       continue;
     }
 
-    // Escala absoluta: a cor não muda só porque a pessoa arrastou o mapa.
-    // ~1 item = verde, ~3 = amarelo, ~5 = laranja e 7+ = vermelho.
-    const normalized = clamp((density - 0.15) / 6.85, 0, 1);
+    // Escala absoluta: 1 ocorrência ≈ verde, 3 ≈ amarelo, 5 ≈ laranja e 7+ ≈ vermelho.
+    const normalized = clamp((density - 0.75) / 6.1, 0, 1);
     const [red, green, blue] = interpolateColor(normalized);
     const strength = Math.sqrt(clamp(density / MAX_VISUAL_DENSITY, 0, 1));
 
     lut[offset] = red;
     lut[offset + 1] = green;
     lut[offset + 2] = blue;
-    lut[offset + 3] = Math.round(255 * clamp(0.055 + strength * 0.54, 0, 0.61));
+    lut[offset + 3] = Math.round(255 * clamp(0.045 + strength * 0.53, 0, 0.59));
   }
   return lut;
 }
 
 const COLOR_LUT = createColorLut();
 
-function gridSizeForZoom(zoom: number) {
-  if (zoom <= 11) return 112;
-  if (zoom <= 12) return 104;
-  if (zoom <= 13) return 94;
-  if (zoom <= 14) return 84;
-  if (zoom <= 15) return 74;
-  if (zoom <= 16) return 64;
-  if (zoom <= 17) return 54;
-  if (zoom <= 18) return 46;
-  return 40;
+function clusterDistanceForZoom(zoom: number) {
+  if (zoom <= 11) return 76;
+  if (zoom <= 12) return 70;
+  if (zoom <= 13) return 64;
+  if (zoom <= 14) return 58;
+  if (zoom <= 15) return 52;
+  if (zoom <= 16) return 46;
+  if (zoom <= 17) return 40;
+  if (zoom <= 18) return 34;
+  return 28;
 }
 
 function clusterColor(count: number) {
@@ -111,24 +124,24 @@ function getClusterSourceMarkers(map: L.Map) {
   map.eachLayer((layer) => {
     if (!(layer instanceof L.Marker)) return;
     if ((layer as any).__nmbClusterMarker) return;
-    // Marcador focado e localização do usuário permanecem individuais.
+    // Marcadores focados e a localização do usuário permanecem individuais.
     if (Number(layer.options.zIndexOffset || 0) >= 1000) return;
     markers.push(layer);
   });
   return markers;
 }
 
-function getHeatSourceMarkers(map: L.Map) {
-  const markers: L.Marker[] = [];
+function fallbackHeatPoints(map: L.Map): HeatPoint[] {
+  const points: HeatPoint[] = [];
+  let index = 0;
   map.eachLayer((layer) => {
     if (!(layer instanceof L.Marker)) return;
     if ((layer as any).__nmbClusterMarker) return;
-    // A localização do usuário não representa atividade comunitária.
-    // Relatos/eventos focados (1000/1100) continuam contando no calor.
     if (Number(layer.options.zIndexOffset || 0) >= 1200) return;
-    markers.push(layer);
+    const latLng = layer.getLatLng();
+    points.push({ id: `fallback-${index++}`, lat: latLng.lat, lng: latLng.lng, weight: 1 });
   });
-  return markers;
+  return points;
 }
 
 function removeLegacyHeatLayers(map: L.Map) {
@@ -146,24 +159,26 @@ function removeHeatCanvases(pane: HTMLElement | undefined) {
 }
 
 function renderScaleFor(pointCount: number, width: number, height: number) {
-  let scale = pointCount > 6000 ? 0.26 : pointCount > 2500 ? 0.32 : pointCount > 900 ? 0.4 : 0.5;
-  const maxCells = 420_000;
+  let scale = pointCount > 7000 ? 0.25 : pointCount > 3000 ? 0.31 : pointCount > 1200 ? 0.38 : pointCount > 400 ? 0.46 : 0.56;
+  const maxCells = 520_000;
   const cells = width * height * scale * scale;
   if (cells > maxCells) scale *= Math.sqrt(maxCells / cells);
-  return clamp(scale, 0.22, 0.52);
+  return clamp(scale, 0.22, 0.58);
 }
 
+/** Largura espacial do KDE. Diminui conforme o zoom para sair de região → quadra → rua. */
 function bandwidthMetersForZoom(zoom: number) {
-  if (zoom <= 10) return 5200;
-  if (zoom === 11) return 3000;
-  if (zoom === 12) return 1650;
-  if (zoom === 13) return 900;
-  if (zoom === 14) return 500;
-  if (zoom === 15) return 260;
-  if (zoom === 16) return 135;
-  if (zoom === 17) return 72;
-  if (zoom === 18) return 42;
-  return 28;
+  if (zoom <= 10) return 5600;
+  if (zoom === 11) return 3200;
+  if (zoom === 12) return 1750;
+  if (zoom === 13) return 950;
+  if (zoom === 14) return 520;
+  if (zoom === 15) return 285;
+  if (zoom === 16) return 150;
+  if (zoom === 17) return 82;
+  if (zoom === 18) return 46;
+  if (zoom === 19) return 28;
+  return 20;
 }
 
 function metersPerPixel(latitude: number, zoom: number) {
@@ -178,7 +193,7 @@ function kernelForRadius(radius: number): Kernel {
 
   const size = safeRadius * 2 + 1;
   const values = new Float32Array(size * size);
-  const sigma = Math.max(1, safeRadius * 0.4);
+  const sigma = Math.max(1, safeRadius * 0.39);
   const denominator = 2 * sigma * sigma;
 
   for (let y = -safeRadius; y <= safeRadius; y += 1) {
@@ -201,6 +216,7 @@ function addKernel(
   centerX: number,
   centerY: number,
   kernel: Kernel,
+  weight: number,
 ) {
   const roundedX = Math.round(centerX);
   const roundedY = Math.round(centerY);
@@ -215,18 +231,82 @@ function addKernel(
     const kernelRow = kernelY * kernel.size;
     for (let x = startX; x <= endX; x += 1) {
       const kernelX = x - roundedX + kernel.radius;
-      density[gridRow + x] += kernel.values[kernelRow + kernelX];
+      density[gridRow + x] += kernel.values[kernelRow + kernelX] * weight;
     }
   }
 }
 
-export default function MapClusterController(_props: Props) {
+function groupMarkersByDistance(map: L.Map, markers: L.Marker[]) {
+  const zoom = map.getZoom();
+  const threshold = clusterDistanceForZoom(zoom);
+  const thresholdSquared = threshold * threshold;
+  const cellSize = threshold;
+  const projected: ProjectedMarker[] = markers.map(marker => ({ marker, point: map.project(marker.getLatLng(), zoom) }));
+  const parent = projected.map((_, index) => index);
+  const buckets = new Map<string, number[]>();
+
+  const find = (value: number): number => {
+    let root = value;
+    while (parent[root] !== root) root = parent[root];
+    while (parent[value] !== value) {
+      const next = parent[value];
+      parent[value] = root;
+      value = next;
+    }
+    return root;
+  };
+
+  const union = (a: number, b: number) => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) parent[rootB] = rootA;
+  };
+
+  projected.forEach((entry, index) => {
+    const cellX = Math.floor(entry.point.x / cellSize);
+    const cellY = Math.floor(entry.point.y / cellSize);
+
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const neighbors = buckets.get(`${cellX + dx}:${cellY + dy}`) || [];
+        for (const otherIndex of neighbors) {
+          const other = projected[otherIndex].point;
+          const deltaX = entry.point.x - other.x;
+          const deltaY = entry.point.y - other.y;
+          if (deltaX * deltaX + deltaY * deltaY <= thresholdSquared) union(index, otherIndex);
+        }
+      }
+    }
+
+    const key = `${cellX}:${cellY}`;
+    const bucket = buckets.get(key) || [];
+    bucket.push(index);
+    buckets.set(key, bucket);
+  });
+
+  const groups = new Map<number, L.Marker[]>();
+  projected.forEach((entry, index) => {
+    const root = find(index);
+    const group = groups.get(root) || [];
+    group.push(entry.marker);
+    groups.set(root, group);
+  });
+
+  return [...groups.values()];
+}
+
+export default function MapClusterController({ points = [] }: Props) {
   const map = useMap();
   const clusterMarkers = useRef<L.Marker[]>([]);
   const hiddenMarkers = useRef<L.Marker[]>([]);
   const clusterFrame = useRef<number | null>(null);
 
-  // Números agrupados continuam independentes do desenho do calor.
+  const validPoints = useMemo(
+    () => points.filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng)),
+    [points],
+  );
+
+  // Agrupamento numérico por distância real, sem bordas artificiais de grade.
   useEffect(() => {
     const restoreHiddenMarkers = () => {
       for (const marker of hiddenMarkers.current) {
@@ -260,18 +340,9 @@ export default function MapClusterController(_props: Props) {
         if (sourceMarkers.length < 2) return;
 
         const zoom = map.getZoom();
-        const cellSize = gridSizeForZoom(zoom);
-        const groups = new Map<string, L.Marker[]>();
+        const groups = groupMarkersByDistance(map, sourceMarkers);
 
-        for (const marker of sourceMarkers) {
-          const worldPoint = map.project(marker.getLatLng(), zoom);
-          const key = `${Math.floor(worldPoint.x / cellSize)}:${Math.floor(worldPoint.y / cellSize)}`;
-          const group = groups.get(key) || [];
-          group.push(marker);
-          groups.set(key, group);
-        }
-
-        for (const group of groups.values()) {
+        for (const group of groups) {
           if (group.length < 2) continue;
           const latLngs = group.map(marker => marker.getLatLng());
           const bounds = L.latLngBounds(latLngs);
@@ -291,7 +362,7 @@ export default function MapClusterController(_props: Props) {
             if (samePoint) {
               map.setView(center, Math.min(20, zoom + 2), { animate: true });
             } else {
-              map.fitBounds(bounds, { padding: [80, 80], maxZoom: Math.min(20, zoom + 3), animate: true });
+              map.fitBounds(bounds, { padding: [72, 72], maxZoom: Math.min(20, zoom + 3), animate: true });
             }
           });
           marker.addTo(map);
@@ -317,9 +388,8 @@ export default function MapClusterController(_props: Props) {
     };
   }, [map]);
 
-  // Heatmap permanente: grid numérica de baixa resolução + kernel gaussiano.
-  // O canvas fica ancorado nas coordenadas do Leaflet, então durante o arrasto ele
-  // acompanha o mapa sem recalcular todos os pixels a cada frame.
+  // KDE permanente. Quando a página fornece pontos, o calor usa os dados diretamente;
+  // o fallback por marcadores só existe para compatibilidade durante deploys antigos.
   useEffect(() => {
     let pane = map.getPane(HEAT_PANE);
     if (!pane) pane = map.createPane(HEAT_PANE);
@@ -335,7 +405,7 @@ export default function MapClusterController(_props: Props) {
     canvas.style.pointerEvents = 'none';
     canvas.style.opacity = '1';
     canvas.style.imageRendering = 'auto';
-    canvas.style.willChange = 'transform';
+    canvas.style.willChange = 'transform, opacity';
 
     let heatFrame: number | null = null;
     let densityBuffer = new Float32Array(0);
@@ -348,12 +418,12 @@ export default function MapClusterController(_props: Props) {
       heatFrame = requestAnimationFrame(() => {
         if (!canvas.isConnected) return;
 
-        const sourceMarkers = getHeatSourceMarkers(map);
+        const heatPoints = validPoints.length > 0 ? validPoints : fallbackHeatPoints(map);
         const size = map.getSize();
-        const padding = clamp(Math.round(Math.min(size.x, size.y) * 0.34), 180, 340);
+        const padding = clamp(Math.round(Math.min(size.x, size.y) * 0.30), 150, 300);
         const displayWidth = Math.max(1, size.x + padding * 2);
         const displayHeight = Math.max(1, size.y + padding * 2);
-        const renderScale = renderScaleFor(sourceMarkers.length, displayWidth, displayHeight);
+        const renderScale = renderScaleFor(heatPoints.length, displayWidth, displayHeight);
         const gridWidth = Math.max(1, Math.ceil(displayWidth * renderScale));
         const gridHeight = Math.max(1, Math.ceil(displayHeight * renderScale));
         const requiredCells = gridWidth * gridHeight;
@@ -373,69 +443,86 @@ export default function MapClusterController(_props: Props) {
         canvas.style.height = `${displayHeight}px`;
 
         const viewportTopLeft = map.containerPointToLayerPoint([0, 0]);
-        const canvasOrigin = L.point(viewportTopLeft.x - padding, viewportTopLeft.y - padding);
-        L.DomUtil.setPosition(canvas, canvasOrigin);
+        const canvasTopLeft = viewportTopLeft.subtract([padding, padding]);
+        L.DomUtil.setPosition(canvas, canvasTopLeft);
 
-        if (sourceMarkers.length === 0) return;
+        if (heatPoints.length === 0) {
+          canvas.style.opacity = '1';
+          return;
+        }
 
         const zoom = map.getZoom();
-        const center = map.getCenter();
+        const centerLatitude = map.getCenter().lat;
         const bandwidthMeters = bandwidthMetersForZoom(zoom);
-        const cssRadius = clamp(bandwidthMeters / metersPerPixel(center.lat, zoom), 22, 72);
-        const kernel = kernelForRadius(cssRadius * renderScale);
-        const northWest = map.containerPointToLatLng([-padding, -padding]);
-        const southEast = map.containerPointToLatLng([size.x + padding, size.y + padding]);
-        const paddedBounds = L.latLngBounds(northWest, southEast);
+        const bandwidthScreenPixels = bandwidthMeters / Math.max(0.01, metersPerPixel(centerLatitude, zoom));
+        const radiusGrid = clamp(bandwidthScreenPixels * renderScale, 3, 72);
+        const kernel = kernelForRadius(radiusGrid);
+        const paddedBounds = map.getBounds().pad(0.45);
 
-        for (const marker of sourceMarkers) {
-          const latLng = marker.getLatLng();
+        for (const pointData of heatPoints) {
+          const latLng = L.latLng(pointData.lat, pointData.lng);
           if (!paddedBounds.contains(latLng)) continue;
-          const layerPoint = map.latLngToLayerPoint(latLng);
-          const x = (layerPoint.x - canvasOrigin.x) * renderScale;
-          const y = (layerPoint.y - canvasOrigin.y) * renderScale;
-          addKernel(densityBuffer, gridWidth, gridHeight, x, y, kernel);
+          const containerPoint = map.latLngToContainerPoint(latLng);
+          const gridX = (containerPoint.x + padding) * renderScale;
+          const gridY = (containerPoint.y + padding) * renderScale;
+          const inferredWeight = pointData.approximate ? 0.58 : 1;
+          const weight = clamp(pointData.weight ?? inferredWeight, 0.15, 2.5);
+          addKernel(densityBuffer, gridWidth, gridHeight, gridX, gridY, kernel, weight);
         }
 
         const pixels = imageData.data;
         for (let cell = 0; cell < requiredCells; cell += 1) {
           const density = densityBuffer[cell];
-          if (density < 0.045) continue;
-          const lutIndex = Math.min(
-            COLOR_LUT_SIZE - 1,
-            Math.round((Math.min(MAX_VISUAL_DENSITY, density) / MAX_VISUAL_DENSITY) * (COLOR_LUT_SIZE - 1)),
-          );
-          const sourceOffset = lutIndex * 4;
+          if (density < 0.085) continue;
+          const lutIndex = Math.round(clamp(density / MAX_VISUAL_DENSITY, 0, 1) * (COLOR_LUT_SIZE - 1));
+          const lutOffset = lutIndex * 4;
           const pixelOffset = cell * 4;
-          pixels[pixelOffset] = COLOR_LUT[sourceOffset];
-          pixels[pixelOffset + 1] = COLOR_LUT[sourceOffset + 1];
-          pixels[pixelOffset + 2] = COLOR_LUT[sourceOffset + 2];
-          pixels[pixelOffset + 3] = COLOR_LUT[sourceOffset + 3];
+          pixels[pixelOffset] = COLOR_LUT[lutOffset];
+          pixels[pixelOffset + 1] = COLOR_LUT[lutOffset + 1];
+          pixels[pixelOffset + 2] = COLOR_LUT[lutOffset + 2];
+          pixels[pixelOffset + 3] = COLOR_LUT[lutOffset + 3];
         }
 
         const context = canvas.getContext('2d', { alpha: true });
-        context?.putImageData(imageData, 0, 0);
+        if (!context) return;
+        context.clearRect(0, 0, gridWidth, gridHeight);
+        context.putImageData(imageData, 0, 0);
+        canvas.style.opacity = '1';
       });
     };
 
+    const onZoomStart = () => {
+      // Evita esticar um frame antigo durante a animação de zoom.
+      canvas.style.opacity = '0';
+    };
+    const onZoomEnd = () => drawHeat();
+    const onMoveEnd = () => drawHeat();
+    const onResize = () => drawHeat();
     const onLayerChange = (event: L.LeafletEvent) => {
+      if (validPoints.length > 0) return;
       if (event.layer && ((event.layer as any).__nmbClusterMarker || (event.layer as any).__nmbHeatLayer)) return;
       drawHeat();
     };
 
-    // moveend em vez de move: o pane do Leaflet já acompanha o arrasto.
-    map.on('moveend zoomend resize', drawHeat);
+    map.on('zoomstart', onZoomStart);
+    map.on('zoomend', onZoomEnd);
+    map.on('moveend', onMoveEnd);
+    map.on('resize', onResize);
     map.on('layeradd layerremove', onLayerChange);
     drawHeat();
 
     return () => {
       if (heatFrame != null) cancelAnimationFrame(heatFrame);
-      map.off('moveend zoomend resize', drawHeat);
+      map.off('zoomstart', onZoomStart);
+      map.off('zoomend', onZoomEnd);
+      map.off('moveend', onMoveEnd);
+      map.off('resize', onResize);
       map.off('layeradd layerremove', onLayerChange);
       canvas.remove();
       removeLegacyHeatLayers(map);
       removeHeatCanvases(pane);
     };
-  }, [map]);
+  }, [map, validPoints]);
 
   return null;
 }
