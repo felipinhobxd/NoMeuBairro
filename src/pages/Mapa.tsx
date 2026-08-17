@@ -431,7 +431,7 @@ export default function Mapa() {
       {locationError && <p className="-mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{locationError}</p>}
 
       <Card className="flex-1 min-h-[390px] !p-0 overflow-hidden relative !border-slate-200 dark:!border-slate-800 shadow-xl">
-        <MapContainer center={defaultCenter} zoom={defaultZoom} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation={false} markerZoomAnimation={false} zoomSnap={1} wheelDebounceTime={16}>
+        <MapContainer center={defaultCenter} zoom={defaultZoom} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation zoomAnimationThreshold={6} zoomSnap={1} wheelDebounceTime={28} wheelPxPerZoomLevel={70}>
           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
           {focusedEvent && <FocusPoint lat={focusedEvent.lat} lng={focusedEvent.lng} zoom={18} popupZIndex={1100} />}

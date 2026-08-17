@@ -331,8 +331,6 @@ export default function MapClusterController({ points = [] }: Props) {
       hiddenMarkers.current.push(marker);
     };
 
-    let pendingZoom = map.getZoom();
-
     const renderClusters = (zoom: number) => {
       clearClusters();
       const sourceMarkers = getClusterSourceMarkers(map);
@@ -358,9 +356,9 @@ export default function MapClusterController({ points = [] }: Props) {
           const first = latLngs[0];
           const samePoint = latLngs.every(point => Math.abs(point.lat - first.lat) < 1e-8 && Math.abs(point.lng - first.lng) < 1e-8);
           if (samePoint) {
-            map.setView(center, Math.min(20, Math.ceil(zoom) + 2), { animate: false });
+            map.setView(center, Math.min(20, Math.ceil(zoom) + 2), { animate: true });
           } else {
-            map.fitBounds(bounds, { padding: [72, 72], maxZoom: Math.min(20, Math.ceil(zoom) + 3), animate: false });
+            map.fitBounds(bounds, { padding: [72, 72], maxZoom: Math.min(20, Math.ceil(zoom) + 3), animate: true });
           }
         });
         marker.addTo(map);
@@ -368,39 +366,39 @@ export default function MapClusterController({ points = [] }: Props) {
       }
     };
 
-    const refreshClusters = (zoom = map.getZoom(), immediate = false) => {
-      pendingZoom = zoom;
+    const refreshClusters = (immediate = false) => {
       if (clusterFrame.current != null) cancelAnimationFrame(clusterFrame.current);
 
       if (immediate) {
         clusterFrame.current = null;
-        renderClusters(pendingZoom);
+        renderClusters(map.getZoom());
         return;
       }
 
       clusterFrame.current = requestAnimationFrame(() => {
         clusterFrame.current = null;
-        renderClusters(pendingZoom);
+        renderClusters(map.getZoom());
       });
     };
 
-    const onZoom = () => refreshClusters(map.getZoom());
-    const onZoomAnim = (event: any) => refreshClusters(Number(event.zoom ?? map.getZoom()));
-
+    // Durante a animação o próprio markerPane do Leaflet interpola a posição e a escala.
+    // No primeiro frame após o zoom terminar, recalculamos as contagens sem espera extra.
+    const onZoomEnd = () => refreshClusters(true);
+    const onResize = () => refreshClusters();
     const onLayerChange = (event: L.LeafletEvent) => {
       if (event.layer && ((event.layer as any).__nmbClusterMarker || (event.layer as any).__nmbHeatLayer)) return;
       refreshClusters();
     };
 
-    map.on('zoom zoomend resize', onZoom);
-    map.on('zoomanim', onZoomAnim);
+    map.on('zoomend', onZoomEnd);
+    map.on('resize', onResize);
     map.on('layeradd layerremove', onLayerChange);
-    refreshClusters(map.getZoom(), true);
+    refreshClusters(true);
 
     return () => {
       if (clusterFrame.current != null) cancelAnimationFrame(clusterFrame.current);
-      map.off('zoom zoomend resize', onZoom);
-      map.off('zoomanim', onZoomAnim);
+      map.off('zoomend', onZoomEnd);
+      map.off('resize', onResize);
       map.off('layeradd layerremove', onLayerChange);
       clearClusters();
     };
@@ -428,6 +426,8 @@ export default function MapClusterController({ points = [] }: Props) {
     let heatFrame: number | null = null;
     let densityBuffer = new Float32Array(0);
     let imageData: ImageData | null = null;
+    let renderedZoom = map.getZoom();
+    let canvasOriginLatLng: L.LatLng | null = null;
 
     const drawHeat = () => {
       if (!canvas.isConnected) return;
@@ -463,6 +463,8 @@ export default function MapClusterController({ points = [] }: Props) {
         const viewportTopLeft = map.containerPointToLayerPoint([0, 0]);
         const canvasTopLeft = viewportTopLeft.subtract([padding, padding]);
         L.DomUtil.setPosition(canvas, canvasTopLeft);
+        renderedZoom = map.getZoom();
+        canvasOriginLatLng = map.layerPointToLatLng(canvasTopLeft);
 
         if (heatPoints.length === 0) {
           canvas.style.opacity = '1';
@@ -509,7 +511,16 @@ export default function MapClusterController({ points = [] }: Props) {
       });
     };
 
-    const onZoom = () => drawHeat();
+    const onZoomAnim = (event: any) => {
+      if (!canvasOriginLatLng) return;
+      const targetZoom = Number(event.zoom ?? map.getZoom());
+      const targetCenter = event.center ? L.latLng(event.center) : map.getCenter();
+      const scale = map.getZoomScale(targetZoom, renderedZoom);
+      const targetPixelOrigin = map.project(targetCenter, targetZoom).subtract(map.getSize().divideBy(2));
+      const targetPoint = map.project(canvasOriginLatLng, targetZoom).subtract(targetPixelOrigin);
+      L.DomUtil.setTransform(canvas, targetPoint, scale);
+    };
+    const onZoomEnd = () => drawHeat();
     const onMoveEnd = () => drawHeat();
     const onResize = () => drawHeat();
     const onLayerChange = (event: L.LeafletEvent) => {
@@ -518,7 +529,10 @@ export default function MapClusterController({ points = [] }: Props) {
       drawHeat();
     };
 
-    map.on('zoom zoomend', onZoom);
+    // Durante o zoom, o bitmap atual é escalado junto com o mapa; no final ele é
+    // redesenhado com o bandwidth e a resolução corretos para o novo nível.
+    map.on('zoomanim', onZoomAnim);
+    map.on('zoomend', onZoomEnd);
     map.on('moveend', onMoveEnd);
     map.on('resize', onResize);
     map.on('layeradd layerremove', onLayerChange);
@@ -526,7 +540,8 @@ export default function MapClusterController({ points = [] }: Props) {
 
     return () => {
       if (heatFrame != null) cancelAnimationFrame(heatFrame);
-      map.off('zoom zoomend', onZoom);
+      map.off('zoomanim', onZoomAnim);
+      map.off('zoomend', onZoomEnd);
       map.off('moveend', onMoveEnd);
       map.off('resize', onResize);
       map.off('layeradd layerremove', onLayerChange);
