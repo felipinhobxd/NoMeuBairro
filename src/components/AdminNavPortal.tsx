@@ -10,6 +10,7 @@ export default function AdminNavPortal() {
   const navigate = useNavigate();
   const location = useLocation();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
   const [desktopTarget, setDesktopTarget] = useState<HTMLElement | null>(null);
   const [mobileHeaderTarget, setMobileHeaderTarget] = useState<HTMLElement | null>(null);
 
@@ -36,14 +37,20 @@ export default function AdminNavPortal() {
   }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const syncViewport = () => setIsMobile(media.matches);
+    syncViewport();
+    media.addEventListener('change', syncViewport);
+    return () => media.removeEventListener('change', syncViewport);
+  }, []);
+
+  useEffect(() => {
     const syncTargets = () => {
       const desktopNav = document.querySelector<HTMLElement>('header nav[aria-label="Navegação principal"]');
       const themeButton = document.querySelector<HTMLButtonElement>('header button[aria-label^="Ativar modo"]');
       setDesktopTarget(desktopNav);
       setMobileHeaderTarget(themeButton?.parentElement ?? null);
 
-      // Em larguras intermediárias os rótulos ocupavam espaço demais quando Admin existia.
-      // Mantemos o texto no DOM para acessibilidade e fornecemos tooltip para cada item.
       desktopNav?.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
         const label = (button.textContent || '').replace(/\s+/g, ' ').trim();
         if (label && !button.title) button.title = label;
@@ -64,10 +71,10 @@ export default function AdminNavPortal() {
     <button
       type="button"
       onClick={() => navigate('/admin')}
-      className={`nmb-admin-nav hidden md:flex items-center justify-center gap-1.5 min-h-10 px-2.5 2xl:px-3 rounded-xl text-[13px] font-bold transition-all duration-200 shrink-0 ${
+      className={`nmb-admin-nav hidden md:flex items-center justify-center gap-1.5 min-h-10 px-2.5 2xl:px-3 rounded-xl text-[13px] font-semibold transition-all duration-200 shrink-0 ${
         active
-          ? 'bg-orange-600 text-white shadow-sm'
-          : 'text-orange-700 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-500/10'
+          ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 ring-1 ring-amber-200/80 dark:ring-amber-500/20'
+          : 'text-slate-500 dark:text-slate-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10'
       }`}
       aria-current={active ? 'page' : undefined}
       aria-label="Administração"
@@ -82,10 +89,10 @@ export default function AdminNavPortal() {
     <button
       type="button"
       onClick={() => navigate('/admin')}
-      className={`nmb-admin-mobile md:hidden p-2 rounded-xl transition-all duration-200 ${
+      className={`nmb-admin-mobile p-2 rounded-xl transition-all duration-200 ${
         active
-          ? 'bg-orange-600 text-white shadow-sm'
-          : 'text-orange-600 dark:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-500/10'
+          ? 'bg-amber-500 text-white shadow-sm'
+          : 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-500/10'
       }`}
       aria-current={active ? 'page' : undefined}
       aria-label="Administração"
@@ -97,8 +104,8 @@ export default function AdminNavPortal() {
 
   return (
     <>
-      {desktopTarget ? createPortal(desktopButton, desktopTarget) : null}
-      {mobileHeaderTarget ? createPortal(mobileButton, mobileHeaderTarget) : null}
+      {!isMobile && desktopTarget ? createPortal(desktopButton, desktopTarget) : null}
+      {isMobile && mobileHeaderTarget ? createPortal(mobileButton, mobileHeaderTarget) : null}
     </>
   );
 }
