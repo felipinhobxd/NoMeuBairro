@@ -1,0 +1,30 @@
+name: Apply responsive layout upgrade
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/responsive-layout-upgrade.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply responsive source patch
+        run: python3 .github/scripts/responsive_layout_upgrade.py
+      - name: Commit responsive layout
+        run: |
+          git config user.name "No Meu Bairro Bot"
+          git config user.email "actions@users.noreply.github.com"
+          rm -f .github/scripts/responsive_layout_upgrade.py .github/workflows/responsive-layout-upgrade.yml
+          git add -A
+          git diff --cached --check
+          git commit -m "feat: optimize responsive navigation across devices"
+          git push origin HEAD:main
