@@ -4,10 +4,10 @@ import 'leaflet/dist/leaflet.css';
 import { useData } from '../contexts/DataContext';
 import { curitibaNeighborhoods, useNeighborhood } from '../contexts/NeighborhoodContext';
 import { Card } from '../components/UI';
-import MapClusterController from '../components/MapClusterController';
+import MapClusterController, { type HeatPoint } from '../components/MapClusterController';
 import {
   Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot,
-  Layers3, MapPin, ExternalLink, Loader2, LocateFixed, Flame, Eye, EyeOff,
+  Layers3, MapPin, ExternalLink, Loader2, LocateFixed, Flame, Eye,
 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
 import type { PostCategory, CommunityEvent } from '../types';
@@ -179,7 +179,6 @@ export default function Mapa() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<PostCategory | 'all'>('all');
   const [layers, setLayers] = useState<Set<LayerKey>>(() => new Set(['reports', 'events', 'jobs']));
-  const [heatEnabled, setHeatEnabled] = useState(true);
   const [jobs, setJobs] = useState<MapJob[]>([]);
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [jobsLoading, setJobsLoading] = useState(false);
@@ -321,6 +320,26 @@ export default function Mapa() {
     return result;
   }, [layers, visibleReportPositions, visibleEventPositions, visibleJobPositions, nearMe, userPosition]);
 
+  const heatPoints = useMemo<HeatPoint[]>(() => {
+    const result: HeatPoint[] = [];
+    if (layers.has('reports')) {
+      result.push(...visibleReportPositions.map(({ item, lat, lng, approximate }) => ({
+        id: `post-${item.id}`, lat, lng, approximate, weight: approximate ? 0.58 : 1,
+      })));
+    }
+    if (layers.has('events')) {
+      result.push(...visibleEventPositions.map(({ item, lat, lng, approximate }) => ({
+        id: `event-${item.id}`, lat, lng, approximate, weight: approximate ? 0.58 : 1,
+      })));
+    }
+    if (layers.has('jobs')) {
+      result.push(...visibleJobPositions.map(({ item, lat, lng, approximate }) => ({
+        id: `job-${item.id}`, lat, lng, approximate, weight: approximate ? 0.58 : 1,
+      })));
+    }
+    return result;
+  }, [layers, visibleReportPositions, visibleEventPositions, visibleJobPositions]);
+
   const layerCounts: Record<LayerKey, number> = {
     reports: visibleReportPositions.length,
     events: visibleEventPositions.length,
@@ -329,6 +348,7 @@ export default function Mapa() {
 
   const itemCount = visiblePoints.length - (nearMe && userPosition ? 1 : 0);
   const defaultCenter: [number, number] = [currentNeighborhood.latitude, currentNeighborhood.longitude];
+  const defaultZoom = currentNeighborhood.name ? 14 : 12;
 
   const openJob = (jobId: string) => {
     try { sessionStorage.setItem('anb-job-focus', jobId); } catch {}
@@ -351,16 +371,7 @@ export default function Mapa() {
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Áreas mais movimentadas ficam mais quentes conforme relatos, eventos e vagas se acumulam.</p>
         </div>
 
-        <div className="grid grid-cols-2 sm:flex gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setHeatEnabled(value => !value)}
-            className={`min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all ${heatEnabled ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/20' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'}`}
-            aria-pressed={heatEnabled}
-          >
-            {heatEnabled ? <Flame className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            {heatEnabled ? 'Calor ativo' : 'Mostrar calor'}
-          </button>
+        <div className="flex flex-wrap gap-2 shrink-0">
           <button
             type="button"
             onClick={toggleNearMe}
@@ -373,7 +384,7 @@ export default function Mapa() {
           <button
             type="button"
             onClick={showAllLayers}
-            className={`col-span-2 min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-orange-300'}`}
+            className={`min-h-11 inline-flex items-center justify-center gap-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold border transition-all ${allLayersActive ? 'bg-orange-700 text-white border-orange-700 shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-orange-300'}`}
           >
             <Layers3 className="w-4 h-4" /> Mostrar tudo
           </button>
@@ -404,18 +415,6 @@ export default function Mapa() {
             })}
           </div>
 
-          <div className="hidden lg:block w-px h-9 bg-slate-200 dark:bg-slate-700" />
-
-          {heatEnabled && (
-            <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
-              <Flame className="w-4 h-4 text-orange-600" />
-              <span>Intensidade</span>
-              <span className="w-4 h-4 rounded-full bg-green-500/70" title="Baixa" />
-              <span className="w-4 h-4 rounded-full bg-yellow-500/70" title="Média" />
-              <span className="w-4 h-4 rounded-full bg-orange-500/80" title="Alta" />
-              <span className="w-4 h-4 rounded-full bg-red-600/80" title="Muito alta" />
-            </div>
-          )}
         </div>
 
         {layers.has('reports') && (
@@ -432,7 +431,7 @@ export default function Mapa() {
       {locationError && <p className="-mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{locationError}</p>}
 
       <Card className="flex-1 min-h-[390px] !p-0 overflow-hidden relative !border-slate-200 dark:!border-slate-800 shadow-xl">
-        <MapContainer center={defaultCenter} zoom={14} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
+        <MapContainer center={defaultCenter} zoom={defaultZoom} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation={false}>
           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
           {focusedEvent && <FocusPoint lat={focusedEvent.lat} lng={focusedEvent.lng} zoom={18} popupZIndex={1100} />}
@@ -506,7 +505,7 @@ export default function Mapa() {
             </Marker>
           ))}
 
-          <MapClusterController heatEnabled={heatEnabled} />
+          <MapClusterController points={heatPoints} />
           <RecenterButton points={visiblePoints} />
         </MapContainer>
 
@@ -514,7 +513,7 @@ export default function Mapa() {
           <h4 className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2"><Info className="w-3.5 h-3.5" /> Visível no mapa</h4>
           <div className="space-y-2.5">
             {(Object.keys(layerMeta) as LayerKey[]).filter((layer) => layers.has(layer)).map((layer) => <div key={layer} className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${layerMeta[layer].color}18` }}>{layerMeta[layer].emoji}</span><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">{layerMeta[layer].label}</span><span className="text-xs font-black text-slate-500 ml-auto">{layerCounts[layer]}</span></div>)}
-            {heatEnabled && <div className="pt-2 border-t border-slate-100 dark:border-slate-800"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500" /> Mapa de calor</p><div className="h-2.5 rounded-full bg-gradient-to-r from-green-500 via-yellow-400 via-orange-500 to-red-600" /><div className="flex justify-between mt-1 text-[9px] font-semibold text-slate-400"><span>poucos</span><span>muitos</span></div></div>}
+            {true && <div className="pt-2 border-t border-slate-100 dark:border-slate-800"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500" /> Mapa de calor</p><div className="h-2.5 rounded-full bg-gradient-to-r from-green-500 via-yellow-400 via-orange-500 to-red-600" /><div className="flex justify-between mt-1 text-[9px] font-semibold text-slate-400"><span>poucos</span><span>muitos</span></div></div>}
             {nearMe && <p className="text-[11px] font-semibold text-teal-700 dark:text-teal-300 pt-1">Filtrando em até 3 km de você.</p>}
             {layers.size === 0 && <p className="text-xs text-slate-500">Ative uma camada acima.</p>}
           </div>
@@ -523,7 +522,7 @@ export default function Mapa() {
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
         <div className="flex items-center gap-2"><Eye className="w-3.5 h-3.5 text-orange-600" /><strong className="text-slate-900 dark:text-white">{itemCount}</strong><span>itens visíveis</span></div>
-        {heatEnabled && <span className="font-semibold text-orange-700 dark:text-orange-300">Cores mais quentes = maior concentração de itens</span>}
+        {true && <span className="font-semibold text-orange-700 dark:text-orange-300">Cores mais quentes = maior concentração de itens</span>}
         {nearMe && <span className="font-semibold text-teal-700 dark:text-teal-300">Perto de mim ativo · sua posição não é armazenada</span>}
         {jobsLoading && <div className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Carregando vagas...</div>}
         {jobsError && <p className="font-semibold text-red-600 dark:text-red-400">Não foi possível carregar as vagas. Desative e ative Empregos para tentar novamente.</p>}

@@ -54,7 +54,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType>(null!);
 const SK_MY_ANON = 'anb-my-anonymous-ids';
 const SK_ANON_TOKENS = 'anb-anonymous-control-tokens';
-const POST_LIMIT = 30;
+const POST_LIMIT = 150;
 const EVENT_LIMIT = 60;
 const COMMENT_PER_POST_LIMIT = 100;
 const NOTIFICATION_LIMIT = 40;
