@@ -11,8 +11,8 @@ export default function ProfilePage() {
       <Profile />
       {isAuthenticated && user && (
         <div className="max-w-2xl mx-auto animate-fade-in space-y-6">
-          <ProfileActivity userId={user.id} accountType={user.accountType} />
           <ModerationPanel />
+          <ProfileActivity userId={user.id} accountType={user.accountType} />
         </div>
       )}
     </div>
