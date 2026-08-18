@@ -1,5 +1,4 @@
 from pathlib import Path
-import re
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -21,105 +20,113 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-path = 'src/pages/Feed.tsx'
+path = 'src/pages/Estatisticas.tsx'
 text = read(path)
-
 text = replace_once(
     text,
-    "  const [nearMe, setNearMe] = useState(false);\n  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);",
-    "  const [nearMe, setNearMe] = useState(false);\n  const [nearRadius, setNearRadius] = useState<1 | 3 | 5 | 10>(5);\n  const [sortMode, setSortMode] = useState<'recent' | 'supported' | 'discussed' | 'nearest'>('recent');\n  const [onlyWithImage, setOnlyWithImage] = useState(false);\n  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);",
-    'advanced filter state',
+    "  Clock, AlertCircle, TrendingUp, CalendarDays, Briefcase, Loader2, RefreshCw,\n",
+    "  Clock, AlertCircle, TrendingUp, CalendarDays, Briefcase, Loader2, RefreshCw, ShieldCheck, Trash2, Eye,\n",
+    'transparency icons',
 )
-
-pattern = re.compile(r"  const filtered = useMemo\(\(\) => \{.*?\n  \}, \[posts, activeCategory, activeStatus, searchQuery, onlyMine, nearMe, userLocation, user, currentNeighborhood, isNeighborhoodSelected\]\);", re.S)
-replacement = """  const filtered = useMemo(() => {
-    const q = normalizeNeighborhoodText(searchQuery);
-    return posts.filter(p => {
-      if (activeCategory && p.category !== activeCategory) return false;
-      if (activeStatus !== 'all' && p.status !== activeStatus) return false;
-      if (onlyMine && user && p.authorId !== user.id) return false;
-      if (onlyMine && !user) return false;
-      if (onlyWithImage && !p.imageUrl) return false;
-
-      if (q) {
-        const searchable = normalizeNeighborhoodText([
-          p.title, p.description, p.location, p.authorName,
-          p.neighborhood || '', p.locality || '', neighborhoodSearchText(p.neighborhood), neighborhoodSearchText(p.locality),
-        ].join(' '));
-        if (!searchable.includes(q)) return false;
-      }
-
-      // GPS proximity takes precedence over the selected neighborhood. This makes
-      // "Perto de mim" useful even when the global filter is set to another area.
-      if (nearMe) {
-        if (!userLocation || p.latitude == null || p.longitude == null) return false;
-        if (calculateDistance(userLocation.lat, userLocation.lng, Number(p.latitude), Number(p.longitude)) > nearRadius) return false;
-      } else if (isNeighborhoodSelected && currentNeighborhood.name) {
-        if (!neighborhoodMatches(currentNeighborhood.name, p.neighborhood, p.locality, p.location)) return false;
-      }
-
-      return true;
-    });
-  }, [posts, activeCategory, activeStatus, searchQuery, onlyMine, onlyWithImage, nearMe, nearRadius, userLocation, user, currentNeighborhood, isNeighborhoodSelected]);
-
-  const visiblePosts = useMemo(() => {
-    const next = [...filtered];
-    if (sortMode === 'supported') return next.sort((a, b) => b.supports - a.supports || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (sortMode === 'discussed') return next.sort((a, b) => ((commentsByPost[b.id]?.length ?? b.commentsCount) - (commentsByPost[a.id]?.length ?? a.commentsCount)) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (sortMode === 'nearest' && userLocation) {
-      return next.sort((a, b) => {
-        const da = a.latitude != null && a.longitude != null ? calculateDistance(userLocation.lat, userLocation.lng, Number(a.latitude), Number(a.longitude)) : Number.POSITIVE_INFINITY;
-        const db = b.latitude != null && b.longitude != null ? calculateDistance(userLocation.lat, userLocation.lng, Number(b.latitude), Number(b.longitude)) : Number.POSITIVE_INFINITY;
-        return da - db;
+text = replace_once(
+    text,
+    "type DailyStat = { date: string; count: number };\n",
+    "type DailyStat = { date: string; count: number };\ntype ModerationTransparency = { periodDays: number; reportsReceived: number; pendingNow: number; handled: number; removed: number; kept: number; averageResponseHours: number; updatedAt?: string };\n",
+    'transparency type',
+)
+text = replace_once(
+    text,
+    "  const [error, setError] = useState('');\n",
+    "  const [error, setError] = useState('');\n  const [moderation, setModeration] = useState<ModerationTransparency | null>(null);\n",
+    'transparency state',
+)
+old_load = """    const { data, error: queryError } = await supabase.rpc('get_public_dashboard_stats');
+    if (queryError) {
+      console.error('Erro ao carregar dados agregados:', queryError);
+      setError('Não foi possível atualizar os dados agora.');
+    } else {
+      setStats(normalizeStats(data));
+    }
+    setLoading(false);"""
+new_load = """    const [statsResult, moderationResult] = await Promise.all([
+      supabase.rpc('get_public_dashboard_stats'),
+      supabase.rpc('get_public_moderation_transparency'),
+    ]);
+    if (statsResult.error) {
+      console.error('Erro ao carregar dados agregados:', statsResult.error);
+      setError('Não foi possível atualizar os dados agora.');
+    } else {
+      setStats(normalizeStats(statsResult.data));
+    }
+    if (moderationResult.error) {
+      console.warn('Erro ao carregar transparência da moderação:', moderationResult.error);
+      setModeration(null);
+    } else if (moderationResult.data) {
+      const value: any = moderationResult.data;
+      setModeration({
+        periodDays: Number(value.periodDays || 30),
+        reportsReceived: Number(value.reportsReceived || 0),
+        pendingNow: Number(value.pendingNow || 0),
+        handled: Number(value.handled || 0),
+        removed: Number(value.removed || 0),
+        kept: Number(value.kept || 0),
+        averageResponseHours: Number(value.averageResponseHours || 0),
+        updatedAt: value.updatedAt || undefined,
       });
     }
-    return next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [filtered, sortMode, userLocation, commentsByPost]);"""
-text, count = pattern.subn(replacement, text, count=1)
-if count != 1:
-    raise RuntimeError(f'filtered block: expected 1, found {count}')
+    setLoading(false);"""
+text = replace_once(text, old_load, new_load, 'load transparency')
 
-text = replace_once(
-    text,
-    "<span className=\"hidden sm:inline\">Perto de mim</span>",
-    "<span className=\"hidden sm:inline\">{nearMe ? `Até ${nearRadius} km` : 'Perto de mim'}</span>",
-    'nearby button label',
-)
-text = replace_once(
-    text,
-    "<Filter className=\"w-3.5 h-3.5\" /><span className=\"hidden sm:inline\">Categorias</span>",
-    "<Filter className=\"w-3.5 h-3.5\" /><span className=\"hidden sm:inline\">Filtros</span>",
-    'filter button label',
-)
+marker = """      <Card>
+        <div className=\"flex items-center justify-between gap-3 mb-5\"><div><h3 className=\"font-bold text-slate-900 dark:text-white\">Novos relatos nos últimos 7 dias</h3><p className=\"text-xs text-slate-500 mt-1\">Contagem diária diretamente do banco</p></div><TrendingUp className=\"w-5 h-5 text-orange-700\" /></div>"""
+transparency = """      {moderation && <Card className=\"!p-5 sm:!p-6\">
+        <div className=\"flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5\">
+          <div><h3 className=\"font-bold text-slate-900 dark:text-white flex items-center gap-2\"><ShieldCheck className=\"w-5 h-5 text-emerald-600\" /> Transparência da moderação</h3><p className=\"text-xs text-slate-500 mt-1 max-w-2xl\">Indicadores agregados dos últimos {moderation.periodDays} dias. Motivos, denunciantes e conteúdos individuais nunca aparecem aqui.</p></div>
+          <span className=\"rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 self-start\">Dados públicos agregados</span>
+        </div>
+        <div className=\"grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3\">
+          {[
+            { label: 'Recebidas', value: moderation.reportsReceived, icon: AlertCircle, cls: 'text-orange-600 bg-orange-50 dark:bg-orange-500/10' },
+            { label: 'Analisadas', value: moderation.handled, icon: ShieldCheck, cls: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },
+            { label: 'Removidos', value: moderation.removed, icon: Trash2, cls: 'text-red-600 bg-red-50 dark:bg-red-500/10' },
+            { label: 'Mantidos', value: moderation.kept, icon: Eye, cls: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
+            { label: 'Pendentes agora', value: moderation.pendingNow, icon: Clock, cls: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10' },
+          ].map(item => <div key={item.label} className=\"rounded-xl border border-slate-100 dark:border-slate-800 p-3 bg-slate-50/60 dark:bg-slate-900/40\"><div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', item.cls)}><item.icon className=\"w-4 h-4\" /></div><p className=\"mt-2 text-xl font-black text-slate-900 dark:text-white\">{item.value}</p><p className=\"text-[10px] font-bold uppercase tracking-wide text-slate-500\">{item.label}</p></div>)}
+        </div>
+        <div className=\"mt-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2\"><div><p className=\"text-xs font-bold text-slate-800 dark:text-slate-200\">Tempo médio de análise</p><p className=\"text-[11px] text-slate-500\">Calculado somente sobre denúncias concluídas no período.</p></div><p className=\"text-lg font-black text-emerald-700 dark:text-emerald-300\">{moderation.averageResponseHours < 1 ? '< 1 hora' : moderation.averageResponseHours < 24 ? `${moderation.averageResponseHours.toFixed(1)} h` : `${(moderation.averageResponseHours / 24).toFixed(1)} dias`}</p></div>
+      </Card>}
 
-old_panel = """{showFilters && <div className=\"flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800\">{Object.entries(postCategories).map(([key, def]) => { const Icon = catIcons[key] ?? HelpCircle; return <button key={key} onClick={() => setActiveCategory(activeCategory === key ? null : key as PostCategory)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all', activeCategory === key ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700')}><Icon className=\"w-3.5 h-3.5\" />{def.label}</button>; })}</div>}"""
-new_panel = """{showFilters && <div className=\"mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3\"><div><p className=\"text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2\">Categoria</p><div className=\"flex flex-wrap gap-1.5\">{Object.entries(postCategories).map(([key, def]) => { const Icon = catIcons[key] ?? HelpCircle; return <button key={key} onClick={() => setActiveCategory(activeCategory === key ? null : key as PostCategory)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all', activeCategory === key ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700')}><Icon className=\"w-3.5 h-3.5\" />{def.label}</button>; })}</div></div><div className=\"grid grid-cols-1 sm:grid-cols-2 gap-2\"><label className=\"block\"><span className=\"text-[10px] font-black uppercase tracking-wider text-slate-400\">Ordenar por</span><select value={sortMode} onChange={e => setSortMode(e.target.value as typeof sortMode)} className=\"mt-1 w-full min-h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500\"><option value=\"recent\">Mais recentes</option><option value=\"supported\">Mais apoiados</option><option value=\"discussed\">Mais comentados</option><option value=\"nearest\">Mais próximos</option></select></label><button type=\"button\" onClick={() => setOnlyWithImage(!onlyWithImage)} className={cn('mt-4 sm:mt-[18px] min-h-10 rounded-xl px-3 text-xs font-bold ring-1 transition-all', onlyWithImage ? 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20' : 'bg-white text-slate-600 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700')} aria-pressed={onlyWithImage}>📷 {onlyWithImage ? 'Somente com imagem' : 'Filtrar com imagem'}</button></div>{nearMe && <div><p className=\"text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2\">Distância máxima</p><div className=\"flex gap-1.5\">{([1,3,5,10] as const).map(radius => <button type=\"button\" key={radius} onClick={() => { setNearRadius(radius); if (sortMode === 'recent') setSortMode('nearest'); }} className={cn('min-h-9 flex-1 rounded-lg text-xs font-bold transition-all', nearRadius === radius ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300')}>{radius} km</button>)}</div></div>}<button type=\"button\" onClick={() => { setActiveCategory(null); setOnlyWithImage(false); setSortMode('recent'); setNearRadius(5); }} className=\"text-[10px] font-bold text-slate-400 hover:text-red-500\">Limpar filtros avançados</button></div>}"""
-text = replace_once(text, old_panel, new_panel, 'advanced filter panel')
-
-text = text.replace("filtered.length === 0", "visiblePosts.length === 0")
-text = text.replace("{filtered.length} resultado", "{visiblePosts.length} resultado")
-text = text.replace("{filtered.map(post => {", "{visiblePosts.map(post => {")
-
-text = replace_once(
-    text,
-    "            const canManageStatus = isMyPost(post) || canModerate;\n            return <Card",
-    "            const canManageStatus = isMyPost(post) || canModerate;\n            const distanceFromUser = userLocation && post.latitude != null && post.longitude != null ? calculateDistance(userLocation.lat, userLocation.lng, Number(post.latitude), Number(post.longitude)) : null;\n            return <Card",
-    'distance per post',
-)
-text = replace_once(
-    text,
-    "{resolvedArea && <span className=\"inline-flex items-center gap-1 rounded-md bg-orange-50 dark:bg-orange-500/10 px-2 py-1 text-[11px] font-bold text-orange-800 dark:text-orange-300\"><MapPin className=\"w-3 h-3\" />{resolvedArea}</span>}{post.location &&",
-    "{resolvedArea && <span className=\"inline-flex items-center gap-1 rounded-md bg-orange-50 dark:bg-orange-500/10 px-2 py-1 text-[11px] font-bold text-orange-800 dark:text-orange-300\"><MapPin className=\"w-3 h-3\" />{resolvedArea}</span>}{nearMe && distanceFromUser != null && <span className=\"inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300\"><LocateFixed className=\"w-3 h-3\" />{distanceFromUser < 1 ? `${Math.round(distanceFromUser * 1000)} m` : `${distanceFromUser.toFixed(1)} km`}</span>}{post.location &&",
-    'distance badge',
-)
-
-# LocateFixed is already used conceptually for proximity; add it to imports.
-text = replace_once(
-    text,
-    "Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell, CheckCircle2, CalendarDays, Briefcase, Bookmark,",
-    "Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell, CheckCircle2, CalendarDays, Briefcase, Bookmark, LocateFixed,",
-    'LocateFixed import',
-)
-
+""" + marker
+text = replace_once(text, marker, transparency, 'transparency card')
 write(path, text)
-print('Advanced feed filters and nearby radius applied successfully.')
+
+migration = r'''create or replace function public.get_public_moderation_transparency()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = 'public'
+as $$
+  with recent as (
+    select * from public.content_reports where created_at >= now() - interval '30 days'
+  ), handled as (
+    select * from public.content_reports
+    where status in ('resolved','ignored') and archived_at is not null and archived_at >= now() - interval '30 days'
+  )
+  select jsonb_build_object(
+    'periodDays', 30,
+    'reportsReceived', (select count(*) from recent),
+    'pendingNow', (select count(*) from public.content_reports where status = 'pending'),
+    'handled', (select count(*) from handled),
+    'removed', (select count(*) from handled where status = 'resolved'),
+    'kept', (select count(*) from handled where status = 'ignored'),
+    'averageResponseHours', coalesce((select round(avg(extract(epoch from (archived_at - created_at)) / 3600.0)::numeric, 1) from handled where archived_at >= created_at), 0),
+    'updatedAt', now()
+  );
+$$;
+revoke all on function public.get_public_moderation_transparency() from public;
+grant execute on function public.get_public_moderation_transparency() to anon, authenticated;
+'''
+write('database/20260817_public_moderation_transparency.sql', migration)
+
+print('Public moderation transparency upgrade applied successfully.')
