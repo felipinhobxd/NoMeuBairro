@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - '.github/scripts/apply_post_lifecycle.py'
+      - '.github/workflows/apply-post-lifecycle.yml'
 
 permissions:
   contents: write
@@ -39,7 +40,8 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src public database supabase 2>/dev/null || true
+          git add src public database
+          if [ -d supabase ]; then git add supabase; fi
           if git diff --cached --quiet; then
             echo "No product changes to commit"
             exit 0
