@@ -9,8 +9,8 @@ input,
 textarea {
   color: #0f172a !important;
   background-color: #ffffff;
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 17px;
+  line-height: 1.5;
 }
 
 select option {
@@ -167,11 +167,14 @@ main[role="main"] h3 {
 }
 main[role="main"] p { line-height: 1.6; }
 
-/* Pequenos metadados deixam de usar 9/10px no conteudo principal. */
-main[role="main"] .text-\[9px\] { font-size: 0.75rem !important; line-height: 1.05rem !important; }
-main[role="main"] .text-\[10px\] { font-size: 0.78rem !important; line-height: 1.08rem !important; }
-main[role="main"] .text-\[11px\] { font-size: 0.82rem !important; line-height: 1.18rem !important; }
-main[role="main"] .text-xs { font-size: 0.84rem !important; line-height: 1.22rem !important; }
+/* Nenhum metadado da interface volta a 9/10px, inclusive fora do conteudo principal. */
+.text-\[9px\] { font-size: 0.75rem !important; line-height: 1rem !important; }
+.text-\[10px\] { font-size: 0.8125rem !important; line-height: 1.1rem !important; }
+.text-\[11px\] { font-size: 0.84375rem !important; line-height: 1.15rem !important; }
+.text-\[12px\] { font-size: 0.875rem !important; line-height: 1.2rem !important; }
+.text-\[13px\] { font-size: 0.9375rem !important; line-height: 1.3rem !important; }
+.text-\[14px\] { font-size: 1rem !important; line-height: 1.4rem !important; }
+main[role="main"] .text-xs { font-size: var(--text-xs) !important; line-height: var(--text-xs--line-height) !important; }
 
 /* Acoes comuns ficam mais faceis de reconhecer. */
 main[role="main"] button:not([aria-label]) {
@@ -193,16 +196,16 @@ textarea {
   input,
   select,
   textarea {
-    min-height: 44px;
+    min-height: 46px;
   }
 
-  main[role="main"] h1 { font-size: 1.55rem !important; line-height: 1.9rem !important; }
-  main[role="main"] h2 { font-size: 1.22rem; }
+  main[role="main"] h1 { font-size: 1.75rem !important; line-height: 2.2rem !important; }
+  main[role="main"] h2 { font-size: 1.375rem; line-height: 1.8rem; }
 
   /* Barra inferior precisa continuar cabendo em telas estreitas. */
   nav[aria-label="Navegação mobile"] .text-\[10px\] {
-    font-size: 10px !important;
-    line-height: 12px !important;
+    font-size: 12px !important;
+    line-height: 14px !important;
   }
 }
 
