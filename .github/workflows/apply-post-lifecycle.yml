@@ -39,10 +39,10 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/types/index.ts src/utils/notificationActivity.ts src/pages/Notifications.tsx src/pages/Feed.tsx database/20260817_neighborhood_follows.sql
+          git add src/pages/Feed.tsx database/20260817_neighborhood_weekly_summary.sql
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-          git commit -m "feat: follow neighborhoods and notify local activity"
+          git commit -m "feat: add weekly neighborhood summary"
           git push origin HEAD:main
