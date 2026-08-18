@@ -9,10 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/android": "^8.3.4",
-    "@capacitor/cli": "^8.3.4",
-    "@capacitor/core": "^8.3.4",
-    "@capacitor/geolocation": "^8.2.0",
     "@hcaptcha/react-hcaptcha": "^1.12.0",
     "@supabase/supabase-js": "^2.105.4",
     "clsx": "2.1.1",

@@ -235,7 +235,7 @@ Principais tecnologias atuais:
 - React Router
 - Leaflet + React Leaflet
 - Lucide Icons
-- Capacitor
+- PWA instalável com manifest e service worker
 
 ### Backend e infraestrutura
 
