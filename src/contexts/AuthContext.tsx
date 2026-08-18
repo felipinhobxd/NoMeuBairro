@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react';
 import type { User, AccountType } from '../types';
 import { supabase } from '../utils/supabase';
+import { disconnectPushOnLogout } from '../utils/pushNotifications';
 
 interface AuthContextType {
   user: User | null;
@@ -163,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchProfile]);
 
   const logout = useCallback(async () => {
+    await disconnectPushOnLogout();
     await supabase.auth.signOut();
     lastProfileIdentityRef.current = null;
     profileInFlightRef.current = null;

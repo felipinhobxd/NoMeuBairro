@@ -115,6 +115,14 @@ export default function Mural() {
   }, [user?.id, toast]);
 
   useEffect(() => {
+    const focusedId = new URLSearchParams(window.location.search).get('evento');
+    if (!focusedId) return;
+    try { sessionStorage.setItem('anb-mural-focus-event', focusedId); } catch {}
+    const cleanUrl = `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState(window.history.state, '', cleanUrl);
+  }, []);
+
+  useEffect(() => {
     const focusedId = sessionStorage.getItem('anb-mural-focus-event');
     if (!focusedId || events.length === 0) return;
     setActiveType('all');

@@ -207,6 +207,14 @@ export default function Empregos() {
   }, [user?.id, isResident]);
 
   useEffect(() => {
+    const focusedId = new URLSearchParams(window.location.search).get('vaga');
+    if (!focusedId) return;
+    try { sessionStorage.setItem('anb-job-focus', focusedId); } catch {}
+    const cleanUrl = `${window.location.pathname}${window.location.hash}`;
+    window.history.replaceState(window.history.state, '', cleanUrl);
+  }, []);
+
+  useEffect(() => {
     const focusedId = sessionStorage.getItem('anb-job-focus');
     if (!focusedId || loading) return;
     const timer = window.setTimeout(() => {

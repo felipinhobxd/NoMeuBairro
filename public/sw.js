@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nmb-shell-v2';
+const CACHE_NAME = 'nmb-shell-v3';
 const SHELL = ['/', '/logo.png', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -29,7 +29,6 @@ async function networkFirst(request, fallbackPath) {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
@@ -37,21 +36,51 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(request, '/'));
     return;
   }
-
   if (request.destination === 'script' || request.destination === 'style') {
     event.respondWith(networkFirst(request));
     return;
   }
-
   if (['image', 'font'].includes(request.destination) || url.pathname.endsWith('.webmanifest')) {
-    event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
-        }
-        return response;
-      })),
-    );
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
+      }
+      return response;
+    })));
   }
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = { body: event.data?.text() || '' }; }
+  const title = payload.title || 'No Meu Bairro';
+  const body = [payload.body, payload.context].filter(Boolean).join(' · ');
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: payload.tag || 'nmb-activity',
+    renotify: false,
+    data: {
+      url: payload.url || '/notificacoes',
+      notificationId: payload.notificationId || null,
+    },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const path = event.notification.data?.url || '/notificacoes';
+  const targetUrl = new URL(path, self.location.origin).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if ('navigate' in client) {
+        try { await client.navigate(targetUrl); } catch {}
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow(targetUrl);
+  })());
 });
