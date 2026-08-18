@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
 
+// VAPID public keys are designed to be distributed to browsers. Only the
+// matching private key remains encrypted in Supabase Vault.
+const VAPID_PUBLIC_KEY = 'BMLCZQX5oPc_pvsgjPOVPXUIXVvG4zRYEwccZCsKNouMlVOXOFOBNMuBjciEkLIcy4UxDyAE_dLOZTWEgV7r9I0';
+
 export type PushState = {
   supported: boolean;
   permission: NotificationPermission | 'unsupported';
@@ -60,11 +64,9 @@ export async function enablePushNotifications(): Promise<PushState> {
   const registration = await ensureServiceWorker();
   let subscription = await registration.pushManager.getSubscription();
   if (!subscription) {
-    const { data: publicKey, error } = await supabase.rpc('get_push_public_key');
-    if (error || !publicKey) throw new Error(error?.message || 'Chave pública de notificações indisponível.');
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: base64UrlToUint8Array(String(publicKey)),
+      applicationServerKey: base64UrlToUint8Array(VAPID_PUBLIC_KEY),
     });
   }
   await registerWithServer(subscription);
