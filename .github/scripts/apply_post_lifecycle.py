@@ -20,144 +20,175 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
-share_utility = r'''export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
+# Notification model
+path = 'src/types/index.ts'
+text = read(path)
+text = replace_once(
+    text,
+    "  | 'application_contacted'\n  | 'event_attendance';",
+    "  | 'application_contacted'\n  | 'event_attendance'\n  | 'neighborhood_post'\n  | 'neighborhood_event'\n  | 'neighborhood_job';",
+    'notification type union',
+)
+write(path, text)
 
-type SharePayload = {
-  title: string;
-  text?: string;
-  url: string;
-};
+# Notification wording and destinations
+path = 'src/utils/notificationActivity.ts'
+text = read(path)
+text = replace_once(
+    text,
+    "    case 'event_attendance':\n      return `${actor} confirmou presença no seu evento`;",
+    "    case 'event_attendance':\n      return `${actor} confirmou presença no seu evento`;\n    case 'neighborhood_post':\n      return `${actor} publicou um novo relato em um bairro que você segue`;\n    case 'neighborhood_event':\n      return `${actor} publicou um novo evento em um bairro que você segue`;\n    case 'neighborhood_job':\n      return 'Nova vaga publicada em um bairro que você segue';",
+    'notification messages',
+)
+text = replace_once(
+    text,
+    "    case 'post_resolved': return 'Ver relato';\n    default: return 'Ver publicação';",
+    "    case 'post_resolved':\n    case 'neighborhood_post': return 'Ver relato';\n    case 'neighborhood_event': return 'Ver evento';\n    case 'neighborhood_job': return 'Ver vaga';\n    default: return 'Ver publicação';",
+    'notification action labels',
+)
+text = replace_once(
+    text,
+    "  if (notification.postId && ['support', 'comment', 'reply', 'post_resolved'].includes(notification.type)) {",
+    "  if (notification.postId && ['support', 'comment', 'reply', 'post_resolved', 'neighborhood_post'].includes(notification.type)) {",
+    'notification post destination',
+)
+text = replace_once(
+    text,
+    "  if (notification.type === 'event_attendance') {\n    try {\n      if (notification.eventId) sessionStorage.setItem('anb-focus-event', notification.eventId);\n    } catch {}\n    return '/mural';\n  }",
+    "  if (notification.type === 'event_attendance' || notification.type === 'neighborhood_event') {\n    try {\n      if (notification.eventId) sessionStorage.setItem('anb-focus-event', notification.eventId);\n    } catch {}\n    return '/mural';\n  }\n\n  if (notification.type === 'neighborhood_job') {\n    try {\n      if (notification.jobId) sessionStorage.setItem('anb-focus-job', notification.jobId);\n    } catch {}\n    return '/empregos';\n  }",
+    'notification event/job destinations',
+)
+write(path, text)
 
-function absoluteUrl(url: string) {
-  if (typeof window === 'undefined') return url;
-  try { return new URL(url, window.location.origin).toString(); }
-  catch { return url; }
-}
+# Notification icons and empty-state copy
+path = 'src/pages/Notifications.tsx'
+text = read(path)
+text = replace_once(
+    text,
+    "  CheckCircle2, Briefcase, Eye, PhoneCall, CalendarCheck,\n",
+    "  CheckCircle2, Briefcase, Eye, PhoneCall, CalendarCheck, MapPin,\n",
+    'notification map icon import',
+)
+text = replace_once(
+    text,
+    "    case 'event_attendance': return <CalendarCheck className=\"w-4 h-4 text-purple-600\" />;",
+    "    case 'event_attendance': return <CalendarCheck className=\"w-4 h-4 text-purple-600\" />;\n    case 'neighborhood_post': return <MapPin className=\"w-4 h-4 text-orange-600\" />;\n    case 'neighborhood_event': return <CalendarCheck className=\"w-4 h-4 text-violet-600\" />;\n    case 'neighborhood_job': return <Briefcase className=\"w-4 h-4 text-blue-600\" />;",
+    'notification local activity icons',
+)
+text = replace_once(
+    text,
+    'description="Apoios, comentários, respostas, candidaturas, eventos e outras atividades importantes aparecerão aqui."',
+    'description="Apoios, comentários, respostas e novidades dos bairros que você segue aparecerão aqui."',
+    'notification empty state',
+)
+write(path, text)
 
-async function copyText(value: string) {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
-  }
-  if (typeof document === 'undefined') throw new Error('Clipboard indisponível');
-  const input = document.createElement('textarea');
-  input.value = value;
-  input.setAttribute('readonly', '');
-  input.style.position = 'fixed';
-  input.style.opacity = '0';
-  document.body.appendChild(input);
-  input.select();
-  const ok = document.execCommand('copy');
-  document.body.removeChild(input);
-  if (!ok) throw new Error('Não foi possível copiar');
-}
-
-export async function shareContent(payload: SharePayload): Promise<ShareResult> {
-  const url = absoluteUrl(payload.url);
-  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-    try {
-      await navigator.share({ title: payload.title, text: payload.text, url });
-      return 'shared';
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return 'cancelled';
-      // Fall through to clipboard when native sharing is unavailable or fails.
-    }
-  }
-  try {
-    await copyText(url);
-    return 'copied';
-  } catch {
-    return 'failed';
-  }
-}
-'''
-write('src/utils/share.ts', share_utility)
-
-# Feed: make each relato directly openable and shareable.
-feed_path = 'src/pages/Feed.tsx'
-feed = read(feed_path)
-feed = replace_once(
-    feed,
-    "  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw,\n",
+# Feed follow control
+path = 'src/pages/Feed.tsx'
+text = read(path)
+text = replace_once(
+    text,
     "  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2,\n",
-    'Feed sharing icons',
+    "  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell,\n",
+    'feed bell icon',
 )
-feed = replace_once(
-    feed,
-    "import { supabase } from '../utils/supabase';\n",
-    "import { supabase } from '../utils/supabase';\nimport { shareContent } from '../utils/share';\n",
-    'Feed share utility import',
+text = replace_once(
+    text,
+    "  const [canModerate, setCanModerate] = useState(false);\n",
+    "  const [canModerate, setCanModerate] = useState(false);\n  const [isFollowingNeighborhood, setIsFollowingNeighborhood] = useState(false);\n  const [followLoading, setFollowLoading] = useState(false);\n",
+    'feed follow state',
 )
-feed = replace_once(
-    feed,
-    "  const handleStatusChange = useCallback(async (postId: string, status: PostStatus) => { const result = await updatePostStatus(postId, status); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o status.', 'error'); return; } const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' }; toast(`Status atualizado para \\\"${labels[status]}\\\".`); }, [updatePostStatus, toast]);\n",
-    "  const handleStatusChange = useCallback(async (postId: string, status: PostStatus) => { const result = await updatePostStatus(postId, status); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o status.', 'error'); return; } const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' }; toast(`Status atualizado para \\\"${labels[status]}\\\".`); }, [updatePostStatus, toast]);\n  const handleSharePost = useCallback(async (post: { id: string; title: string; description: string }) => { const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` }); if (result === 'copied') toast('Link do relato copiado!'); else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error'); }, [toast]);\n",
-    'Feed share handler',
-)
-feed = replace_once(
-    feed,
-    "              <h3 className=\"text-base font-semibold text-slate-900 dark:text-white mb-1\">{post.title}</h3>",
-    "              <Link to={`/post/${post.id}`} className=\"block rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40\"><h3 className=\"text-base font-semibold text-slate-900 dark:text-white mb-1 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors\">{post.title}</h3></Link>",
-    'Feed clickable post title',
-)
-old_actions = "<div className=\"flex items-center gap-2 mt-2\"><button onClick={() => setShowReport({ postId: post.id })} className=\"flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-500/10 transition-all\"><AlertTriangle className=\"w-3.5 h-3.5\" />Denunciar</button>{canManageStatus &&"
-new_actions = "<div className=\"flex items-center gap-1 sm:gap-2 mt-2 flex-wrap\"><button onClick={() => setShowReport({ postId: post.id })} className=\"flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-500/10 transition-all\"><AlertTriangle className=\"w-3.5 h-3.5\" />Denunciar</button><Link to={`/post/${post.id}`} className=\"flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all\"><ExternalLink className=\"w-3.5 h-3.5\" />Abrir</Link><button type=\"button\" onClick={() => void handleSharePost(post)} className=\"flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all\"><Share2 className=\"w-3.5 h-3.5\" />Compartilhar</button>{canManageStatus &&"
-feed = replace_once(feed, old_actions, new_actions, 'Feed detail/share actions')
-write(feed_path, feed)
+moderator_effect = """  useEffect(() => {\n    let active = true;\n    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }\n    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {\n      if (!active) return;\n      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');\n    });\n    return () => { active = false; };\n  }, [user?.id]);\n"""
+follow_effect = moderator_effect + """\n  useEffect(() => {\n    let active = true;\n    if (!user?.id || !isNeighborhoodSelected || !currentNeighborhood.name) {\n      setIsFollowingNeighborhood(false);\n      setFollowLoading(false);\n      return () => { active = false; };\n    }\n    setFollowLoading(true);\n    const kind = currentNeighborhood.kind === 'locality' ? 'locality' : 'official';\n    void supabase.from('neighborhood_follows')\n      .select('area')\n      .eq('user_id', user.id)\n      .eq('area', currentNeighborhood.name)\n      .eq('kind', kind)\n      .maybeSingle()\n      .then(({ data, error }) => {\n        if (!active) return;\n        if (error) console.warn('Não foi possível verificar o bairro seguido:', error);\n        setIsFollowingNeighborhood(Boolean(data));\n        setFollowLoading(false);\n      });\n    return () => { active = false; };\n  }, [user?.id, isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind]);\n"""
+text = replace_once(text, moderator_effect, follow_effect, 'feed follow query effect')
+share_handler = """  const handleSharePost = useCallback(async (post: { id: string; title: string; description: string }) => { const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` }); if (result === 'copied') toast('Link do relato copiado!'); else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error'); }, [toast]);\n"""
+toggle_handler = share_handler + """  const toggleNeighborhoodFollow = useCallback(async () => {\n    if (!isNeighborhoodSelected || !currentNeighborhood.name) { toast('Selecione um bairro para acompanhá-lo.', 'info'); return; }\n    if (!user?.id) { toast('Entre ou crie uma conta para seguir bairros.', 'info'); navigate('/login'); return; }\n    if (followLoading) return;\n    setFollowLoading(true);\n    const area = currentNeighborhood.name;\n    const kind = currentNeighborhood.kind === 'locality' ? 'locality' : 'official';\n    try {\n      const request = isFollowingNeighborhood\n        ? supabase.from('neighborhood_follows').delete().eq('user_id', user.id).eq('area', area).eq('kind', kind)\n        : supabase.from('neighborhood_follows').insert({ user_id: user.id, area, kind });\n      const { error } = await request;\n      if (error) { toast(error.message || 'Não foi possível atualizar o bairro seguido.', 'error'); return; }\n      setIsFollowingNeighborhood(!isFollowingNeighborhood);\n      toast(isFollowingNeighborhood ? `Você deixou de seguir ${area}.` : `Agora você segue ${area}.`);\n    } finally {\n      setFollowLoading(false);\n    }\n  }, [isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind, user?.id, followLoading, isFollowingNeighborhood, navigate, toast]);\n"""
+text = replace_once(text, share_handler, toggle_handler, 'feed follow toggle handler')
+old_header = """      <div className=\"flex items-start justify-between gap-4\"><div><h1 className=\"text-2xl font-bold text-slate-900 dark:text-white tracking-tight\">Relatos Comunitários</h1><p className=\"text-sm text-slate-500 dark:text-slate-400 mt-1\">{isNeighborhoodSelected ? <>Bairro selecionado: <strong className=\"text-emerald-600 dark:text-emerald-400\">{displayNeighborhood}</strong></> : <>Mostrando relatos de <strong className=\"text-emerald-600 dark:text-emerald-400\">todos os bairros</strong></>}</p></div><button onClick={() => { fetchData(); toast('Atualizando relatos...', 'info'); }} disabled={loading} className=\"mt-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50\" aria-label=\"Atualizar relatos\"><RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} /></button></div>\n"""
+new_header = """      <div className=\"flex items-start justify-between gap-3 sm:gap-4\"><div className=\"min-w-0\"><h1 className=\"text-2xl font-bold text-slate-900 dark:text-white tracking-tight\">Relatos Comunitários</h1><p className=\"text-sm text-slate-500 dark:text-slate-400 mt-1\">{isNeighborhoodSelected ? <>Bairro selecionado: <strong className=\"text-emerald-600 dark:text-emerald-400\">{displayNeighborhood}</strong></> : <>Mostrando relatos de <strong className=\"text-emerald-600 dark:text-emerald-400\">todos os bairros</strong></>}</p>{isNeighborhoodSelected && <p className=\"text-[11px] text-slate-400 mt-1\">Siga este bairro para receber novidades no No Meu Bairro.</p>}</div><div className=\"flex items-center gap-2 shrink-0\">{isNeighborhoodSelected && <button type=\"button\" onClick={() => void toggleNeighborhoodFollow()} disabled={followLoading} className={cn('min-h-10 inline-flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold ring-1 transition-all disabled:opacity-60', isFollowingNeighborhood ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20' : 'bg-white text-slate-600 ring-slate-200 hover:text-emerald-700 hover:ring-emerald-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-800')} aria-pressed={isFollowingNeighborhood} title={isFollowingNeighborhood ? `Deixar de seguir ${displayNeighborhood}` : `Seguir ${displayNeighborhood}`}><Bell className={cn('w-4 h-4', isFollowingNeighborhood && 'fill-current')} /><span className=\"hidden sm:inline\">{followLoading ? 'Salvando...' : isFollowingNeighborhood ? 'Seguindo' : 'Seguir bairro'}</span></button>}<button onClick={() => { fetchData(); toast('Atualizando relatos...', 'info'); }} disabled={loading} className=\"p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50\" aria-label=\"Atualizar relatos\"><RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} /></button></div></div>\n"""
+text = replace_once(text, old_header, new_header, 'feed follow header control')
+write(path, text)
 
-# PostDetails: native share on mobile, clipboard fallback on desktop, and useful document title.
-details_path = 'src/pages/PostDetails.tsx'
-details = read(details_path)
-details = replace_once(
-    details,
-    "import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2 } from 'lucide-react';",
-    "import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2 } from 'lucide-react';",
-    'PostDetails share icon',
-)
-details = replace_once(
-    details,
-    "import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo } from '../components/UI';",
-    "import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo, useToast } from '../components/UI';",
-    'PostDetails toast import',
-)
-details = replace_once(
-    details,
-    "import { supabase } from '../utils/supabase';\n",
-    "import { supabase } from '../utils/supabase';\nimport { shareContent } from '../utils/share';\n",
-    'PostDetails share import',
-)
-details = replace_once(
-    details,
-    "  const { isAuthenticated, user } = useAuth();\n",
-    "  const { isAuthenticated, user } = useAuth();\n  const { toast } = useToast();\n",
-    'PostDetails toast hook',
-)
-role_effect = """  useEffect(() => {\n    let active = true;\n    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }\n    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {\n      if (!active) return;\n      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');\n    });\n    return () => { active = false; };\n  }, [user?.id]);\n"""
-details = replace_once(
-    details,
-    role_effect,
-    role_effect + """\n  useEffect(() => {\n    if (!post) return;\n    const previousTitle = document.title;\n    document.title = `${post.title} | No Meu Bairro`;\n    return () => { document.title = previousTitle; };\n  }, [post?.id, post?.title]);\n""",
-    'PostDetails document title',
-)
-status_handler_end = """  const handleStatusChange = async (status: PostStatus) => {\n    if (!postId || !post || updatingStatus || post.status === status) return;\n    setUpdatingStatus(status);\n    try {\n      const result = await updatePostStatus(postId, status);\n      if (!result.ok) return;\n      setPost(prev => prev ? { ...prev, status, updatedAt: new Date().toISOString() } : prev);\n      const { data } = await supabase.from('post_status_history').select('id,old_status,new_status,source,changed_at').eq('post_id', postId).order('changed_at', { ascending: false }).limit(30);\n      if (data) setStatusHistory(data as StatusHistoryItem[]);\n    } finally {\n      setUpdatingStatus(null);\n    }\n  };\n"""
-details = replace_once(
-    details,
-    status_handler_end,
-    status_handler_end + """\n  const handleShare = async () => {\n    if (!post) return;\n    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` });\n    if (result === 'copied') toast('Link do relato copiado!');\n    else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error');\n  };\n""",
-    'PostDetails share handler',
-)
-details = replace_once(
-    details,
-    "        <div className=\"grid grid-cols-2 gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800\">",
-    "        <div className=\"grid grid-cols-3 gap-2 sm:gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800\">",
-    'PostDetails action grid',
-)
-details = replace_once(
-    details,
-    "          <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className=\"flex items-center justify-center gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-sm font-bold transition-all\">\n            <MessageSquare className=\"w-5 h-5\" /> Comentar {post.commentsCount > 0 ? `(${post.commentsCount})` : ''}\n          </button>\n",
-    "          <button onClick={() => document.getElementById('post-comments')?.scrollIntoView({ behavior: 'smooth', block: 'start' })} className=\"flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300 text-xs sm:text-sm font-bold transition-all\">\n            <MessageSquare className=\"w-5 h-5\" /> <span>Comentar <span className=\"hidden sm:inline\">{post.commentsCount > 0 ? `(${post.commentsCount})` : ''}</span></span>\n          </button>\n          <button type=\"button\" onClick={() => void handleShare()} className=\"flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 text-xs sm:text-sm font-bold transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20\">\n            <Share2 className=\"w-5 h-5\" /> Compartilhar\n          </button>\n",
-    'PostDetails share button',
-)
-write(details_path, details)
+migration = r'''create table if not exists public.neighborhood_follows (
+  user_id uuid not null references public.users(id) on delete cascade,
+  area text not null,
+  kind text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, area, kind),
+  constraint neighborhood_follows_area_check check (char_length(trim(area)) between 2 and 100),
+  constraint neighborhood_follows_kind_check check (kind = any (array['official'::text, 'locality'::text]))
+);
 
-print('Post sharing upgrade applied successfully.')
+create index if not exists idx_neighborhood_follows_area on public.neighborhood_follows (kind, area);
+alter table public.neighborhood_follows enable row level security;
+revoke all on table public.neighborhood_follows from anon, authenticated;
+grant select, insert, delete on table public.neighborhood_follows to authenticated;
+
+drop policy if exists neighborhood_follows_select_own on public.neighborhood_follows;
+create policy neighborhood_follows_select_own on public.neighborhood_follows for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists neighborhood_follows_insert_own on public.neighborhood_follows;
+create policy neighborhood_follows_insert_own on public.neighborhood_follows for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists neighborhood_follows_delete_own on public.neighborhood_follows;
+create policy neighborhood_follows_delete_own on public.neighborhood_follows for delete to authenticated using ((select auth.uid()) = user_id);
+
+create unique index if not exists notifications_neighborhood_post_unique on public.notifications (user_id, post_id, type) where type = 'neighborhood_post' and post_id is not null;
+create unique index if not exists notifications_neighborhood_event_unique on public.notifications (user_id, event_id, type) where type = 'neighborhood_event' and event_id is not null;
+create unique index if not exists notifications_neighborhood_job_unique on public.notifications (user_id, job_id, type) where type = 'neighborhood_job' and job_id is not null;
+
+create or replace function public.notify_neighborhood_followers_post()
+returns trigger language plpgsql security definer set search_path = 'public' as $$
+begin
+  if new.is_anonymous is true then return new; end if;
+  insert into public.notifications(user_id, actor_id, type, post_id)
+  select f.user_id, new.author_id, 'neighborhood_post', new.id
+  from public.neighborhood_follows f
+  where ((f.kind = 'official' and new.neighborhood is not null and f.area = new.neighborhood)
+      or (f.kind = 'locality' and new.locality is not null and f.area = new.locality))
+    and f.user_id is distinct from new.author_id
+  on conflict do nothing;
+  return new;
+end;
+$$;
+
+create or replace function public.notify_neighborhood_followers_event()
+returns trigger language plpgsql security definer set search_path = 'public' as $$
+begin
+  insert into public.notifications(user_id, actor_id, type, event_id)
+  select f.user_id, new.created_by, 'neighborhood_event', new.id
+  from public.neighborhood_follows f
+  where ((f.kind = 'official' and new.neighborhood is not null and f.area = new.neighborhood)
+      or (f.kind = 'locality' and new.locality is not null and f.area = new.locality))
+    and f.user_id is distinct from new.created_by
+  on conflict do nothing;
+  return new;
+end;
+$$;
+
+create or replace function public.notify_neighborhood_followers_job()
+returns trigger language plpgsql security definer set search_path = 'public' as $$
+begin
+  if new.is_active is not true then return new; end if;
+  insert into public.notifications(user_id, actor_id, type, job_id)
+  select f.user_id, null, 'neighborhood_job', new.id
+  from public.neighborhood_follows f
+  where ((f.kind = 'official' and new.neighborhood is not null and f.area = new.neighborhood)
+      or (f.kind = 'locality' and new.locality is not null and f.area = new.locality))
+  on conflict do nothing;
+  return new;
+end;
+$$;
+
+revoke all on function public.notify_neighborhood_followers_post() from public, anon, authenticated;
+revoke all on function public.notify_neighborhood_followers_event() from public, anon, authenticated;
+revoke all on function public.notify_neighborhood_followers_job() from public, anon, authenticated;
+
+drop trigger if exists trg_notify_neighborhood_followers_post on public.posts;
+create trigger trg_notify_neighborhood_followers_post after insert on public.posts for each row execute function public.notify_neighborhood_followers_post();
+drop trigger if exists trg_notify_neighborhood_followers_event on public.events;
+create trigger trg_notify_neighborhood_followers_event after insert on public.events for each row execute function public.notify_neighborhood_followers_event();
+drop trigger if exists trg_notify_neighborhood_followers_job on public.job_posts;
+create trigger trg_notify_neighborhood_followers_job after insert on public.job_posts for each row execute function public.notify_neighborhood_followers_job();
+'''
+write('database/20260817_neighborhood_follows.sql', migration)
+
+print('Neighborhood follow upgrade applied successfully.')
