@@ -1,6 +1,6 @@
 import {
   Bell, CheckCheck, Heart, MessageSquare, Trash2, ArrowRight, Reply,
-  CheckCircle2, Briefcase, Eye, PhoneCall, CalendarCheck,
+  CheckCircle2, Briefcase, Eye, PhoneCall, CalendarCheck, MapPin,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
@@ -23,6 +23,9 @@ function ActivityIcon({ notification }: { notification: AppNotification }) {
     case 'application_viewed': return <Eye className="w-4 h-4 text-sky-600" />;
     case 'application_contacted': return <PhoneCall className="w-4 h-4 text-emerald-600" />;
     case 'event_attendance': return <CalendarCheck className="w-4 h-4 text-purple-600" />;
+    case 'neighborhood_post': return <MapPin className="w-4 h-4 text-orange-600" />;
+    case 'neighborhood_event': return <CalendarCheck className="w-4 h-4 text-violet-600" />;
+    case 'neighborhood_job': return <Briefcase className="w-4 h-4 text-blue-600" />;
     default: return <Bell className="w-4 h-4 text-slate-500" />;
   }
 }
@@ -80,7 +83,7 @@ export default function Notifications() {
           <EmptyState
             icon={Bell}
             title="Nenhuma notificação"
-            description="Apoios, comentários, respostas, candidaturas, eventos e outras atividades importantes aparecerão aqui."
+            description="Apoios, comentários, respostas e novidades dos bairros que você segue aparecerão aqui."
           />
         </Card>
       ) : (

@@ -92,7 +92,10 @@ export type AppNotificationType =
   | 'job_interest'
   | 'application_viewed'
   | 'application_contacted'
-  | 'event_attendance';
+  | 'event_attendance'
+  | 'neighborhood_post'
+  | 'neighborhood_event'
+  | 'neighborhood_job';
 
 export interface AppNotification {
   id: string;

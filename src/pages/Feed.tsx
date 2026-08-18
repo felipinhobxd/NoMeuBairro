@@ -8,7 +8,7 @@ import {
 import {
   Plus, Filter, ChevronDown, Heart, MessageSquare,
   MapPin, ShieldAlert, AlertTriangle, Lightbulb, Zap,
-  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2,
+  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell,
 } from 'lucide-react';
 import {
   EmptyState, Card, Modal, Input, Textarea, Select, Button,
@@ -93,6 +93,8 @@ export default function Feed() {
   const [fd, setFd] = useState('');
   const [fi, setFi] = useState('');
   const [canModerate, setCanModerate] = useState(false);
+  const [isFollowingNeighborhood, setIsFollowingNeighborhood] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => { if (currentNeighborhood) setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude }); }, [currentNeighborhood]);
   useEffect(() => {
@@ -114,6 +116,30 @@ export default function Feed() {
     });
     return () => { active = false; };
   }, [user?.id]);
+
+  useEffect(() => {
+    let active = true;
+    if (!user?.id || !isNeighborhoodSelected || !currentNeighborhood.name) {
+      setIsFollowingNeighborhood(false);
+      setFollowLoading(false);
+      return () => { active = false; };
+    }
+    setFollowLoading(true);
+    const kind = currentNeighborhood.kind === 'locality' ? 'locality' : 'official';
+    void supabase.from('neighborhood_follows')
+      .select('area')
+      .eq('user_id', user.id)
+      .eq('area', currentNeighborhood.name)
+      .eq('kind', kind)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) console.warn('Não foi possível verificar o bairro seguido:', error);
+        setIsFollowingNeighborhood(Boolean(data));
+        setFollowLoading(false);
+      });
+    return () => { active = false; };
+  }, [user?.id, isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind]);
 
   const openCreate = useCallback(() => {
     if (!isAuthenticated || !user) {
@@ -180,12 +206,31 @@ export default function Feed() {
   const handleDeleteComment = useCallback(async (commentId: string) => { const result = await deleteComment(commentId); if (!result.ok) { toast(result.error || 'Não foi possível excluir o comentário.', 'error'); return; } toast('Comentário excluído.', 'info'); }, [deleteComment, toast]);
   const handleStatusChange = useCallback(async (postId: string, status: PostStatus) => { const result = await updatePostStatus(postId, status); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o status.', 'error'); return; } const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' }; toast(`Status atualizado para \"${labels[status]}\".`); }, [updatePostStatus, toast]);
   const handleSharePost = useCallback(async (post: { id: string; title: string; description: string }) => { const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` }); if (result === 'copied') toast('Link do relato copiado!'); else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error'); }, [toast]);
+  const toggleNeighborhoodFollow = useCallback(async () => {
+    if (!isNeighborhoodSelected || !currentNeighborhood.name) { toast('Selecione um bairro para acompanhá-lo.', 'info'); return; }
+    if (!user?.id) { toast('Entre ou crie uma conta para seguir bairros.', 'info'); navigate('/login'); return; }
+    if (followLoading) return;
+    setFollowLoading(true);
+    const area = currentNeighborhood.name;
+    const kind = currentNeighborhood.kind === 'locality' ? 'locality' : 'official';
+    try {
+      const request = isFollowingNeighborhood
+        ? supabase.from('neighborhood_follows').delete().eq('user_id', user.id).eq('area', area).eq('kind', kind)
+        : supabase.from('neighborhood_follows').insert({ user_id: user.id, area, kind });
+      const { error } = await request;
+      if (error) { toast(error.message || 'Não foi possível atualizar o bairro seguido.', 'error'); return; }
+      setIsFollowingNeighborhood(!isFollowingNeighborhood);
+      toast(isFollowingNeighborhood ? `Você deixou de seguir ${area}.` : `Agora você segue ${area}.`);
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind, user?.id, followLoading, isFollowingNeighborhood, navigate, toast]);
   const handleSendReport = async () => { if (!reportReason.trim()) return; if (!isAuthenticated || !user) { toast('Entre ou crie uma conta para denunciar conteúdo.', 'info'); navigate('/login'); return; } const finalReason = reportDetail.trim() ? `${reportReason}: ${reportDetail}` : reportReason; const result = await reportContent({ ...showReport, reason: finalReason }); if (!result.ok) { toast(result.error || 'Não foi possível enviar a denúncia.', 'error'); return; } setShowReport(null); setReportReason(''); setReportDetail(''); toast('Denúncia enviada para análise do administrador.'); };
   const displayNeighborhood = currentNeighborhood.name || 'Todos os bairros';
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatos Comunitários</h1><p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isNeighborhoodSelected ? <>Bairro selecionado: <strong className="text-emerald-600 dark:text-emerald-400">{displayNeighborhood}</strong></> : <>Mostrando relatos de <strong className="text-emerald-600 dark:text-emerald-400">todos os bairros</strong></>}</p></div><button onClick={() => { fetchData(); toast('Atualizando relatos...', 'info'); }} disabled={loading} className="mt-1 p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50" aria-label="Atualizar relatos"><RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} /></button></div>
+      <div className="flex items-start justify-between gap-3 sm:gap-4"><div className="min-w-0"><h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatos Comunitários</h1><p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isNeighborhoodSelected ? <>Bairro selecionado: <strong className="text-emerald-600 dark:text-emerald-400">{displayNeighborhood}</strong></> : <>Mostrando relatos de <strong className="text-emerald-600 dark:text-emerald-400">todos os bairros</strong></>}</p>{isNeighborhoodSelected && <p className="text-[11px] text-slate-400 mt-1">Siga este bairro para receber novidades no No Meu Bairro.</p>}</div><div className="flex items-center gap-2 shrink-0">{isNeighborhoodSelected && <button type="button" onClick={() => void toggleNeighborhoodFollow()} disabled={followLoading} className={cn('min-h-10 inline-flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold ring-1 transition-all disabled:opacity-60', isFollowingNeighborhood ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20' : 'bg-white text-slate-600 ring-slate-200 hover:text-emerald-700 hover:ring-emerald-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-800')} aria-pressed={isFollowingNeighborhood} title={isFollowingNeighborhood ? `Deixar de seguir ${displayNeighborhood}` : `Seguir ${displayNeighborhood}`}><Bell className={cn('w-4 h-4', isFollowingNeighborhood && 'fill-current')} /><span className="hidden sm:inline">{followLoading ? 'Salvando...' : isFollowingNeighborhood ? 'Seguindo' : 'Seguir bairro'}</span></button>}<button onClick={() => { fetchData(); toast('Atualizando relatos...', 'info'); }} disabled={loading} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50" aria-label="Atualizar relatos"><RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} /></button></div></div>
       {isAuthenticated && user && posts.length === 0 && <Card className="!bg-gradient-to-br !from-emerald-50 !to-teal-50 dark:!from-emerald-500/5 dark:!to-teal-500/5 !ring-emerald-200 dark:!ring-emerald-500/20 animate-fade-in"><div className="flex items-start gap-4"><div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 shadow-sm"><span className="text-2xl" role="img" aria-hidden="true">👋</span></div><div className="flex-1 min-w-0"><h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-300">Olá, {user.name.split(' ')[0]}! Bem-vindo ao No Meu Bairro.</h3><p className="text-xs text-emerald-700/70 dark:text-emerald-400/60 mt-1 leading-relaxed">Este é o espaço onde moradores compartilham problemas e notícias de toda Curitiba. 🌿</p><Button size="sm" className="mt-3" onClick={openCreate}><Sparkles className="w-3.5 h-3.5" /> Criar meu primeiro relato</Button></div></div></Card>}
       <div className="space-y-2"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input type="text" placeholder="Buscar por título, bairro, CIC ou CEP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={async (e) => { if (e.key === 'Enter') { const clean = searchQuery.replace(/\D/g, ''); if (clean.length === 8) { toast('Buscando CEP...', 'info'); try { const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`); const data = await res.json(); if (!data.erro) { const ok = await setNeighborhoodByCep(clean); if (ok) { toast('Bairro localizado: ' + data.bairro); setSearchQuery(''); } } else toast('CEP não encontrado.', 'error'); } catch { toast('Erro ao buscar CEP.', 'error'); } } } }} className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" aria-label="Buscar relatos ou selecionar bairro por CEP" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10" aria-label="Limpar busca"><X className="w-4 h-4" /></button>}</div></div>
       <Card className="!p-3"><div className="flex items-center gap-2"><div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1" role="tablist">{statusOpts.map(s => { const count = statusCounts[s.id] ?? 0; return <button key={s.id} role="tab" aria-selected={activeStatus === s.id} onClick={() => setActiveStatus(s.id)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all', activeStatus === s.id ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')}>{s.label}{count > 0 && <span className={cn('px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none', activeStatus === s.id ? 'bg-white/20' : 'bg-slate-200/80 dark:bg-slate-700')}>{count}</span>}</button>; })}</div>{isAuthenticated && <button onClick={() => setOnlyMine(!onlyMine)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0', onlyMine ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')} aria-pressed={onlyMine} title="Mostrar apenas meus relatos"><UserCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">Meus</span></button>}<button onClick={toggleNearMe} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0', nearMe ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')} aria-pressed={nearMe} title="Mostrar relatos perto de mim"><MapPin className="w-3.5 h-3.5" /><span className="hidden sm:inline">Perto de mim</span></button><button onClick={() => setShowFilters(!showFilters)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0', showFilters ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400')}><Filter className="w-3.5 h-3.5" /><span className="hidden sm:inline">Categorias</span><ChevronDown className={cn('w-3 h-3 transition-transform', showFilters && 'rotate-180')} /></button></div>{showFilters && <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">{Object.entries(postCategories).map(([key, def]) => { const Icon = catIcons[key] ?? HelpCircle; return <button key={key} onClick={() => setActiveCategory(activeCategory === key ? null : key as PostCategory)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all', activeCategory === key ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700')}><Icon className="w-3.5 h-3.5" />{def.label}</button>; })}</div>}</Card>

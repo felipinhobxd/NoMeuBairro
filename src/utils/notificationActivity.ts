@@ -19,6 +19,12 @@ export function notificationMessage(notification: AppNotification) {
       return `${actor} atualizou sua candidatura para contato`;
     case 'event_attendance':
       return `${actor} confirmou presença no seu evento`;
+    case 'neighborhood_post':
+      return `${actor} publicou um novo relato em um bairro que você segue`;
+    case 'neighborhood_event':
+      return `${actor} publicou um novo evento em um bairro que você segue`;
+    case 'neighborhood_job':
+      return 'Nova vaga publicada em um bairro que você segue';
     default:
       return 'Nova atividade no NoMeuBairro';
   }
@@ -35,13 +41,16 @@ export function notificationActionLabel(notification: AppNotification) {
     case 'application_contacted': return 'Ver candidaturas';
     case 'event_attendance': return 'Ver evento';
     case 'reply': return 'Ver resposta';
-    case 'post_resolved': return 'Ver relato';
+    case 'post_resolved':
+    case 'neighborhood_post': return 'Ver relato';
+    case 'neighborhood_event': return 'Ver evento';
+    case 'neighborhood_job': return 'Ver vaga';
     default: return 'Ver publicação';
   }
 }
 
 export function notificationDestination(notification: AppNotification) {
-  if (notification.postId && ['support', 'comment', 'reply', 'post_resolved'].includes(notification.type)) {
+  if (notification.postId && ['support', 'comment', 'reply', 'post_resolved', 'neighborhood_post'].includes(notification.type)) {
     return `/post/${notification.postId}`;
   }
 
@@ -60,11 +69,18 @@ export function notificationDestination(notification: AppNotification) {
     return '/empregos';
   }
 
-  if (notification.type === 'event_attendance') {
+  if (notification.type === 'event_attendance' || notification.type === 'neighborhood_event') {
     try {
       if (notification.eventId) sessionStorage.setItem('anb-focus-event', notification.eventId);
     } catch {}
     return '/mural';
+  }
+
+  if (notification.type === 'neighborhood_job') {
+    try {
+      if (notification.jobId) sessionStorage.setItem('anb-focus-job', notification.jobId);
+    } catch {}
+    return '/empregos';
   }
 
   return '/notificacoes';
