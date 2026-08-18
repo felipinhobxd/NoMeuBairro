@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { FontSizeProvider } from './contexts/FontSizeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { NeighborhoodProvider } from './contexts/NeighborhoodContext';
@@ -88,50 +89,52 @@ function RouteFallback() {
 export default function App() {
   return (
     <AppErrorBoundary>
-      <ThemeProvider>
-        <AuthProvider>
-          <NeighborhoodProvider>
-            <DataProvider>
-              <ToastProvider>
-                <RecoveryRedirect />
-                <HashRouter>
-                  <DataRouteLoader />
-                  <BrazilWhatsappMask />
-                  <InteractionGuard />
-                  <DesktopUiPolish />
-                  <ProductExperience />
-                  <MuralMapEnhancer />
-                  <Layout>
-                    <Suspense fallback={<RouteFallback />}>
-                      <Routes>
-                        <Route path="/" element={<Feed />} />
-                        <Route path="/empregos" element={<Empregos />} />
-                        <Route path="/mural" element={<Mural />} />
-                        <Route path="/denuncias" element={<Denuncias />} />
-                        <Route path="/mapa" element={<Mapa />} />
-                        <Route path="/estatisticas" element={<Estatisticas />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/perfil" element={<ProfilePage />} />
-                        <Route path="/perfil/:userId" element={<PublicProfile />} />
-                        <Route path="/empresa" element={<CompanyDashboard />} />
-                        <Route path="/empresa/:companyId" element={<CompanyPublicProfile />} />
-                        <Route path="/notificacoes" element={<Notifications />} />
-                        <Route path="/post/:postId" element={<PostDetails />} />
-                        <Route path="/salvos" element={<Saved />} />
-                        <Route path="/admin" element={<Admin />} />
-                        <Route path="/privacidade" element={<Privacy />} />
-                        <Route path="/termos" element={<Terms />} />
-                      </Routes>
-                    </Suspense>
-                  </Layout>
-                  <PanicButton />
-                  <CookieConsent />
-                </HashRouter>
-              </ToastProvider>
-            </DataProvider>
-          </NeighborhoodProvider>
-        </AuthProvider>
-      </ThemeProvider>
+      <FontSizeProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <NeighborhoodProvider>
+              <DataProvider>
+                <ToastProvider>
+                  <RecoveryRedirect />
+                  <HashRouter>
+                    <DataRouteLoader />
+                    <BrazilWhatsappMask />
+                    <InteractionGuard />
+                    <DesktopUiPolish />
+                    <ProductExperience />
+                    <MuralMapEnhancer />
+                    <Layout>
+                      <Suspense fallback={<RouteFallback />}>
+                        <Routes>
+                          <Route path="/" element={<Feed />} />
+                          <Route path="/empregos" element={<Empregos />} />
+                          <Route path="/mural" element={<Mural />} />
+                          <Route path="/denuncias" element={<Denuncias />} />
+                          <Route path="/mapa" element={<Mapa />} />
+                          <Route path="/estatisticas" element={<Estatisticas />} />
+                          <Route path="/login" element={<Login />} />
+                          <Route path="/perfil" element={<ProfilePage />} />
+                          <Route path="/perfil/:userId" element={<PublicProfile />} />
+                          <Route path="/empresa" element={<CompanyDashboard />} />
+                          <Route path="/empresa/:companyId" element={<CompanyPublicProfile />} />
+                          <Route path="/notificacoes" element={<Notifications />} />
+                          <Route path="/post/:postId" element={<PostDetails />} />
+                          <Route path="/salvos" element={<Saved />} />
+                          <Route path="/admin" element={<Admin />} />
+                          <Route path="/privacidade" element={<Privacy />} />
+                          <Route path="/termos" element={<Terms />} />
+                        </Routes>
+                      </Suspense>
+                    </Layout>
+                    <PanicButton />
+                    <CookieConsent />
+                  </HashRouter>
+                </ToastProvider>
+              </DataProvider>
+            </NeighborhoodProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </FontSizeProvider>
     </AppErrorBoundary>
   );
 }

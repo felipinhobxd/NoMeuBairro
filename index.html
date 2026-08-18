@@ -13,6 +13,26 @@
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <title>No Meu Bairro</title>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var validFontSizes = ['small', 'medium', 'large', 'giant'];
+        var fontSize = null;
+        var theme = null;
+        try {
+          fontSize = localStorage.getItem('nmb-font-size-v1');
+          theme = localStorage.getItem('anb-theme');
+        } catch (_) {}
+
+        var hasFontSizeChoice = validFontSizes.indexOf(fontSize) !== -1;
+        if (!hasFontSizeChoice) fontSize = 'medium';
+        root.setAttribute('data-font-size', fontSize);
+        if (hasFontSizeChoice) root.setAttribute('data-font-choice', 'done');
+
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (theme === 'dark' || (theme === null && prefersDark)) root.classList.add('dark');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

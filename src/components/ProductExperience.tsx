@@ -61,7 +61,7 @@ const tourSteps: TourStep[] = [
   {
     kind: 'intro',
     title: 'Aprenda clicando',
-    description: 'Vou destacar os botões importantes. Clique ou toque neles para conhecer o site de verdade. Leva menos de 1 minuto.',
+    description: 'Vou destacar os botões importantes. Clique neles para conhecer o site. Se precisar, você pode trocar a fonte pelo botão “Aa” no topo.',
     icon: Sparkles,
     accent: 'from-emerald-500 to-teal-600',
   },
@@ -142,7 +142,7 @@ const mobileTourSteps: TourStep[] = [
   {
     kind: 'intro',
     title: 'Aprenda tocando',
-    description: 'Vou destacar a interface real. Toque nos botões indicados e, em poucos passos, você já sabe onde fica tudo.',
+    description: 'Vou destacar a interface real. Toque nos botões indicados para conhecer o site. O tamanho da fonte pode ser alterado depois em “Mais”.',
     icon: Sparkles,
     accent: 'from-emerald-500 to-teal-600',
   },
@@ -190,7 +190,7 @@ const mobileTourSteps: TourStep[] = [
     kind: 'target',
     target: 'more',
     title: 'Mais',
-    description: 'Aqui ficam Dados, Denúncias, Perfil e também Busca, Instalar app, tema e Sair. Administradores também encontram o Admin aqui.',
+    description: 'Aqui ficam Dados, Denúncias, Perfil e também Busca, tamanho da fonte, Instalar app, tema e Sair. Administradores também encontram o Admin aqui.',
     icon: MoreHorizontal,
     accent: 'from-slate-600 to-slate-800',
   },

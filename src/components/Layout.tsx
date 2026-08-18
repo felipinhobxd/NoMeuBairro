@@ -1,6 +1,7 @@
 import { type ReactNode, useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
+import { fontSizeLabels, useFontSize } from '../contexts/FontSizeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import {
@@ -14,6 +15,7 @@ import {
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
   BarChart3, Search, ChevronRight, Building2, Sparkles, MapPinned, Reply, CheckCircle2, Eye, PhoneCall, CalendarCheck,
   ShieldCheck, MoreHorizontal, Download, Bookmark,
+  ALargeSmall,
 } from 'lucide-react';
 import { timeAgo, Button, Card, Input, useToast } from './UI';
 import type { AppNotification } from '../types';
@@ -334,6 +336,7 @@ interface LayoutProps { children: ReactNode }
 
 export default function Layout({ children }: LayoutProps) {
   const { isDark, toggle } = useTheme();
+  const { fontSize, openFontSizePicker } = useFontSize();
   const { user, isAuthenticated, logout } = useAuth();
   const { currentNeighborhood, isNeighborhoodSelected, clearSelection } = useNeighborhood();
   const navigate = useNavigate();
@@ -421,6 +424,15 @@ export default function Layout({ children }: LayoutProps) {
             </nav>
 
             <div className="nmb-header-actions flex items-center gap-1 lg:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={openFontSizePicker}
+                className="nmb-header-font hidden sm:flex p-2 rounded-xl text-slate-500 hover:text-orange-700 hover:bg-orange-50 dark:text-slate-400 dark:hover:text-orange-300 dark:hover:bg-orange-500/10 transition-all duration-200"
+                aria-label={`Alterar tamanho da fonte. Atual: ${fontSizeLabels[fontSize]}`}
+                title={`Fonte: ${fontSizeLabels[fontSize]}`}
+              >
+                <ALargeSmall className="w-[18px] h-[18px]" />
+              </button>
               <button onClick={toggle} className="nmb-header-theme p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>{isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}</button>
               <NotificationBell />
               {isAuthenticated && <button onClick={() => navigate('/salvos')} className={cn('p-2.5 rounded-xl transition-all duration-200', isActive('/salvos') ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-label="Itens salvos" title="Itens salvos"><Bookmark className="w-[18px] h-[18px]" /></button>}
@@ -512,6 +524,7 @@ export default function Layout({ children }: LayoutProps) {
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => triggerHeaderAction('Buscar no site')} className="min-h-[50px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"><Search className="w-4.5 h-4.5" />Buscar</button>
                 <button type="button" onClick={() => triggerHeaderAction('Instalar aplicativo')} className="min-h-[50px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200"><Download className="w-4.5 h-4.5" />Instalar app</button>
+                <button type="button" onClick={() => { setMobileMoreOpen(false); openFontSizePicker(); }} className="min-h-[50px] rounded-xl border border-orange-200 dark:border-orange-500/25 bg-orange-50 dark:bg-orange-500/10 px-3 flex items-center gap-2.5 text-sm font-bold text-orange-800 dark:text-orange-300"><ALargeSmall className="w-4.5 h-4.5" />Fonte: {fontSizeLabels[fontSize]}</button>
                 <button type="button" onClick={toggle} className="min-h-[50px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200">{isDark ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}{isDark ? 'Modo claro' : 'Modo escuro'}</button>
                 {isAuthenticated && user ? (
                   <button type="button" onClick={() => { setMobileMoreOpen(false); void logout(); }} className="min-h-[50px] rounded-xl border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 px-3 flex items-center gap-2.5 text-sm font-bold text-red-700 dark:text-red-300"><LogOut className="w-4.5 h-4.5" />Sair</button>

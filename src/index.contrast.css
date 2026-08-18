@@ -9,7 +9,7 @@ input,
 textarea {
   color: #0f172a !important;
   background-color: #ffffff;
-  font-size: 17px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -168,12 +168,12 @@ main[role="main"] h3 {
 main[role="main"] p { line-height: 1.6; }
 
 /* Nenhum metadado da interface volta a 9/10px, inclusive fora do conteudo principal. */
-.text-\[9px\] { font-size: 0.75rem !important; line-height: 1rem !important; }
-.text-\[10px\] { font-size: 0.8125rem !important; line-height: 1.1rem !important; }
-.text-\[11px\] { font-size: 0.84375rem !important; line-height: 1.15rem !important; }
-.text-\[12px\] { font-size: 0.875rem !important; line-height: 1.2rem !important; }
-.text-\[13px\] { font-size: 0.9375rem !important; line-height: 1.3rem !important; }
-.text-\[14px\] { font-size: 1rem !important; line-height: 1.4rem !important; }
+.text-\[9px\] { font-size: var(--nmb-text-9) !important; line-height: 1.4 !important; }
+.text-\[10px\] { font-size: var(--nmb-text-10) !important; line-height: 1.4 !important; }
+.text-\[11px\] { font-size: var(--nmb-text-11) !important; line-height: 1.45 !important; }
+.text-\[12px\] { font-size: var(--nmb-text-12) !important; line-height: 1.45 !important; }
+.text-\[13px\] { font-size: var(--nmb-text-13) !important; line-height: 1.5 !important; }
+.text-\[14px\] { font-size: var(--nmb-text-14) !important; line-height: 1.5 !important; }
 main[role="main"] .text-xs { font-size: var(--text-xs) !important; line-height: var(--text-xs--line-height) !important; }
 
 /* Acoes comuns ficam mais faceis de reconhecer. */
@@ -199,13 +199,13 @@ textarea {
     min-height: 46px;
   }
 
-  main[role="main"] h1 { font-size: 1.75rem !important; line-height: 2.2rem !important; }
-  main[role="main"] h2 { font-size: 1.375rem; line-height: 1.8rem; }
+  main[role="main"] h1 { font-size: var(--nmb-mobile-h1) !important; line-height: var(--nmb-mobile-h1-line) !important; }
+  main[role="main"] h2 { font-size: var(--nmb-mobile-h2); line-height: var(--nmb-mobile-h2-line); }
 
   /* Barra inferior precisa continuar cabendo em telas estreitas. */
   nav[aria-label="Navegação mobile"] .text-\[10px\] {
-    font-size: 13px !important;
-    line-height: 14px !important;
+    font-size: var(--nmb-mobile-nav-size) !important;
+    line-height: 1.1 !important;
   }
 }
 

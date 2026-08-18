@@ -60,7 +60,7 @@ export default function Privacy() {
 
       <Card className="!p-5 sm:!p-6">
         <h2 className="text-lg font-black text-slate-900 dark:text-white">Armazenamento no seu navegador</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">O site usa armazenamento local e de sessão para lembrar escolhas úteis, como tema, bairro selecionado, conclusão do guia inicial e qual conteúdo deve receber foco após uma navegação. O aplicativo instalado também usa um cache técnico limitado para abrir a interface de forma mais confiável; dados do Supabase, mapas e serviços externos não são colocados nesse cache pelo nosso service worker.</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">O site usa armazenamento local e de sessão para lembrar escolhas úteis, como tema, tamanho da fonte, bairro selecionado, conclusão do guia inicial e qual conteúdo deve receber foco após uma navegação. O aplicativo instalado também usa um cache técnico limitado para abrir a interface de forma mais confiável; dados do Supabase, mapas e serviços externos não são colocados nesse cache pelo nosso service worker.</p>
       </Card>
 
       <Card className="!p-5 sm:!p-6">
