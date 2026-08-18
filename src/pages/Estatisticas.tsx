@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, postCategories } from '../components/UI';
 import {
   BarChart3, PieChart, Activity, CheckCircle2,
-  Clock, AlertCircle, TrendingUp, CalendarDays, Briefcase, Loader2, RefreshCw,
+  Clock, AlertCircle, TrendingUp, CalendarDays, Briefcase, Loader2, RefreshCw, ShieldCheck, Trash2, Eye,
 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { supabase } from '../utils/supabase';
 
 type CategoryStat = { category: string; count: number };
 type DailyStat = { date: string; count: number };
+type ModerationTransparency = { periodDays: number; reportsReceived: number; pendingNow: number; handled: number; removed: number; kept: number; averageResponseHours: number; updatedAt?: string };
 type DashboardStats = {
   totalReports: number;
   pending: number;
@@ -45,16 +46,36 @@ export default function Estatisticas() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [moderation, setModeration] = useState<ModerationTransparency | null>(null);
 
   const loadStats = async () => {
     setLoading(true);
     setError('');
-    const { data, error: queryError } = await supabase.rpc('get_public_dashboard_stats');
-    if (queryError) {
-      console.error('Erro ao carregar dados agregados:', queryError);
+    const [statsResult, moderationResult] = await Promise.all([
+      supabase.rpc('get_public_dashboard_stats'),
+      supabase.rpc('get_public_moderation_transparency'),
+    ]);
+    if (statsResult.error) {
+      console.error('Erro ao carregar dados agregados:', statsResult.error);
       setError('Não foi possível atualizar os dados agora.');
     } else {
-      setStats(normalizeStats(data));
+      setStats(normalizeStats(statsResult.data));
+    }
+    if (moderationResult.error) {
+      console.warn('Erro ao carregar transparência da moderação:', moderationResult.error);
+      setModeration(null);
+    } else if (moderationResult.data) {
+      const value: any = moderationResult.data;
+      setModeration({
+        periodDays: Number(value.periodDays || 30),
+        reportsReceived: Number(value.reportsReceived || 0),
+        pendingNow: Number(value.pendingNow || 0),
+        handled: Number(value.handled || 0),
+        removed: Number(value.removed || 0),
+        kept: Number(value.kept || 0),
+        averageResponseHours: Number(value.averageResponseHours || 0),
+        updatedAt: value.updatedAt || undefined,
+      });
     }
     setLoading(false);
   };
@@ -173,6 +194,23 @@ export default function Estatisticas() {
           </div>
         </Card>
       </div>
+
+      {moderation && <Card className="!p-5 sm:!p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+          <div><h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-emerald-600" /> Transparência da moderação</h3><p className="text-xs text-slate-500 mt-1 max-w-2xl">Indicadores agregados dos últimos {moderation.periodDays} dias. Motivos, denunciantes e conteúdos individuais nunca aparecem aqui.</p></div>
+          <span className="rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 self-start">Dados públicos agregados</span>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
+          {[
+            { label: 'Recebidas', value: moderation.reportsReceived, icon: AlertCircle, cls: 'text-orange-600 bg-orange-50 dark:bg-orange-500/10' },
+            { label: 'Analisadas', value: moderation.handled, icon: ShieldCheck, cls: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },
+            { label: 'Removidos', value: moderation.removed, icon: Trash2, cls: 'text-red-600 bg-red-50 dark:bg-red-500/10' },
+            { label: 'Mantidos', value: moderation.kept, icon: Eye, cls: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
+            { label: 'Pendentes agora', value: moderation.pendingNow, icon: Clock, cls: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10' },
+          ].map(item => <div key={item.label} className="rounded-xl border border-slate-100 dark:border-slate-800 p-3 bg-slate-50/60 dark:bg-slate-900/40"><div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', item.cls)}><item.icon className="w-4 h-4" /></div><p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{item.value}</p><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.label}</p></div>)}
+        </div>
+        <div className="mt-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"><div><p className="text-xs font-bold text-slate-800 dark:text-slate-200">Tempo médio de análise</p><p className="text-[11px] text-slate-500">Calculado somente sobre denúncias concluídas no período.</p></div><p className="text-lg font-black text-emerald-700 dark:text-emerald-300">{moderation.averageResponseHours < 1 ? '< 1 hora' : moderation.averageResponseHours < 24 ? `${moderation.averageResponseHours.toFixed(1)} h` : `${(moderation.averageResponseHours / 24).toFixed(1)} dias`}</p></div>
+      </Card>}
 
       <Card>
         <div className="flex items-center justify-between gap-3 mb-5"><div><h3 className="font-bold text-slate-900 dark:text-white">Novos relatos nos últimos 7 dias</h3><p className="text-xs text-slate-500 mt-1">Contagem diária diretamente do banco</p></div><TrendingUp className="w-5 h-5 text-orange-700" /></div>
