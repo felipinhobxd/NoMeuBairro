@@ -2,21 +2,6 @@ export type EmploymentType = 'clt' | 'pj' | 'estagio' | 'aprendiz' | 'temporario
 export type WorkModel = 'presencial' | 'hibrido' | 'remoto';
 export type JobApplicationStatus = 'interested' | 'viewed' | 'contacted' | 'withdrawn';
 
-export interface CompanyProfile {
-  id: string;
-  companyName: string;
-  description?: string;
-  logoUrl?: string;
-  email: string;
-  phone?: string;
-  whatsapp?: string;
-  website?: string;
-  address?: string;
-  neighborhood?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface JobPost {
   id: string;
   companyId: string;

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-export interface Neighborhood {
+interface Neighborhood {
   name: string;
   latitude: number;
   longitude: number;
@@ -101,7 +101,10 @@ export const curitibaNeighborhoods: Neighborhood[] = [
   { name: 'Vista Alegre', latitude: -25.4100, longitude: -49.3000, cepExample: '80810-000' },
   { name: 'Xaxim', latitude: -25.4900, longitude: -49.2500, cepExample: '81710-000' },
   { name: 'Vitória Régia', latitude: -25.5415, longitude: -49.3375, cepExample: '81470-430', aliases: ['Vitoria Regia'], kind: 'locality', parentNeighborhood: 'Cidade Industrial de Curitiba' },
-].map((item) => ({ kind: 'official' as const, ...item }));
+].map((item): Neighborhood => ({
+  ...item,
+  kind: item.kind === 'locality' ? 'locality' : 'official',
+}));
 
 export function findNeighborhood(value: string | null | undefined) {
   const normalized = normalizeNeighborhoodText(value);

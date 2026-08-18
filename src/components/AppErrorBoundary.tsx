@@ -22,13 +22,13 @@ export default class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Erro de renderização capturado pelo NoMeuBairro:', error, info);
-    void supabase.rpc('log_client_error', {
+    void Promise.resolve(supabase.rpc('log_client_error', {
       p_message: error.message || 'Erro de renderização',
       p_stack: error.stack || null,
       p_component_stack: info.componentStack || null,
       p_path: canonicalPath(),
       p_user_agent: navigator.userAgent,
-    }).catch(() => {});
+    })).catch(() => {});
   }
 
   private reload = () => {

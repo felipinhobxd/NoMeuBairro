@@ -197,7 +197,7 @@ function NeighborhoodPicker() {
 
   useEffect(() => {
     let active = true;
-    void supabase.rpc('get_neighborhood_post_counts').then(({ data, error }) => {
+    void Promise.resolve(supabase.rpc('get_neighborhood_post_counts')).then(({ data, error }) => {
       if (!active) return;
       if (error) {
         console.warn('Não foi possível carregar as contagens completas por bairro:', error);

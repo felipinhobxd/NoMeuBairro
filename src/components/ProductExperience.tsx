@@ -495,7 +495,7 @@ export default function ProductExperience() {
     setSearching(true);
     setSearchError('');
     const timer = window.setTimeout(() => {
-      void supabase.rpc('global_search', { p_query: q, p_limit: 18 }).then(({ data, error }) => {
+      void Promise.resolve(supabase.rpc('global_search', { p_query: q, p_limit: 18 })).then(({ data, error }) => {
         if (!active) return;
         if (error) {
           console.warn('Busca global indisponível:', error);
@@ -718,7 +718,7 @@ export default function ProductExperience() {
   };
 
   useEffect(() => {
-    void supabase.rpc('track_page_view', { p_path: canonicalRoute(location.pathname) }).then(({ error }) => {
+    void Promise.resolve(supabase.rpc('track_page_view', { p_path: canonicalRoute(location.pathname) })).then(({ error }) => {
       if (error) console.warn('Analytics agregado indisponível:', error.message);
     }).catch(() => {});
   }, [location.pathname]);
@@ -731,13 +731,13 @@ export default function ProductExperience() {
       const last = errorFingerprints.current.get(fingerprint) || 0;
       if (now - last < 30_000) return;
       errorFingerprints.current.set(fingerprint, now);
-      void supabase.rpc('log_client_error', {
+      void Promise.resolve(supabase.rpc('log_client_error', {
         p_message: cleanMessage,
         p_stack: stack || null,
         p_component_stack: null,
         p_path: canonicalRoute(location.pathname),
         p_user_agent: navigator.userAgent,
-      }).catch(() => {});
+      })).catch(() => {});
     };
 
     const onError = (event: ErrorEvent) => send(event.message || 'Erro de JavaScript', event.error instanceof Error ? event.error.stack : null);

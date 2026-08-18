@@ -5,7 +5,7 @@ import {
 import { ALargeSmall, Check, Eye, X } from 'lucide-react';
 import { cn } from '../utils/cn';
 
-export type FontSizePreference = 'small' | 'medium' | 'large' | 'giant';
+type FontSizePreference = 'small' | 'medium' | 'large' | 'giant';
 
 const FONT_SIZE_STORAGE_KEY = 'nmb-font-size-v1';
 

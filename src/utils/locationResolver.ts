@@ -1,7 +1,7 @@
 import { canonicalNeighborhoodName, curitibaNeighborhoods, findNeighborhood } from '../contexts/NeighborhoodContext';
 import { supabase } from './supabase';
 
-export type ResolvedLocation = {
+type ResolvedLocation = {
   latitude: number | null;
   longitude: number | null;
   neighborhood: string | null;

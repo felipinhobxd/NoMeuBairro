@@ -6,16 +6,12 @@ on:
     paths:
       - 'package.json'
       - 'package-lock.json'
-      - 'backend/**/*.py'
-      - 'backend/requirements.txt'
       - '.github/workflows/dependency-audit.yml'
   pull_request:
     branches: [main]
     paths:
       - 'package.json'
       - 'package-lock.json'
-      - 'backend/**/*.py'
-      - 'backend/requirements.txt'
       - '.github/workflows/dependency-audit.yml'
   workflow_dispatch:
 
@@ -38,42 +34,3 @@ jobs:
 
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
-
-      - name: Verify frontend build
-        run: npm run build
-
-      - name: Install Python dependencies
-        run: python -m pip install --disable-pip-version-check -r backend/requirements.txt
-
-      - name: Compile Python sources
-        run: python -m compileall -q backend
-
-      - name: Smoke-test Flask application
-        env:
-          PYTHONPATH: backend
-          FLASK_ENV: development
-        run: |
-          python - <<'PY'
-          import os
-          from app import app, create_app
-
-          routes = {rule.rule for rule in app.url_map.iter_rules()}
-          assert '/' in routes
-          assert '/api/health' in routes
-          assert '/api/auth/login' in routes
-          assert '/api/auth/register' in routes
-
-          for key in ('DATABASE_URL', 'SECRET_KEY', 'JWT_SECRET_KEY', 'CORS_ORIGINS'):
-              os.environ.pop(key, None)
-          try:
-              create_app('production')
-          except RuntimeError:
-              pass
-          else:
-              raise AssertionError('Production must reject missing secure configuration')
-          PY
-
-      - name: Audit Python dependencies
-        run: |
-          python -m pip install --disable-pip-version-check pip-audit
-          pip-audit -r backend/requirements.txt

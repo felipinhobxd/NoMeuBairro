@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/UI';
 import { supabase } from '../utils/supabase';
 
-export type SavedKind = 'post' | 'event' | 'job';
+type SavedKind = 'post' | 'event' | 'job';
 
 const savedColumns: Record<SavedKind, 'post_id' | 'event_id' | 'job_id'> = {
   post: 'post_id',

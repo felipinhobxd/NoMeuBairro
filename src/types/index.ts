@@ -16,7 +16,7 @@ export interface User {
   createdAt: string;
 }
 
-export interface Badge {
+interface Badge {
   id: string;
   name: string;
   description: string;
@@ -74,17 +74,9 @@ export interface CommunityEvent {
   attendanceCount?: number;
 }
 
-export interface EventAttendee {
-  id: string;
-  eventId: string;
-  userId: string;
-  userName: string;
-  userAvatarUrl?: string;
-}
-
 export type EventType = 'feira' | 'saude' | 'reuniao' | 'cultura' | 'esporte' | 'campanha' | 'outros';
 
-export type AppNotificationType =
+type AppNotificationType =
   | 'support'
   | 'comment'
   | 'reply'

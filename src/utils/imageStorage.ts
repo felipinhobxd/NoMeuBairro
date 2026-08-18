@@ -20,7 +20,7 @@ function extensionForMime(mime: string) {
   return 'jpg';
 }
 
-export function postImageStoragePath(url: string | undefined | null) {
+function postImageStoragePath(url: string | undefined | null) {
   if (!url) return null;
   const marker = '/storage/v1/object/public/post-images/';
   const index = url.indexOf(marker);

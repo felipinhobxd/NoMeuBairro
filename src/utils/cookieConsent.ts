@@ -1,4 +1,4 @@
-export const COOKIE_CONSENT_KEY = 'anb-cookie-consent';
+const COOKIE_CONSENT_KEY = 'anb-cookie-consent';
 export const COOKIE_CONSENT_EVENT = 'nmb-cookie-consent-changed';
 
 export type CookieConsentChoice = 'all' | 'essential';

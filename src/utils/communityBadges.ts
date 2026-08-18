@@ -33,8 +33,6 @@ export const communityBadges = [
   { key: 'presenca_local', name: 'Presença Local', desc: 'Confirmou presença em 3 eventos', emoji: '🙌', target: 3, metric: 'eventsAttended' },
 ] as const;
 
-export type CommunityBadgeKey = typeof communityBadges[number]['key'];
-
 export function normalizeCommunityContribution(value: any): CommunityContributionSummary {
   return {
     postsCount: Number(value?.postsCount ?? value?.postscount ?? 0),

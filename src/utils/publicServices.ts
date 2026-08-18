@@ -1,6 +1,6 @@
 import type { PostCategory } from '../types';
 
-export type PublicServiceContact = {
+type PublicServiceContact = {
   authority: string;
   phone: string;
   tel: string;
@@ -10,7 +10,7 @@ export type PublicServiceContact = {
   note?: string;
 };
 
-export const publicServiceContacts: Record<PostCategory, PublicServiceContact> = {
+const publicServiceContacts: Record<PostCategory, PublicServiceContact> = {
   buraco: {
     authority: 'Central 156 de Curitiba',
     phone: '156',

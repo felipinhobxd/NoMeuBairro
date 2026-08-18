@@ -1,4 +1,4 @@
-export type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
+type ShareResult = 'shared' | 'copied' | 'cancelled' | 'failed';
 
 type SharePayload = {
   title: string;

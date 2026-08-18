@@ -165,11 +165,13 @@ export default function PostDetails() {
 
       const data = postResult.data;
       if (data) {
+        const userRelation = data.users as { name?: string; avatar_url?: string } | { name?: string; avatar_url?: string }[] | null;
+        const postAuthor = Array.isArray(userRelation) ? userRelation[0] : userRelation;
         setPost({
           id: data.id,
           authorId: data.author_id || 'anonymous',
-          authorName: data.is_anonymous ? 'Denúncia Anônima' : (data.users?.name || 'Morador'),
-          authorAvatarUrl: data.is_anonymous ? undefined : data.users?.avatar_url,
+          authorName: data.is_anonymous ? 'Denúncia Anônima' : (postAuthor?.name || 'Morador'),
+          authorAvatarUrl: data.is_anonymous ? undefined : postAuthor?.avatar_url,
           category: data.category,
           status: data.status,
           title: data.title,
