@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nmb-shell-v3';
+const CACHE_NAME = 'nmb-shell-v4';
 const SHELL = ['/', '/logo.png', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -33,6 +33,12 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
+    // Rotas dinâmicas de compartilhamento e APIs precisam sempre chegar à
+    // Vercel. Nunca salve o HTML de uma prévia social como a shell do PWA.
+    if (url.pathname.startsWith('/relato/') || url.pathname.startsWith('/post/') || url.pathname.startsWith('/api/')) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(networkFirst(request, '/'));
     return;
   }

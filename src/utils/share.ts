@@ -12,6 +12,10 @@ function absoluteUrl(url: string) {
   catch { return url; }
 }
 
+export function postShareUrl(postId: string) {
+  return `/relato/${encodeURIComponent(postId)}`;
+}
+
 async function copyText(value: string) {
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);

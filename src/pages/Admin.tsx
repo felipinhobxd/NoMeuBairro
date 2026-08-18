@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, BarChart3, Bug, CalendarDays, Check, Filter, History as HistoryIcon,
-  MessageSquare, RefreshCw, ShieldCheck, Trash2,
+  MessageSquare, RefreshCw, ShieldCheck, Trash2, UserX, Ban,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, EmptyState, useToast } from '../components/UI';
@@ -52,7 +52,18 @@ type ClientErrorItem = {
   user_agent?: string | null;
 };
 
-type AdminTab = 'pending' | 'history' | 'usage' | 'errors';
+type AccountDeletionRequest = {
+  id: string;
+  user_id: string;
+  user_name: string;
+  reason?: string | null;
+  status: 'pending' | 'completed' | 'cancelled';
+  requested_at: string;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+};
+
+type AdminTab = 'pending' | 'history' | 'accounts' | 'usage' | 'errors';
 
 const typeMeta: Record<string, { label: string; icon: typeof MessageSquare }> = {
   post: { label: 'Post do feed', icon: MessageSquare },
@@ -83,7 +94,7 @@ function formatDate(value: string) {
 }
 
 export default function Admin() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -93,15 +104,18 @@ export default function Admin() {
   const [historyItems, setHistoryItems] = useState<ModerationHistoryItem[]>([]);
   const [usageItems, setUsageItems] = useState<UsageRow[]>([]);
   const [errorItems, setErrorItems] = useState<ClientErrorItem[]>([]);
+  const [accountRequests, setAccountRequests] = useState<AccountDeletionRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [usageLoading, setUsageLoading] = useState(false);
   const [errorsLoading, setErrorsLoading] = useState(false);
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [usageError, setUsageError] = useState('');
   const [clientError, setClientError] = useState('');
+  const [accountsError, setAccountsError] = useState('');
   const [historyAction, setHistoryAction] = useState('all');
   const [historyType, setHistoryType] = useState('all');
   const [historyModerator, setHistoryModerator] = useState('all');
@@ -171,6 +185,31 @@ export default function Admin() {
     }
   }, []);
 
+  const loadAccountRequests = useCallback(async () => {
+    setAccountsLoading(true);
+    setAccountsError('');
+    try {
+      const result = await supabase.from('account_deletion_requests')
+        .select('id,user_id,reason,status,requested_at,reviewed_at,reviewed_by')
+        .order('requested_at', { ascending: false })
+        .limit(200);
+      if (result.error) throw result.error;
+      const rows = result.data || [];
+      const userIds = Array.from(new Set(rows.map(row => row.user_id).filter(Boolean)));
+      const names = new Map<string, string>();
+      if (userIds.length) {
+        const profiles = await supabase.from('users').select('id,name').in('id', userIds);
+        if (!profiles.error) for (const profile of profiles.data || []) names.set(profile.id, profile.name || 'Morador');
+      }
+      setAccountRequests(rows.map(row => ({ ...row, user_name: names.get(row.user_id) || 'Morador' })) as AccountDeletionRequest[]);
+    } catch (err: any) {
+      setAccountRequests([]);
+      setAccountsError(err?.message || 'Não foi possível carregar as solicitações de conta.');
+    } finally {
+      setAccountsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
     const check = async () => {
@@ -189,11 +228,12 @@ export default function Admin() {
         void loadHistory();
         void loadUsage();
         void loadErrors();
+        void loadAccountRequests();
       }
     };
     void check();
     return () => { active = false; };
-  }, [isAuthenticated, loadQueue, loadHistory, loadUsage, loadErrors]);
+  }, [isAuthenticated, loadQueue, loadHistory, loadUsage, loadErrors, loadAccountRequests]);
 
   const counts = useMemo(() => items.reduce((acc, item) => {
     const key = item.content_type || 'post';
@@ -239,6 +279,33 @@ export default function Admin() {
     return errorItems.filter(item => new Date(item.created_at).getTime() >= since).length;
   }, [errorItems]);
 
+  const pendingAccountRequests = useMemo(() => accountRequests.filter(item => item.status === 'pending'), [accountRequests]);
+
+  const reviewAccountRequest = async (item: AccountDeletionRequest, status: 'completed' | 'cancelled') => {
+    if (!user?.id || actingId) return;
+    if (status === 'completed' && !window.confirm('Confirme somente se a conta já foi excluída no Supabase Auth. Esta ação apenas fecha o registro da solicitação.')) return;
+    setActingId(item.id);
+    try {
+      const { error: reviewError } = await supabase.from('account_deletion_requests').update({
+        status,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user.id,
+      }).eq('id', item.id).eq('status', 'pending');
+      if (reviewError) throw reviewError;
+      setAccountRequests(previous => previous.map(requestItem => requestItem.id === item.id ? {
+        ...requestItem,
+        status,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user.id,
+      } : requestItem));
+      toast(status === 'completed' ? 'Solicitação marcada como concluída.' : 'Solicitação cancelada.', status === 'completed' ? 'success' : 'info');
+    } catch (err: any) {
+      toast(err?.message || 'Não foi possível revisar a solicitação.', 'error');
+    } finally {
+      setActingId(null);
+    }
+  };
+
   const moderate = async (item: ModerationItem, action: 'ignore' | 'remove') => {
     if (actingId) return;
     if (action === 'remove' && !window.confirm(`Excluir definitivamente este ${item.content_type === 'event' ? 'evento' : item.content_type === 'comment' ? 'comentário' : 'post'}?`)) return;
@@ -270,6 +337,7 @@ export default function Admin() {
 
   const refreshActiveTab = () => {
     if (activeTab === 'history') void loadHistory();
+    else if (activeTab === 'accounts') void loadAccountRequests();
     else if (activeTab === 'usage') void loadUsage();
     else if (activeTab === 'errors') void loadErrors();
     else void loadQueue();
@@ -285,10 +353,11 @@ export default function Admin() {
     <div className="max-w-xl mx-auto py-10"><Card className="text-center"><AlertTriangle className="w-12 h-12 mx-auto text-amber-500 mb-4" /><h1 className="text-xl font-bold text-slate-900 dark:text-white">Acesso restrito</h1><p className="text-sm text-slate-500 mt-2">Sua conta não possui permissão de administrador ou moderador.</p><Button variant="secondary" className="mt-5" onClick={() => navigate('/')}>Voltar ao feed</Button></Card></div>
   );
 
-  const refreshing = activeTab === 'history' ? historyLoading : activeTab === 'usage' ? usageLoading : activeTab === 'errors' ? errorsLoading : loading;
+  const refreshing = activeTab === 'history' ? historyLoading : activeTab === 'accounts' ? accountsLoading : activeTab === 'usage' ? usageLoading : activeTab === 'errors' ? errorsLoading : loading;
   const tabs: { id: AdminTab; label: string; icon: typeof AlertTriangle; count?: number }[] = [
     { id: 'pending', label: 'Pendentes', icon: AlertTriangle, count: items.length },
     { id: 'history', label: 'Histórico', icon: HistoryIcon, count: historyItems.length },
+    { id: 'accounts', label: 'Contas', icon: UserX, count: pendingAccountRequests.length },
     { id: 'usage', label: 'Uso', icon: BarChart3 },
     { id: 'errors', label: 'Erros', icon: Bug, count: recentErrorCount },
   ];
@@ -352,6 +421,57 @@ export default function Admin() {
               const meta = typeMeta[item.content_type] || typeMeta.post; const Icon = meta.icon; const kept = item.moderation_action === 'ignore';
               return <Card key={item.report_id} className="!p-5"><div className="flex flex-col gap-4"><div className="flex items-start gap-3"><div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${kept ? 'bg-emerald-50 dark:bg-emerald-500/10' : 'bg-red-50 dark:bg-red-500/10'}`}><Icon className={`w-5 h-5 ${kept ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`} /></div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">{meta.label}</span><span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-md ${kept ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300'}`}>{kept ? 'Mantido' : 'Excluído'}</span><span className="text-[11px] text-slate-400">{formatDate(item.moderated_at)}</span></div><h2 className="text-base font-bold text-slate-900 dark:text-white mt-2">{item.content_title || 'Conteúdo moderado'}</h2><p className="text-sm text-slate-600 dark:text-slate-300 mt-1 whitespace-pre-line line-clamp-4">{item.content_preview || 'Sem prévia arquivada.'}</p></div></div><div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 p-3"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Motivo original</p><p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mt-1">{item.reason}</p></div><div className="grid sm:grid-cols-2 gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400"><p><strong className="text-slate-700 dark:text-slate-300">Autor:</strong> {item.content_author_name || 'Não identificado'}</p><p><strong className="text-slate-700 dark:text-slate-300">Denunciante:</strong> {item.reporter_name || 'Não identificado'}</p><p><strong className="text-slate-700 dark:text-slate-300">Moderado por:</strong> {item.moderator_name || 'Administrador'}</p><p><strong className="text-slate-700 dark:text-slate-300">Denunciado em:</strong> {formatDate(item.reported_at)}</p></div></div></Card>;
             })}</div>
+          )}
+        </>
+      )}
+
+      {activeTab === 'accounts' && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <Card className="!p-4"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Pendentes</p><p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{pendingAccountRequests.length}</p></Card>
+            <Card className="!p-4"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Concluídas</p><p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{accountRequests.filter(item => item.status === 'completed').length}</p></Card>
+            <Card className="!p-4 col-span-2 sm:col-span-1"><p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Canceladas</p><p className="text-2xl font-black text-slate-900 dark:text-white mt-1">{accountRequests.filter(item => item.status === 'cancelled').length}</p></Card>
+          </div>
+          <Card className="!p-4 bg-sky-50/60 dark:bg-sky-500/5 !border-sky-100 dark:!border-sky-500/15">
+            <p className="text-xs leading-relaxed text-sky-800 dark:text-sky-200"><strong>Importante:</strong> marcar como concluída não apaga o usuário do Supabase Auth. Faça a exclusão efetiva pelo painel seguro do Supabase e só depois encerre a solicitação aqui.</p>
+          </Card>
+          {accountsError && <Card className="!border-red-200 dark:!border-red-500/20"><p className="text-sm font-semibold text-red-600 dark:text-red-400">{accountsError}</p></Card>}
+          {!accountsLoading && !accountsError && accountRequests.length === 0 ? (
+            <EmptyState icon={UserX} title="Nenhuma solicitação de exclusão" description="Quando um morador solicitar a exclusão da conta, ela aparecerá aqui." />
+          ) : (
+            <div className="space-y-3">
+              {accountRequests.map(item => {
+                const pending = item.status === 'pending';
+                const busy = actingId === item.id;
+                return (
+                  <Card key={item.id} className="!p-5">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${pending ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' : item.status === 'completed' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}><UserX className="h-5 w-5" /></div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-sm font-bold text-slate-900 dark:text-white">{item.user_name}</h2>
+                            <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wider ${pending ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300' : item.status === 'completed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>{pending ? 'Pendente' : item.status === 'completed' ? 'Concluída' : 'Cancelada'}</span>
+                          </div>
+                          <p className="mt-1 break-all font-mono text-[10px] text-slate-400">ID: {item.user_id}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Solicitada em {formatDate(item.requested_at)}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Motivo informado</p>
+                        <p className="mt-1 whitespace-pre-line text-sm text-slate-700 dark:text-slate-200">{item.reason || 'Nenhum motivo informado.'}</p>
+                      </div>
+                      {pending && (
+                        <div className="flex flex-col justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800 sm:flex-row">
+                          <Button type="button" variant="secondary" size="sm" disabled={Boolean(actingId)} onClick={() => void reviewAccountRequest(item, 'cancelled')}><Ban className="h-4 w-4" /> Cancelar pedido</Button>
+                          <Button type="button" size="sm" disabled={Boolean(actingId)} onClick={() => void reviewAccountRequest(item, 'completed')}>{busy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Confirmar exclusão concluída</Button>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </>
       )}

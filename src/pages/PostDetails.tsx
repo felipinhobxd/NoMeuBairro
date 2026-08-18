@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2, Bookmark } from 'lucide-react';
+import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2, Bookmark, ClipboardCheck, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo, useToast } from '../components/UI';
 import PublicServiceContact from '../components/PublicServiceContact';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
-import { shareContent } from '../utils/share';
+import { postShareUrl, shareContent } from '../utils/share';
 import { useSavedItems } from '../hooks/useSavedItems';
 import { cn } from '../utils/cn';
-import type { Comment, Post, PostStatus } from '../types';
+import { getPublicServiceContact } from '../utils/publicServices';
+import type { Comment, OfficialProtocolStatus, Post, PostStatus } from '../types';
 
 type StatusHistoryItem = { id: string; old_status?: PostStatus | null; new_status: PostStatus; source: string; changed_at: string };
 const lifecycleLabels: Record<PostStatus, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' };
@@ -17,6 +18,11 @@ const lifecycleClasses: Record<PostStatus, string> = {
   pending: 'bg-amber-500',
   in_progress: 'bg-blue-500',
   resolved: 'bg-emerald-600',
+};
+const officialStatusLabels: Record<OfficialProtocolStatus, string> = {
+  submitted: 'Protocolado',
+  in_progress: 'Em atendimento',
+  resolved: 'Resolvido pelo órgão',
 };
 
 function ThreadComment({
@@ -133,6 +139,7 @@ export default function PostDetails() {
   const [statusHistory, setStatusHistory] = useState<StatusHistoryItem[]>([]);
   const [canModerate, setCanModerate] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<PostStatus | null>(null);
+  const [savingProtocol, setSavingProtocol] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -146,7 +153,7 @@ export default function PostDetails() {
 
       const postPromise = supabase
         .from('posts')
-        .select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,users(name,avatar_url),post_supports(count)')
+        .select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,users(name,avatar_url),post_supports(count)')
         .eq('id', postId)
         .maybeSingle();
       const commentsPromise = loadComments(postId);
@@ -183,6 +190,10 @@ export default function PostDetails() {
           locationPrecision: data.location_precision || undefined,
           latitude: data.latitude == null ? undefined : Number(data.latitude),
           longitude: data.longitude == null ? undefined : Number(data.longitude),
+          officialAgency: data.official_agency || undefined,
+          officialProtocol: data.official_protocol || undefined,
+          officialStatus: data.official_status || undefined,
+          officialContactedAt: data.official_contacted_at || undefined,
           supports: data.post_supports?.[0]?.count ?? 0,
           commentsCount: data.comments_count ?? 0,
           createdAt: data.created_at,
@@ -266,9 +277,39 @@ export default function PostDetails() {
     }
   };
 
+  const handleProtocolSave = async () => {
+    if (!postId || !post || savingProtocol) return;
+    const protocol = post.officialProtocol?.trim() || '';
+    setSavingProtocol(true);
+    try {
+      const contact = getPublicServiceContact(post.category);
+      const officialStatus = protocol ? post.officialStatus || 'submitted' : null;
+      const { error } = await supabase.from('posts').update({
+        official_agency: protocol ? contact.authority : null,
+        official_protocol: protocol || null,
+        official_status: officialStatus,
+        official_contacted_at: protocol ? post.officialContactedAt || new Date().toISOString() : null,
+      }).eq('id', postId);
+      if (error) {
+        toast(error.message || 'Não foi possível salvar o protocolo.', 'error');
+        return;
+      }
+      setPost(previous => previous ? {
+        ...previous,
+        officialAgency: protocol ? contact.authority : undefined,
+        officialProtocol: protocol || undefined,
+        officialStatus: officialStatus || undefined,
+        officialContactedAt: protocol ? previous.officialContactedAt || new Date().toISOString() : undefined,
+      } : previous);
+      toast(protocol ? 'Protocolo oficial atualizado.' : 'Protocolo removido.', protocol ? 'success' : 'info');
+    } finally {
+      setSavingProtocol(false);
+    }
+  };
+
   const handleShare = async () => {
     if (!post) return;
-    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/#/post/${post.id}` });
+    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: postShareUrl(post.id) });
     if (result === 'copied') toast('Link do relato copiado!');
     else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error');
   };
@@ -284,6 +325,7 @@ export default function PostDetails() {
   const anonymous = post.authorId === 'anonymous';
   const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
   const canManageStatus = isMyPost(post) || canModerate;
+  const canManageOfficial = canManageStatus && !anonymous && Boolean(user?.id);
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -315,6 +357,55 @@ export default function PostDetails() {
           {post.location && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" /> {post.location}</span>}
         </div>
         <PublicServiceContact category={post.category} />
+
+        {(post.officialProtocol || canManageOfficial) && (
+          <section className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10" aria-labelledby="official-protocol-title">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 ring-1 ring-emerald-100 dark:bg-slate-900 dark:text-emerald-300 dark:ring-emerald-500/20"><ClipboardCheck className="h-4 w-4" /></div>
+              <div className="min-w-0 flex-1">
+                <p id="official-protocol-title" className="text-sm font-extrabold text-emerald-950 dark:text-emerald-100">Acompanhamento no órgão oficial</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">O No Meu Bairro exibe o protocolo informado pelo autor; o atendimento continua sob responsabilidade do órgão.</p>
+              </div>
+            </div>
+
+            {post.officialProtocol && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-xl bg-white px-3 py-2.5 ring-1 ring-emerald-100 dark:bg-slate-900 dark:ring-emerald-500/20 sm:col-span-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Protocolo</p>
+                  <p className="mt-1 break-all text-sm font-bold text-slate-900 dark:text-white">{post.officialProtocol}</p>
+                  {post.officialAgency && <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{post.officialAgency}</p>}
+                </div>
+                <div className="rounded-xl bg-white px-3 py-2.5 ring-1 ring-emerald-100 dark:bg-slate-900 dark:ring-emerald-500/20">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Situação</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900 dark:text-white">{officialStatusLabels[post.officialStatus || 'submitted']}</p>
+                </div>
+              </div>
+            )}
+
+            {canManageOfficial && (
+              <details className="mt-3 rounded-xl border border-emerald-200/80 bg-white/70 p-3 dark:border-emerald-500/20 dark:bg-slate-900/60" open={!post.officialProtocol}>
+                <summary className="cursor-pointer text-xs font-bold text-emerald-800 dark:text-emerald-300">{post.officialProtocol ? 'Editar protocolo' : 'Adicionar protocolo oficial'}</summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Número do protocolo</span>
+                    <input value={post.officialProtocol || ''} onChange={event => setPost(previous => previous ? { ...previous, officialProtocol: event.target.value.slice(0, 80) } : previous)} placeholder="Ex: 2026-123456" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Situação no órgão</span>
+                    <select value={post.officialStatus || 'submitted'} onChange={event => setPost(previous => previous ? { ...previous, officialStatus: event.target.value as OfficialProtocolStatus } : previous)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                      <option value="submitted">Protocolado</option>
+                      <option value="in_progress">Em atendimento</option>
+                      <option value="resolved">Resolvido pelo órgão</option>
+                    </select>
+                  </label>
+                </div>
+                <button type="button" onClick={() => void handleProtocolSave()} disabled={savingProtocol} className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 text-sm font-bold text-white transition hover:bg-emerald-800 disabled:opacity-60 sm:w-auto">
+                  <Save className="h-4 w-4" /> {savingProtocol ? 'Salvando...' : 'Salvar alteração'}
+                </button>
+              </details>
+            )}
+          </section>
+        )}
 
         {canManageStatus && (
           <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">

@@ -15,4 +15,19 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          const normalized = id.replace(/\\/g, '/');
+          if (!normalized.includes('/node_modules/')) return undefined;
+          if (normalized.includes('/leaflet/') || normalized.includes('/react-leaflet/')) return 'vendor-maps';
+          if (normalized.includes('/@supabase/')) return 'vendor-supabase';
+          if (normalized.includes('/lucide-react/')) return 'vendor-icons';
+          if (normalized.includes('/react/') || normalized.includes('/react-dom/') || normalized.includes('/react-router') || normalized.includes('/@remix-run/')) return 'vendor-react';
+          return undefined;
+        },
+      },
+    },
+  },
 });

@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "check:bundle": "node scripts/check-bundle-size.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run check:bundle"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^1.12.0",

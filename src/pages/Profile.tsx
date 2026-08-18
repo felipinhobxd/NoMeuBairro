@@ -9,6 +9,7 @@ import { Card, Button, Modal, Input, useToast } from '../components/UI';
 import { cn } from '../utils/cn';
 import { communityBadges, EMPTY_COMMUNITY_CONTRIBUTION, getCommunityBadgeProgress, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
 import { supabase } from '../utils/supabase';
+import AccountDataControls from '../components/AccountDataControls';
 
 type Point = { x: number; y: number };
 type SourceImage = { src: string; width: number; height: number };
@@ -295,6 +296,8 @@ export default function Profile() {
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800"><button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"><LogOut className="w-4 h-4" /> Sair da conta</button></div>
         </div>
       </Card>
+
+      <AccountDataControls />
 
       <Modal open={showEditProfile} onClose={closeEditProfile} title="Editar perfil">
         <div className="space-y-5 pb-8 sm:pb-0">

@@ -18,11 +18,12 @@ import {
 import MapPicker from '../components/MapPicker';
 import { cn } from '../utils/cn';
 import { supabase } from '../utils/supabase';
-import { shareContent } from '../utils/share';
+import { postShareUrl, shareContent } from '../utils/share';
 import { useSavedItems } from '../hooks/useSavedItems';
 import { clearLocalDraft, readLocalDraft, saveLocalDraft } from '../utils/localDrafts';
-import type { PostCategory, PostStatus, Comment } from '../types';
+import type { PostCategory, PostStatus, Comment, OfficialProtocolStatus, SimilarPost } from '../types';
 import PublicServiceContact from '../components/PublicServiceContact';
+import { getPublicServiceContact } from '../utils/publicServices';
 
 const catIcons: Record<string, typeof AlertTriangle> = {
   buraco: AlertTriangle, iluminacao: Lightbulb, fios: Zap,
@@ -111,6 +112,10 @@ export default function Feed() {
   const [fLng, setFLng] = useState<number | undefined>();
   const [fd, setFd] = useState('');
   const [fi, setFi] = useState('');
+  const [fOfficialProtocol, setFOfficialProtocol] = useState('');
+  const [fOfficialStatus, setFOfficialStatus] = useState<OfficialProtocolStatus>('submitted');
+  const [similarPosts, setSimilarPosts] = useState<SimilarPost[]>([]);
+  const [creatingPost, setCreatingPost] = useState(false);
   const [canModerate, setCanModerate] = useState(false);
   const [isFollowingNeighborhood, setIsFollowingNeighborhood] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
@@ -164,7 +169,7 @@ export default function Feed() {
 
   const discardPostDraft = useCallback(() => {
     if (user?.id) clearLocalDraft(`nmb-draft:post:${user.id}`);
-    setFt(''); setFc('buraco'); setFl(''); setFd(''); setFi(''); setFLat(undefined); setFLng(undefined);
+    setFt(''); setFc('buraco'); setFl(''); setFd(''); setFi(''); setFLat(undefined); setFLng(undefined); setFOfficialProtocol(''); setFOfficialStatus('submitted'); setSimilarPosts([]);
     setPostDraftRestored(false);
     toast('Rascunho descartado.', 'info');
   }, [user?.id, toast]);
@@ -291,17 +296,41 @@ export default function Feed() {
     } else { setNearMe(false); setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude }); }
   }, [nearMe, currentNeighborhood, toast]);
 
-  const handleCreate = useCallback(async () => {
+  const handleCreate = useCallback(async (allowDuplicate = false) => {
     if (!ft.trim() || !fd.trim() || !fl.trim()) return;
-    const result = await addPost({ title: ft, description: fd, category: fc, location: fl, imageUrl: fi || undefined, latitude: fLat, longitude: fLng });
-    if (result.error) {
-      toast(result.error?.message || 'Não foi possível publicar o relato.', 'error');
-      return;
+    setCreatingPost(true);
+    try {
+      const result = await addPost({
+        title: ft,
+        description: fd,
+        category: fc,
+        location: fl,
+        imageUrl: fi || undefined,
+        latitude: fLat,
+        longitude: fLng,
+        officialAgency: getPublicServiceContact(fc).authority,
+        officialProtocol: fOfficialProtocol || undefined,
+        officialStatus: fOfficialStatus,
+        allowDuplicate,
+      });
+      if (result.duplicates?.length) {
+        setSimilarPosts(result.duplicates);
+        toast('Encontramos relatos parecidos perto desse local.', 'info');
+        return;
+      }
+      if (result.error) {
+        toast(result.error?.message || 'Não foi possível publicar o relato.', 'error');
+        return;
+      }
+      if (user?.id) clearLocalDraft(`nmb-draft:post:${user.id}`);
+      setPostDraftRestored(false);
+      setShowCreate(false);
+      setFt(''); setFc('buraco'); setFl(''); setFd(''); setFi(''); setFLat(undefined); setFLng(undefined); setFOfficialProtocol(''); setFOfficialStatus('submitted'); setSimilarPosts([]);
+      toast('Relato publicado com bairro identificado!');
+    } finally {
+      setCreatingPost(false);
     }
-    if (user?.id) clearLocalDraft(`nmb-draft:post:${user.id}`);
-    setPostDraftRestored(false);
-    setShowCreate(false); setFt(''); setFc('buraco'); setFl(''); setFd(''); setFi(''); setFLat(undefined); setFLng(undefined); toast('Relato publicado com bairro identificado!');
-  }, [ft, fd, fl, fc, fi, fLat, fLng, addPost, toast, user?.id]);
+  }, [ft, fd, fl, fc, fi, fLat, fLng, fOfficialProtocol, fOfficialStatus, addPost, toast, user?.id]);
 
   const handlePostCepSearch = async (cep: string) => { const clean = cep.replace(/\D/g, ''); if (clean.length === 8) { try { const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`); const data = await res.json(); if (!data.erro) { setFl(data.bairro ? `${data.logradouro} — ${data.bairro}` : data.logradouro); toast('Rua e bairro localizados pelo CEP!'); } } catch {} } };
   const handleSupport = useCallback(async (id: string) => { if (!isAuthenticated || !user) { toast('Entre ou crie uma conta para apoiar um relato.', 'info'); navigate('/login'); return; } const isSupported = supported.has(id); const result = await supportPost(id); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o apoio.', 'error'); return; } const next = new Set(supported); if (isSupported) next.delete(id); else { next.add(id); setHeartsAnimating(prev => { const n = new Set(prev); n.add(id); return n; }); setTimeout(() => setHeartsAnimating(prev => { const n = new Set(prev); n.delete(id); return n; }), 500); } setSupported(next); try { localStorage.setItem('anb-supported', JSON.stringify([...next])); } catch {} }, [supported, supportPost, isAuthenticated, user, toast, navigate]);
@@ -311,7 +340,7 @@ export default function Feed() {
   const handleDeletePost = useCallback(async (postId: string) => { const result = await deletePost(postId); if (!result.ok) { toast(result.error || 'Não foi possível excluir o relato.', 'error'); return; } setConfirmDeleteId(null); toast('Relato excluído.', 'info'); }, [deletePost, toast]);
   const handleDeleteComment = useCallback(async (commentId: string) => { const result = await deleteComment(commentId); if (!result.ok) { toast(result.error || 'Não foi possível excluir o comentário.', 'error'); return; } toast('Comentário excluído.', 'info'); }, [deleteComment, toast]);
   const handleStatusChange = useCallback(async (postId: string, status: PostStatus) => { const result = await updatePostStatus(postId, status); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o status.', 'error'); return; } const labels: Record<string, string> = { pending: 'Aberto', in_progress: 'Em andamento', resolved: 'Resolvido' }; toast(`Status atualizado para \"${labels[status]}\".`); }, [updatePostStatus, toast]);
-  const handleSharePost = useCallback(async (post: { id: string; title: string; description: string }) => { const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/#/post/${post.id}` }); if (result === 'copied') toast('Link do relato copiado!'); else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error'); }, [toast]);
+  const handleSharePost = useCallback(async (post: { id: string; title: string; description: string }) => { const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: postShareUrl(post.id) }); if (result === 'copied') toast('Link do relato copiado!'); else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error'); }, [toast]);
   const toggleNeighborhoodFollow = useCallback(async () => {
     if (!isNeighborhoodSelected || !currentNeighborhood.name) { toast('Selecione um bairro para acompanhá-lo.', 'info'); return; }
     if (!user?.id) { toast('Entre ou crie uma conta para seguir bairros.', 'info'); navigate('/login'); return; }
@@ -388,6 +417,17 @@ export default function Feed() {
               {post.latitude != null && post.longitude != null && <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-3 py-2.5"><MapPin className="w-4 h-4 shrink-0 text-emerald-600" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">Localização no mapa</p><p className="text-[10px] text-slate-400 truncate">{post.location}</p></div><button type="button" onClick={() => navigate('/mapa')} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-400 shrink-0">Ver mapa</button></div>}
               <div className="flex items-center gap-2 mt-3 flex-wrap"><CategoryBadge category={post.category} />{resolvedArea && <span className="inline-flex items-center gap-1 rounded-md bg-orange-50 dark:bg-orange-500/10 px-2 py-1 text-[11px] font-bold text-orange-800 dark:text-orange-300"><MapPin className="w-3 h-3" />{resolvedArea}</span>}{nearMe && distanceFromUser != null && <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300"><LocateFixed className="w-3 h-3" />{distanceFromUser < 1 ? `${Math.round(distanceFromUser * 1000)} m` : `${distanceFromUser.toFixed(1)} km`}</span>}{post.location && <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" />{post.location}</span>}</div>
               <PublicServiceContact category={post.category} compact />
+              {post.officialProtocol && (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-extrabold text-emerald-900 dark:text-emerald-200">Protocolo oficial: {post.officialProtocol}</p>
+                    <span className="rounded-full bg-white px-2 py-1 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200 dark:bg-slate-900 dark:text-emerald-300 dark:ring-emerald-500/20">
+                      {post.officialStatus === 'resolved' ? 'Resolvido pelo órgão' : post.officialStatus === 'in_progress' ? 'Em atendimento' : 'Protocolado'}
+                    </span>
+                  </div>
+                  {post.officialAgency && <p className="mt-1 text-[11px] text-emerald-800/80 dark:text-emerald-300/80">{post.officialAgency}</p>}
+                </div>
+              )}
               <div className="flex items-center gap-3 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800"><button onClick={() => handleSupport(post.id)} className={cn('flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95', supported.has(post.id) ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400')} aria-label="Apoiar"><Heart className={cn('w-4 h-4', supported.has(post.id) && 'fill-current', heartsAnimating.has(post.id) && 'animate-heart-pop')} /><span>{post.supports > 0 ? post.supports : ''} Apoio{post.supports !== 1 ? 's' : ''}</span></button><button onClick={() => toggleComments(post.id)} className={cn('flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95', isExpanded ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400')} aria-expanded={isExpanded}><MessageSquare className="w-4 h-4" /><span>{postComments.length > 0 ? postComments.length : ''} Comentário{postComments.length !== 1 ? 's' : ''}</span></button></div>
               <div className="flex items-center gap-1 sm:gap-2 mt-2 flex-wrap"><button onClick={() => setShowReport({ postId: post.id })} className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-500/10 transition-all"><AlertTriangle className="w-3.5 h-3.5" />Denunciar</button><Link to={`/post/${post.id}`} className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all"><ExternalLink className="w-3.5 h-3.5" />Abrir</Link><button type="button" onClick={() => void handleSharePost(post)} className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all"><Share2 className="w-3.5 h-3.5" />Compartilhar</button><button type="button" onClick={() => void toggleSavedPost(post.id)} className={cn('flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold transition-all', isPostSaved(post.id) ? 'text-orange-700 bg-orange-50 dark:text-orange-300 dark:bg-orange-500/10' : 'text-slate-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10')} aria-pressed={isPostSaved(post.id)}><Bookmark className={cn('w-3.5 h-3.5', isPostSaved(post.id) && 'fill-current')} />{isPostSaved(post.id) ? 'Salvo' : 'Salvar'}</button>{canManageStatus && <div className="flex items-center gap-1.5 ml-auto overflow-x-auto no-scrollbar pb-1">{post.status !== 'pending' && <button onClick={() => handleStatusChange(post.id, 'pending')} className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 active:scale-95 transition-all">Aberto</button>}{post.status !== 'in_progress' && <button onClick={() => handleStatusChange(post.id, 'in_progress')} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 ring-1 ring-blue-200 dark:ring-blue-500/20 transition-all">Em andamento</button>}{post.status !== 'resolved' && <button onClick={() => handleStatusChange(post.id, 'resolved')} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 ring-1 ring-blue-200 dark:ring-emerald-500/20 transition-all">Resolvido</button>}</div>}</div>
               {isExpanded && <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3 animate-fade-in">{rootComments.length === 0 ? <p className="text-xs text-slate-400 text-center py-4">Nenhum comentário ainda. Seja o primeiro!</p> : <div className="space-y-3">{rootComments.map((rc: Comment) => { const replies = postComments.filter((c: Comment) => c.parentId === rc.id); return <CommentItem key={rc.id} comment={rc} replies={replies} allComments={postComments} onReply={(c) => handleReplyClick(post.id, c)} replyingTo={curReply} onDelete={handleDeleteComment} onReport={(id) => setShowReport({ commentId: id })} currentUser={user} isPostOwner={user?.id === post.authorId} />; })}</div>}{curReply && replyTarget && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-400 animate-slide-down"><CornerDownRight className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Respondendo a <strong>{replyTarget.authorName}</strong></span><button onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: null }))} className="ml-auto p-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors" aria-label="Cancelar resposta"><X className="w-3.5 h-3.5" /></button></div>}{isAuthenticated ? <div className="flex items-start gap-2"><div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">{user?.name.charAt(0).toUpperCase()}</div><div className="flex-1 relative"><textarea value={commentTexts[post.id] ?? ''} onChange={e => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitComment(post.id); } }} placeholder={curReply ? `Responder a ${replyTarget?.authorName ?? ''}...` : 'Escreva um comentário...'} rows={2} className="w-full px-3 py-2 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors resize-none" /><button onClick={() => handleSubmitComment(post.id)} disabled={!(commentTexts[post.id] ?? '').trim()} className={cn('absolute right-2 bottom-2 p-1.5 rounded-lg transition-all', (commentTexts[post.id] ?? '').trim() ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm' : 'text-slate-300 dark:text-slate-600')} aria-label="Enviar"><Send className="w-4 h-4" /></button></div></div> : <button onClick={() => navigate('/login')} className="w-full py-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:text-emerald-400 transition-colors">Entre na sua conta para comentar</button>}</div>}
@@ -396,7 +436,84 @@ export default function Feed() {
         </div>
       </>}
       <button onClick={openCreate} className="fixed bottom-24 lg:bottom-8 right-4 sm:right-6 z-30 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl shadow-emerald-600/30 hover:shadow-emerald-600/50 transition-all flex items-center justify-center active:scale-95 group" aria-label="Criar novo relato" title={isAuthenticated ? 'Criar novo relato' : 'Entre ou crie uma conta para publicar'}><Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" /></button>
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Novo Relato"><form onSubmit={e => { e.preventDefault(); void handleCreate(); }} className="space-y-4">{postDraftRestored && <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10"><div><p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Rascunho recuperado automaticamente</p><p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Salvo neste dispositivo para você não perder o que estava escrevendo.</p></div><button type="button" onClick={discardPostDraft} className="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline shrink-0">Descartar</button></div>}<Input label="Título" placeholder="Ex: Buraco na Rua das Flores" value={ft} onChange={e => setFt(e.target.value)} required /><Select label="Categoria" options={catOpts} value={fc} onChange={e => setFc(e.target.value as PostCategory)} required /><PublicServiceContact category={fc} /><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => setFl(e.target.value)} required /><Input label="Buscar por CEP" placeholder="Ex: 81460296" maxLength={8} onChange={e => handlePostCepSearch(e.target.value)} /></div><MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} /><Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required /><ImageUpload value={fi} onChange={setFi} /><p className="text-[10px] text-slate-400">Título, categoria, localização e descrição são salvos automaticamente neste dispositivo por até 30 dias. Imagens não entram no rascunho.</p><div className="flex gap-3 pt-2"><Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button><Button type="submit" className="flex-1" disabled={!ft.trim() || !fd.trim() || !fl.trim()}>Publicar relato</Button></div></form></Modal>
+      <Modal
+        open={showCreate}
+        onClose={() => { setShowCreate(false); setSimilarPosts([]); }}
+        title="Novo Relato"
+      >
+        <form onSubmit={e => { e.preventDefault(); void handleCreate(false); }} className="space-y-4">
+          {postDraftRestored && (
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+              <div>
+                <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Rascunho recuperado automaticamente</p>
+                <p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Salvo neste dispositivo para você não perder o que estava escrevendo.</p>
+              </div>
+              <button type="button" onClick={discardPostDraft} className="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline shrink-0">Descartar</button>
+            </div>
+          )}
+          <Input label="Título" placeholder="Ex: Buraco na Rua das Flores" value={ft} onChange={e => { setFt(e.target.value); setSimilarPosts([]); }} required />
+          <Select label="Categoria" options={catOpts} value={fc} onChange={e => { setFc(e.target.value as PostCategory); setSimilarPosts([]); }} required />
+          <PublicServiceContact category={fc} />
+          <details className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+            <summary className="cursor-pointer text-sm font-bold text-slate-800 dark:text-slate-100">Já tenho um protocolo oficial</summary>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Se você já falou com {getPublicServiceContact(fc).authority}, informe o número para a comunidade acompanhar.</p>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Input label="Número do protocolo (opcional)" placeholder="Ex: 2026-123456" value={fOfficialProtocol} onChange={e => setFOfficialProtocol(e.target.value.slice(0, 80))} />
+              <Select
+                label="Situação no órgão"
+                value={fOfficialStatus}
+                onChange={e => setFOfficialStatus(e.target.value as OfficialProtocolStatus)}
+                options={[
+                  { value: 'submitted', label: 'Protocolado' },
+                  { value: 'in_progress', label: 'Em atendimento' },
+                  { value: 'resolved', label: 'Resolvido pelo órgão' },
+                ]}
+              />
+            </div>
+          </details>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => { setFl(e.target.value); setSimilarPosts([]); }} required />
+            <Input label="Buscar por CEP" placeholder="Ex: 81460296" maxLength={8} onChange={e => handlePostCepSearch(e.target.value)} />
+          </div>
+          <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); setSimilarPosts([]); }} address={fl} />
+          <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
+          <ImageUpload value={fi} onChange={setFi} />
+          {similarPosts.length > 0 && (
+            <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold text-amber-900 dark:text-amber-100">Talvez este problema já tenha sido relatado</p>
+                  <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-200">Abrir e apoiar um relato existente concentra a força da comunidade. Se for outro ponto, você ainda pode publicar.</p>
+                </div>
+              </div>
+              <div className="mt-3 space-y-2">
+                {similarPosts.map(similar => (
+                  <button
+                    key={similar.id}
+                    type="button"
+                    onClick={() => { setShowCreate(false); navigate('/post/' + similar.id); }}
+                    className="w-full rounded-xl bg-white p-3 text-left ring-1 ring-amber-200 transition hover:ring-amber-400 dark:bg-slate-900 dark:ring-amber-500/20"
+                  >
+                    <span className="block text-sm font-bold text-slate-900 dark:text-white">{similar.title}</span>
+                    <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{similar.location} · {similar.distanceM < 1000 ? Math.round(similar.distanceM) + ' m' : (similar.distanceM / 1000).toFixed(1) + ' km'}</span>
+                  </button>
+                ))}
+              </div>
+              <Button type="button" variant="secondary" className="mt-3 w-full" disabled={creatingPost} onClick={() => void handleCreate(true)}>
+                {creatingPost ? 'Publicando...' : 'É outro problema — publicar mesmo assim'}
+              </Button>
+            </div>
+          )}
+          <p className="text-[10px] text-slate-400">Título, categoria, localização e descrição são salvos automaticamente neste dispositivo por até 30 dias. Imagens não entram no rascunho.</p>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" className="flex-1" onClick={() => { setShowCreate(false); setSimilarPosts([]); }}>Cancelar</Button>
+            <Button type="submit" className="flex-1" disabled={!ft.trim() || !fd.trim() || !fl.trim() || creatingPost}>
+              {creatingPost ? 'Verificando...' : similarPosts.length > 0 ? 'Verificar novamente' : 'Publicar relato'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
       <Modal open={!!showReport} onClose={() => setShowReport(null)} title="Denunciar Conteúdo"><div className="space-y-4"><p className="text-sm text-slate-500">Ajude-nos a manter o bairro seguro. Por que você está denunciando este conteúdo?</p><Select label="Categoria da Denúncia" options={[{ value: '', label: 'Selecione uma categoria...' }, { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' }, { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' }, { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' }, { value: 'Conteúdo inadequado ou ilegal', label: 'Conteúdo inadequado ou ilegal' }, { value: 'Outros', label: 'Outros' }]} value={reportReason} onChange={e => setReportReason(e.target.value)} /><Textarea label="Detalhes da denúncia (opcional)" placeholder="Descreva melhor o problema para ajudar o administrador..." value={reportDetail} onChange={e => setReportDetail(e.target.value)} rows={3} /><div className="flex gap-3 pt-2"><Button variant="secondary" className="flex-1" onClick={() => setShowReport(null)}>Cancelar</Button><Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={handleSendReport} disabled={!reportReason}>Enviar Denúncia</Button></div></div></Modal>
       <ImageViewer src={zoomedImage || ''} open={!!zoomedImage} onClose={() => setZoomedImage(null)} />
     </div>

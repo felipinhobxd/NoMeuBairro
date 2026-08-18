@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, type ReactNode, useEffect } from 'react';
-import type { Post, PostCategory, PostStatus, CommunityEvent, EventType, Comment, AppNotification, LocationPrecision } from '../types';
+import type { Post, PostCategory, PostStatus, CommunityEvent, EventType, Comment, AppNotification, LocationPrecision, OfficialProtocolStatus, SimilarPost } from '../types';
 import { useAuth } from './AuthContext';
 import { canonicalNeighborhoodName, curitibaNeighborhoods, normalizeNeighborhoodText } from './NeighborhoodContext';
 import { supabase } from '../utils/supabase';
@@ -13,6 +13,22 @@ type ResolvedLocation = {
   locality?: string;
   precision?: LocationPrecision;
 };
+
+type AddPostInput = {
+  title: string;
+  description: string;
+  category: PostCategory;
+  location: string;
+  imageUrl?: string;
+  latitude?: number;
+  longitude?: number;
+  officialAgency?: string;
+  officialProtocol?: string;
+  officialStatus?: OfficialProtocolStatus;
+  allowDuplicate?: boolean;
+};
+
+type AddPostResult = { data?: any; error: any; duplicates?: SimilarPost[] };
 
 interface DataContextType {
   posts: Post[];
@@ -31,8 +47,8 @@ interface DataContextType {
   loadComments: (postId: string, force?: boolean) => Promise<void>;
   loadMyAttendance: (force?: boolean) => Promise<void>;
   fetchData: () => Promise<void>;
-  addPost: (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
-  addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
+  addPost: (data: AddPostInput) => Promise<AddPostResult>;
+  addAnonymousPost: (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number; allowDuplicate?: boolean }) => Promise<AddPostResult>;
   addEvent: (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => Promise<{ error: any }>;
   supportPost: (postId: string) => Promise<ActionResult>;
   addComment: (postId: string, content: string, parentId?: string) => Promise<ActionResult>;
@@ -103,6 +119,10 @@ function mapPost(p: any): Post {
     locationPrecision: p.location_precision || undefined,
     latitude: p.latitude == null ? undefined : Number(p.latitude),
     longitude: p.longitude == null ? undefined : Number(p.longitude),
+    officialAgency: p.official_agency || undefined,
+    officialProtocol: p.official_protocol || undefined,
+    officialStatus: p.official_status || undefined,
+    officialContactedAt: p.official_contacted_at || undefined,
     supports: p.post_supports?.[0]?.count ?? p.supports ?? 0,
     commentsCount: p.comments_count ?? 0,
     createdAt: p.created_at, updatedAt: p.updated_at,
@@ -172,7 +192,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const request = (async () => {
       setPostsLoading(true);
       try {
-        const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
+        const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
         if (error) { console.error('Erro ao carregar relatos:', error); return; }
         setPosts((data || []).map(mapPost)); postsLoadedRef.current = true;
       } finally { setPostsLoading(false); postsRequestRef.current = null; }
@@ -268,12 +288,54 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return () => { void supabase.removeChannel(channel); };
   }, [fetchNotificationById, user?.id]);
 
-  const addPost = useCallback(async (data: { title: string; description: string; category: PostCategory; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
+  const addPost = useCallback(async (data: AddPostInput): Promise<AddPostResult> => {
     if (!user) return { error: 'Not authenticated' };
+    const resolved = await resolveLocation(data.location, data.latitude, data.longitude);
+    if (!data.allowDuplicate && resolved.latitude != null && resolved.longitude != null) {
+      const { data: similarRows, error: similarError } = await supabase.rpc('find_similar_posts', {
+        p_category: data.category,
+        p_latitude: resolved.latitude,
+        p_longitude: resolved.longitude,
+        p_radius_m: 600,
+        p_limit: 5,
+      });
+      if (similarError) console.warn('Não foi possível verificar relatos próximos:', similarError);
+      const duplicates: SimilarPost[] = (similarRows || []).map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        status: row.status,
+        location: row.location || '',
+        neighborhood: row.neighborhood || undefined,
+        locality: row.locality || undefined,
+        latitude: Number(row.latitude),
+        longitude: Number(row.longitude),
+        distanceM: Number(row.distance_m),
+        createdAt: row.created_at,
+      }));
+      if (duplicates.length > 0) return { error: null, duplicates };
+    }
     const stored = await storePostImage(data.imageUrl, user.id);
     if (stored.error) return { error: { message: `Não foi possível salvar a imagem: ${stored.error}` } };
-    const resolved = await resolveLocation(data.location, data.latitude, data.longitude);
-    const { data: inserted, error } = await supabase.from('posts').insert({ author_id: user.id, category: data.category, title: data.title, description: data.description, image_url: stored.url, location: data.location, latitude: resolved.latitude, longitude: resolved.longitude, neighborhood: resolved.neighborhood || null, locality: resolved.locality || null, location_precision: resolved.precision || null, is_anonymous: false }).select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,created_at,updated_at,comments_count').single();
+    const protocol = data.officialProtocol?.trim() || null;
+    const { data: inserted, error } = await supabase.from('posts').insert({
+      author_id: user.id,
+      category: data.category,
+      title: data.title,
+      description: data.description,
+      image_url: stored.url,
+      location: data.location,
+      latitude: resolved.latitude,
+      longitude: resolved.longitude,
+      neighborhood: resolved.neighborhood || null,
+      locality: resolved.locality || null,
+      location_precision: resolved.precision || null,
+      is_anonymous: false,
+      official_agency: protocol ? data.officialAgency?.trim() || null : null,
+      official_protocol: protocol,
+      official_status: protocol ? data.officialStatus || 'submitted' : null,
+      official_contacted_at: protocol ? new Date().toISOString() : null,
+    }).select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').single();
     if (error || !inserted) {
       await deleteStoredPostImage(stored.url);
       return { data: inserted, error } as any;
@@ -283,7 +345,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return { data: inserted, error: null } as any;
   }, [user]);
 
-  const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number }) => {
+  const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number; allowDuplicate?: boolean }): Promise<AddPostResult> => {
     const editToken = createAnonymousEditToken();
     const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', {
       body: {
@@ -295,13 +357,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
         latitude: data.latitude,
         longitude: data.longitude,
         editToken,
+        allowDuplicate: data.allowDuplicate === true,
       },
     });
+    if (!error && result?.duplicateCheck && Array.isArray(result.duplicates)) {
+      const duplicates: SimilarPost[] = result.duplicates.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: '',
+        status: row.status,
+        location: row.location || '',
+        neighborhood: row.neighborhood || undefined,
+        locality: row.locality || undefined,
+        latitude: Number(row.latitude),
+        longitude: Number(row.longitude),
+        distanceM: Number(row.distanceM),
+        createdAt: row.createdAt,
+      }));
+      return { error: null, duplicates };
+    }
     if (error || !result?.ok || !result?.postId) {
       return { error: { message: result?.error || error?.message || 'Não foi possível enviar a denúncia.' } };
     }
     saveAnonControl(result.postId, editToken);
-    const { data: row } = await supabase.from('posts').select('id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,created_at,updated_at,comments_count').eq('id', result.postId).maybeSingle();
+    const { data: row } = await supabase.from('posts').select('id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').eq('id', result.postId).maybeSingle();
     if (row) {
       const nextPost = mapPost({ ...row, author_id: null, is_anonymous: true, post_supports: [{ count: 0 }] });
       postsLoadedRef.current = true;

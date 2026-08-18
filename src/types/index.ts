@@ -1,4 +1,5 @@
 export type PostStatus = 'pending' | 'in_progress' | 'resolved';
+export type OfficialProtocolStatus = 'submitted' | 'in_progress' | 'resolved';
 export type PostCategory = 'buraco' | 'iluminacao' | 'fios' | 'saneamento' | 'limpeza' | 'transporte' | 'seguranca' | 'outros';
 export type AccountType = 'resident' | 'company';
 export type LocationPrecision = 'exact' | 'reverse' | 'neighborhood';
@@ -38,10 +39,28 @@ export interface Post {
   locationPrecision?: LocationPrecision;
   latitude?: number;
   longitude?: number;
+  officialAgency?: string;
+  officialProtocol?: string;
+  officialStatus?: OfficialProtocolStatus;
+  officialContactedAt?: string;
   supports: number;
   commentsCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SimilarPost {
+  id: string;
+  title: string;
+  description: string;
+  status: PostStatus;
+  location: string;
+  neighborhood?: string;
+  locality?: string;
+  latitude: number;
+  longitude: number;
+  distanceM: number;
+  createdAt: string;
 }
 
 export interface Comment {

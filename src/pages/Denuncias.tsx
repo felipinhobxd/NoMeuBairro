@@ -5,6 +5,7 @@ import { Card, Textarea, Select, Button, Input, ImageUpload } from '../component
 import { EmergencyContacts } from '../components/Safety';
 import MapPicker from '../components/MapPicker';
 import { useData } from '../contexts/DataContext';
+import type { SimilarPost } from '../types';
 
 const denunciaTypes = [
   { value: '', label: 'Selecione o tipo de denúncia...' },
@@ -32,10 +33,12 @@ export default function Denuncias() {
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
   const [fi, setFi] = useState('');
+  const [similarPosts, setSimilarPosts] = useState<SimilarPost[]>([]);
 
   const handleCepSearch = async (value: string) => {
     const clean = value.replace(/\D/g, '').slice(0, 8);
     setCep(clean);
+    setSimilarPosts([]);
     if (clean.length !== 8) return;
 
     try {
@@ -74,9 +77,10 @@ export default function Denuncias() {
   }, [cep]);
 
   const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
+    async (e?: React.FormEvent, allowDuplicate = false) => {
+      e?.preventDefault();
       setError('');
+      if (!allowDuplicate) setSimilarPosts([]);
       if (!tipo || !descricao.trim()) {
         setError('Selecione o tipo e descreva a denúncia.');
         return;
@@ -110,8 +114,14 @@ export default function Denuncias() {
         imageUrl: fi || undefined,
         latitude,
         longitude,
+        allowDuplicate,
       });
       setIsSubmitting(false);
+
+      if (result.duplicates?.length) {
+        setSimilarPosts(result.duplicates);
+        return;
+      }
 
       if (result.error) {
         setError(result.error.message || 'Não foi possível enviar a denúncia. Tente novamente.');
@@ -126,6 +136,7 @@ export default function Denuncias() {
       setFLat(undefined);
       setFLng(undefined);
       setFi('');
+      setSimilarPosts([]);
     },
     [tipo, descricao, localizacao, fLat, fLng, fi, addAnonymousPost, geocodeBeforeSubmit],
   );
@@ -184,7 +195,7 @@ export default function Denuncias() {
         <div className="md:col-span-2">
           <Card>
             <form onSubmit={handleSubmit} className="space-y-5">
-              <Select label="Tipo de denúncia" options={denunciaTypes} value={tipo} onChange={e => setTipo(e.target.value)} required />
+              <Select label="Tipo de denúncia" options={denunciaTypes} value={tipo} onChange={e => { setTipo(e.target.value); setSimilarPosts([]); }} required />
               <Textarea label="Descrição" placeholder="Descreva a situação com o nível de detalhe que se sentir confortável. Todo relato é importante e será tratado com seriedade..." value={descricao} onChange={e => setDescricao(e.target.value)} rows={6} required />
 
               <div className="space-y-4">
@@ -198,7 +209,7 @@ export default function Denuncias() {
                     label="Localização (Rua/Bairro)"
                     placeholder="Ex.: Rua das Flores, 123"
                     value={localizacao}
-                    onChange={e => { setLocalizacao(e.target.value); setCep(''); setFLat(undefined); setFLng(undefined); }}
+                    onChange={e => { setLocalizacao(e.target.value); setCep(''); setFLat(undefined); setFLng(undefined); setSimilarPosts([]); }}
                   />
                   <Input
                     label="Buscar por CEP"
@@ -211,8 +222,31 @@ export default function Denuncias() {
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Se você informar rua ou CEP, o endereço será exibido no relato e o ponto aparecerá no mapa. Se deixar em branco, será mostrado “Local Privado”.
                 </p>
-                <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={localizacao} />
+                <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); setSimilarPosts([]); }} address={localizacao} />
               </div>
+
+              {similarPosts.length > 0 && (
+                <div role="alert" className="rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-300" />
+                    <div>
+                      <p className="text-sm font-extrabold text-amber-900 dark:text-amber-100">Há relatos de segurança próximos</p>
+                      <p className="mt-1 text-xs leading-relaxed text-amber-800 dark:text-amber-200">Confira se a situação já foi publicada. Se for um caso diferente, você ainda pode enviar sem revelar seu perfil.</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {similarPosts.map(similar => (
+                      <button key={similar.id} type="button" onClick={() => navigate('/post/' + similar.id)} className="w-full rounded-xl bg-white p-3 text-left ring-1 ring-amber-200 hover:ring-amber-400 dark:bg-slate-900 dark:ring-amber-500/20">
+                        <span className="block text-sm font-bold text-slate-900 dark:text-white">{similar.title}</span>
+                        <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{similar.location} · {similar.distanceM < 1000 ? Math.round(similar.distanceM) + ' m' : (similar.distanceM / 1000).toFixed(1) + ' km'}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <Button type="button" variant="secondary" className="mt-3 w-full" disabled={isSubmitting} onClick={() => void handleSubmit(undefined, true)}>
+                    {isSubmitting ? 'Enviando...' : 'É outra situação — enviar mesmo assim'}
+                  </Button>
+                </div>
+              )}
 
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-400">
                 <Lock className="w-3.5 h-3.5" />
@@ -227,7 +261,7 @@ export default function Denuncias() {
                       <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg>
                       Enviando...
                     </span>
-                  ) : <><Send className="w-4 h-4" />Enviar denúncia</>}
+                  ) : <><Send className="w-4 h-4" />{similarPosts.length > 0 ? 'Verificar novamente' : 'Enviar denúncia'}</>}
                 </Button>
               </div>
             </form>

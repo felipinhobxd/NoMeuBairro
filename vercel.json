@@ -1,9 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/relato/:postId",
+      "destination": "/api/share-post?id=:postId"
+    }
+  ],
   "redirects": [
     {
       "source": "/post/:postId",
-      "destination": "/#/post/:postId",
+      "destination": "/relato/:postId",
       "permanent": false
     }
   ]
