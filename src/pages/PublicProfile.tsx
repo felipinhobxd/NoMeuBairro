@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { Card, Button, StatusBadge, CategoryBadge, timeAgo } from '../components/UI';
 import { cn } from '../utils/cn';
-import { communityBadges, getEarnedCommunityBadges } from '../utils/communityBadges';
+import { communityBadges, EMPTY_COMMUNITY_CONTRIBUTION, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
 
 type PublicPost = {
   id: string;
@@ -23,15 +23,9 @@ type PublicPost = {
   createdAt: string;
 };
 
-type PublicStats = {
-  count: number;
-  evCount: number;
-  supportsReceived: number;
-  earnedBadges: string[];
-  posts: PublicPost[];
-};
+type PublicStats = CommunityContributionSummary & { earnedBadges: string[]; posts: PublicPost[] };
 
-const EMPTY_STATS: PublicStats = { count: 0, evCount: 0, supportsReceived: 0, earnedBadges: [], posts: [] };
+const EMPTY_STATS: PublicStats = { ...EMPTY_COMMUNITY_CONTRIBUTION, earnedBadges: [], posts: [] };
 
 export default function PublicProfile() {
   const { userId } = useParams();
@@ -53,7 +47,7 @@ export default function PublicProfile() {
       try {
         const [profileResult, summaryResult, postsResult] = await Promise.all([
           supabase.from('public_user_profiles').select('id,name,avatar_url,reputation,created_at').eq('id', userId).maybeSingle(),
-          supabase.rpc('get_community_profile_summary', { p_user_id: userId }).maybeSingle(),
+          supabase.rpc('get_community_contribution_summary', { p_user_id: userId }),
           supabase
             .from('posts')
             .select('id,category,status,title,description,location,neighborhood,locality,created_at,post_supports(count)')
@@ -71,12 +65,8 @@ export default function PublicProfile() {
         }
 
         setProfileUser(profileResult.data);
-        const summary = summaryResult.data;
-        const count = Number(summary?.posts_count || 0);
-        const evCount = Number(summary?.events_count || 0);
-        const supportsReceived = Number(summary?.supports_received || 0);
-        const badgePosts = Array.from({ length: count }, (_, index) => ({ status: index === 0 && summary?.has_resolved ? 'resolved' : 'pending' }));
-        const earnedBadges = getEarnedCommunityBadges({ posts: badgePosts, supportsReceived, eventsCount: evCount });
+        const summary = normalizeCommunityContribution(summaryResult.data);
+        const earnedBadges = getEarnedCommunityBadges(summary);
         const posts: PublicPost[] = (postsResult.data || []).map((post: any) => ({
           id: post.id,
           category: post.category,
@@ -89,7 +79,7 @@ export default function PublicProfile() {
           supports: post.post_supports?.[0]?.count ?? 0,
           createdAt: post.created_at,
         }));
-        setStats({ count, evCount, supportsReceived, earnedBadges, posts });
+        setStats({ ...summary, earnedBadges, posts });
       } catch (err) {
         console.error('Erro ao carregar perfil público:', err);
         if (active) {
@@ -146,18 +136,19 @@ export default function PublicProfile() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { icon: MessageSquare, value: stats.count, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' },
-          { icon: Heart, value: stats.supportsReceived, label: 'Apoios', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' },
-          { icon: CalendarDays, value: stats.evCount, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' },
+          { icon: MessageSquare, value: stats.postsCount, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { icon: CheckCircle2, value: stats.resolvedCount, label: 'Resolvidos', iconCls: 'text-teal-600 dark:text-teal-400', bgCls: 'bg-teal-50 dark:bg-teal-500/10' },
+          { icon: Heart, value: stats.supportsReceived, label: 'Apoios recebidos', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' },
+          { icon: CalendarDays, value: stats.eventsCount, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' },
         ].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
           <Card key={label} className="text-center !p-4"><div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}><Icon className={cn('w-5 h-5', iconCls)} /></div><p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="text-[11px] text-slate-500 font-medium">{label}</p></Card>
         ))}
       </div>
 
       <Card>
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Conquistas de {displayName.split(' ')[0]}</h3>
+        <div className="mb-4"><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos de contribuição de {displayName.split(' ')[0]}</h3><p className="text-[11px] text-slate-500 mt-1">Reconhecimentos por participação comunitária; não formam um ranking.</p></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {communityBadges.map(badge => {
             const earned = stats.earnedBadges.includes(badge.key);

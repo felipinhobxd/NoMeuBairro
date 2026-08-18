@@ -7,12 +7,12 @@ import {
 } from 'lucide-react';
 import { Card, Button, Modal, Input, useToast } from '../components/UI';
 import { cn } from '../utils/cn';
-import { communityBadges, getEarnedCommunityBadges } from '../utils/communityBadges';
+import { communityBadges, EMPTY_COMMUNITY_CONTRIBUTION, getCommunityBadgeProgress, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
 import { supabase } from '../utils/supabase';
 
 type Point = { x: number; y: number };
 type SourceImage = { src: string; width: number; height: number };
-type ProfileStats = { myPosts: number; myEvents: number; supportsReceived: number; earnedBadges: string[] };
+type ProfileStats = CommunityContributionSummary & { earnedBadges: string[] };
 
 function loadImage(file: File): Promise<SourceImage> {
   return new Promise((resolve, reject) => {
@@ -170,7 +170,7 @@ export default function Profile() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [stats, setStats] = useState<ProfileStats>({ myPosts: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] });
+  const [stats, setStats] = useState<ProfileStats>({ ...EMPTY_COMMUNITY_CONTRIBUTION, earnedBadges: [] });
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [editName, setEditName] = useState('');
@@ -187,18 +187,14 @@ export default function Profile() {
   useEffect(() => {
     let active = true;
     if (!user?.id) {
-      setStats({ myPosts: 0, myEvents: 0, supportsReceived: 0, earnedBadges: [] });
+      setStats({ ...EMPTY_COMMUNITY_CONTRIBUTION, earnedBadges: [] });
       return () => { active = false; };
     }
 
-    void supabase.rpc('get_community_profile_summary', { p_user_id: user.id }).maybeSingle().then(({ data, error }) => {
+    void supabase.rpc('get_community_contribution_summary', { p_user_id: user.id }).then(({ data, error }) => {
       if (!active || error || !data) return;
-      const myPosts = Number(data.posts_count || 0);
-      const myEvents = Number(data.events_count || 0);
-      const supportsReceived = Number(data.supports_received || 0);
-      const badgePosts = Array.from({ length: myPosts }, (_, index) => ({ status: index === 0 && data.has_resolved ? 'resolved' : 'pending' }));
-      const earnedBadges = getEarnedCommunityBadges({ posts: badgePosts, supportsReceived, eventsCount: myEvents });
-      setStats({ myPosts, myEvents, supportsReceived, earnedBadges });
+      const summary = normalizeCommunityContribution(data);
+      setStats({ ...summary, earnedBadges: getEarnedCommunityBadges(summary) });
     });
 
     return () => { active = false; };
@@ -278,16 +274,16 @@ export default function Profile() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {[{ icon: MessageSquare, value: stats.myPosts, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' }, { icon: Heart, value: stats.supportsReceived, label: 'Apoios recebidos', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' }, { icon: CalendarDays, value: stats.myEvents, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' }].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[{ icon: MessageSquare, value: stats.postsCount, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' }, { icon: CheckCircle2, value: stats.resolvedCount, label: 'Resolvidos', iconCls: 'text-teal-600 dark:text-teal-400', bgCls: 'bg-teal-50 dark:bg-teal-500/10' }, { icon: Heart, value: stats.supportsGiven, label: 'Apoios dados', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' }, { icon: CalendarDays, value: stats.eventsAttended, label: 'Participações', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' }].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
           <Card key={label} className="text-center !p-4"><div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}><Icon className={cn('w-5 h-5', iconCls)} /></div><p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="text-[11px] text-slate-500 font-medium">{label}</p></Card>
         ))}
       </div>
 
       <Card>
-        <div className="flex items-center justify-between mb-4"><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos e Conquistas</h3><span className="text-xs text-slate-400">{stats.earnedBadges.length}/{communityBadges.length}</span></div>
+        <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos de contribuição</h3><p className="text-[11px] text-slate-500 mt-1">Reconhecimentos por ações comunitárias — sem ranking entre moradores.</p></div><span className="text-xs text-slate-400 shrink-0">{stats.earnedBadges.length}/{communityBadges.length}</span></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {communityBadges.map(badge => { const earned = stats.earnedBadges.includes(badge.key); return <div key={badge.key} className={cn('flex flex-col items-center gap-2 p-3 rounded-xl text-center transition-all', earned ? 'bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20' : 'bg-slate-50 dark:bg-slate-800 opacity-50')}><span className="text-2xl">{earned ? badge.emoji : '🔒'}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500">{badge.desc}</p></div>{earned && <CheckCircle2 className="w-4 h-4 text-amber-500" />}</div>; })}
+          {communityBadges.map(badge => { const earned = stats.earnedBadges.includes(badge.key); const progress = getCommunityBadgeProgress(badge, stats); return <div key={badge.key} className={cn('flex flex-col items-center gap-2 p-3 rounded-xl text-center transition-all', earned ? 'bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20' : 'bg-slate-50 dark:bg-slate-800/70 ring-1 ring-slate-100 dark:ring-slate-700')}><span className={cn('text-2xl', !earned && 'grayscale opacity-45')}>{badge.emoji}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500 min-h-7">{badge.desc}</p></div>{earned ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400"><CheckCircle2 className="w-3.5 h-3.5" /> Conquistado</span> : <div className="w-full"><div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(progress.ratio * 100)}%` }} /></div><p className="mt-1 text-[9px] font-bold text-slate-400">Progresso {progress.text}</p></div>}</div>; })}
         </div>
       </Card>
 
