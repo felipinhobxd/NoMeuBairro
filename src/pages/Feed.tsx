@@ -8,7 +8,7 @@ import {
 import {
   Plus, Filter, ChevronDown, Heart, MessageSquare,
   MapPin, ShieldAlert, AlertTriangle, Lightbulb, Zap,
-  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell,
+  Trash2, Bus, Shield, HelpCircle, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell, CheckCircle2, CalendarDays, Briefcase,
 } from 'lucide-react';
 import {
   EmptyState, Card, Modal, Input, Textarea, Select, Button,
@@ -31,6 +31,18 @@ const statusOpts: { id: PostStatus | 'all'; label: string }[] = [
 ];
 const catOpts = Object.entries(postCategories).map(([v, d]) => ({ value: v, label: `${d.emoji} ${d.label}` }));
 const CREATE_POST_INTENT_KEY = 'nmb-after-login-action';
+
+type NeighborhoodWeeklySummary = {
+  area: string;
+  newReports: number;
+  previousReports: number;
+  resolvedReports: number;
+  upcomingEvents: number;
+  newJobs: number;
+  topCategory?: PostCategory | null;
+  topCategoryCount: number;
+  updatedAt?: string;
+};
 
 function CommentItem({ comment, replies, allComments, onReply, replyingTo, onDelete, onReport, currentUser, isPostOwner }: {
   comment: Comment; replies: Comment[]; allComments: Comment[]; onReply: (c: Comment) => void; replyingTo: string | null; onDelete: (id: string) => void; onReport: (id: string) => void; currentUser: any; isPostOwner: boolean;
@@ -95,6 +107,8 @@ export default function Feed() {
   const [canModerate, setCanModerate] = useState(false);
   const [isFollowingNeighborhood, setIsFollowingNeighborhood] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [neighborhoodSummary, setNeighborhoodSummary] = useState<NeighborhoodWeeklySummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   useEffect(() => { if (currentNeighborhood) setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude }); }, [currentNeighborhood]);
   useEffect(() => {
@@ -140,6 +154,29 @@ export default function Feed() {
       });
     return () => { active = false; };
   }, [user?.id, isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind]);
+
+  useEffect(() => {
+    let active = true;
+    if (!isNeighborhoodSelected || !currentNeighborhood.name) {
+      setNeighborhoodSummary(null);
+      setSummaryLoading(false);
+      return () => { active = false; };
+    }
+    setSummaryLoading(true);
+    const p_kind = currentNeighborhood.kind === 'locality' ? 'locality' : 'official';
+    void supabase.rpc('get_neighborhood_weekly_summary', { p_area: currentNeighborhood.name, p_kind })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          console.warn('Não foi possível carregar o resumo do bairro:', error);
+          setNeighborhoodSummary(null);
+        } else {
+          setNeighborhoodSummary(data as NeighborhoodWeeklySummary);
+        }
+        setSummaryLoading(false);
+      });
+    return () => { active = false; };
+  }, [isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind]);
 
   const openCreate = useCallback(() => {
     if (!isAuthenticated || !user) {
@@ -227,10 +264,35 @@ export default function Feed() {
   }, [isNeighborhoodSelected, currentNeighborhood.name, currentNeighborhood.kind, user?.id, followLoading, isFollowingNeighborhood, navigate, toast]);
   const handleSendReport = async () => { if (!reportReason.trim()) return; if (!isAuthenticated || !user) { toast('Entre ou crie uma conta para denunciar conteúdo.', 'info'); navigate('/login'); return; } const finalReason = reportDetail.trim() ? `${reportReason}: ${reportDetail}` : reportReason; const result = await reportContent({ ...showReport, reason: finalReason }); if (!result.ok) { toast(result.error || 'Não foi possível enviar a denúncia.', 'error'); return; } setShowReport(null); setReportReason(''); setReportDetail(''); toast('Denúncia enviada para análise do administrador.'); };
   const displayNeighborhood = currentNeighborhood.name || 'Todos os bairros';
+  const reportDelta = neighborhoodSummary ? neighborhoodSummary.newReports - neighborhoodSummary.previousReports : 0;
+  const topSummaryCategory = neighborhoodSummary?.topCategory ? postCategories[neighborhoodSummary.topCategory] : null;
 
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 sm:gap-4"><div className="min-w-0"><h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Relatos Comunitários</h1><p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{isNeighborhoodSelected ? <>Bairro selecionado: <strong className="text-emerald-600 dark:text-emerald-400">{displayNeighborhood}</strong></> : <>Mostrando relatos de <strong className="text-emerald-600 dark:text-emerald-400">todos os bairros</strong></>}</p>{isNeighborhoodSelected && <p className="text-[11px] text-slate-400 mt-1">Siga este bairro para receber novidades no No Meu Bairro.</p>}</div><div className="flex items-center gap-2 shrink-0">{isNeighborhoodSelected && <button type="button" onClick={() => void toggleNeighborhoodFollow()} disabled={followLoading} className={cn('min-h-10 inline-flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl text-xs font-bold ring-1 transition-all disabled:opacity-60', isFollowingNeighborhood ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20' : 'bg-white text-slate-600 ring-slate-200 hover:text-emerald-700 hover:ring-emerald-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-800')} aria-pressed={isFollowingNeighborhood} title={isFollowingNeighborhood ? `Deixar de seguir ${displayNeighborhood}` : `Seguir ${displayNeighborhood}`}><Bell className={cn('w-4 h-4', isFollowingNeighborhood && 'fill-current')} /><span className="hidden sm:inline">{followLoading ? 'Salvando...' : isFollowingNeighborhood ? 'Seguindo' : 'Seguir bairro'}</span></button>}<button onClick={() => { fetchData(); toast('Atualizando relatos...', 'info'); }} disabled={loading} className="p-2.5 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all active:scale-90 disabled:opacity-50" aria-label="Atualizar relatos"><RefreshCw className={cn('w-5 h-5', loading && 'animate-spin')} /></button></div></div>
+      {isNeighborhoodSelected && (
+        <Card className="!p-4 sm:!p-5 !bg-gradient-to-br !from-emerald-50/80 !to-white dark:!from-emerald-500/5 dark:!to-slate-900 !ring-emerald-100 dark:!ring-emerald-500/15">
+          <div className="flex items-start justify-between gap-3">
+            <div><p className="text-[11px] font-black uppercase tracking-[0.14em] text-emerald-700 dark:text-emerald-400">O que mudou no seu bairro</p><h2 className="mt-1 text-base font-bold text-slate-900 dark:text-white">{displayNeighborhood} · últimos 7 dias</h2></div>
+            {!summaryLoading && neighborhoodSummary && <span className={cn('shrink-0 rounded-lg px-2 py-1 text-[10px] font-bold', reportDelta > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300' : reportDelta < 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400')}>{reportDelta === 0 ? 'volume estável' : `${reportDelta > 0 ? '+' : ''}${reportDelta} relato${Math.abs(reportDelta) === 1 ? '' : 's'} vs. semana anterior`}</span>}
+          </div>
+          {summaryLoading ? (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">{[0,1,2,3].map(item => <div key={item} className="h-16 rounded-xl bg-white/70 dark:bg-slate-800/60 animate-pulse" />)}</div>
+          ) : neighborhoodSummary ? (
+            <>
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { label: 'Novos relatos', value: neighborhoodSummary.newReports, icon: MessageSquare, cls: 'text-orange-600 bg-orange-50 dark:bg-orange-500/10' },
+                  { label: 'Resolvidos', value: neighborhoodSummary.resolvedReports, icon: CheckCircle2, cls: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },
+                  { label: 'Eventos próximos', value: neighborhoodSummary.upcomingEvents, icon: CalendarDays, cls: 'text-violet-600 bg-violet-50 dark:bg-violet-500/10' },
+                  { label: 'Novas vagas', value: neighborhoodSummary.newJobs, icon: Briefcase, cls: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10' },
+                ].map(item => <div key={item.label} className="rounded-xl bg-white/80 dark:bg-slate-900/70 p-3 ring-1 ring-slate-100 dark:ring-slate-800"><div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', item.cls)}><item.icon className="w-4 h-4" /></div><p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{item.value}</p><p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{item.label}</p></div>)}
+              </div>
+              {topSummaryCategory && neighborhoodSummary.topCategoryCount > 0 && <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Tema mais relatado na semana: <strong className="text-slate-700 dark:text-slate-200">{topSummaryCategory.emoji} {topSummaryCategory.label}</strong> ({neighborhoodSummary.topCategoryCount}).</p>}
+            </>
+          ) : <p className="mt-3 text-xs text-slate-400">O resumo deste bairro está temporariamente indisponível.</p>}
+        </Card>
+      )}
       {isAuthenticated && user && posts.length === 0 && <Card className="!bg-gradient-to-br !from-emerald-50 !to-teal-50 dark:!from-emerald-500/5 dark:!to-teal-500/5 !ring-emerald-200 dark:!ring-emerald-500/20 animate-fade-in"><div className="flex items-start gap-4"><div className="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 shadow-sm"><span className="text-2xl" role="img" aria-hidden="true">👋</span></div><div className="flex-1 min-w-0"><h3 className="text-sm font-bold text-emerald-900 dark:text-emerald-300">Olá, {user.name.split(' ')[0]}! Bem-vindo ao No Meu Bairro.</h3><p className="text-xs text-emerald-700/70 dark:text-emerald-400/60 mt-1 leading-relaxed">Este é o espaço onde moradores compartilham problemas e notícias de toda Curitiba. 🌿</p><Button size="sm" className="mt-3" onClick={openCreate}><Sparkles className="w-3.5 h-3.5" /> Criar meu primeiro relato</Button></div></div></Card>}
       <div className="space-y-2"><div className="relative"><Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" /><input type="text" placeholder="Buscar por título, bairro, CIC ou CEP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} onKeyDown={async (e) => { if (e.key === 'Enter') { const clean = searchQuery.replace(/\D/g, ''); if (clean.length === 8) { toast('Buscando CEP...', 'info'); try { const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`); const data = await res.json(); if (!data.erro) { const ok = await setNeighborhoodByCep(clean); if (ok) { toast('Bairro localizado: ' + data.bairro); setSearchQuery(''); } } else toast('CEP não encontrado.', 'error'); } catch { toast('Erro ao buscar CEP.', 'error'); } } } }} className="w-full pl-11 pr-10 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors" aria-label="Buscar relatos ou selecionar bairro por CEP" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors z-10" aria-label="Limpar busca"><X className="w-4 h-4" /></button>}</div></div>
       <Card className="!p-3"><div className="flex items-center gap-2"><div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1" role="tablist">{statusOpts.map(s => { const count = statusCounts[s.id] ?? 0; return <button key={s.id} role="tab" aria-selected={activeStatus === s.id} onClick={() => setActiveStatus(s.id)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all', activeStatus === s.id ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')}>{s.label}{count > 0 && <span className={cn('px-1.5 py-0.5 rounded-md text-[10px] font-bold leading-none', activeStatus === s.id ? 'bg-white/20' : 'bg-slate-200/80 dark:bg-slate-700')}>{count}</span>}</button>; })}</div>{isAuthenticated && <button onClick={() => setOnlyMine(!onlyMine)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0', onlyMine ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')} aria-pressed={onlyMine} title="Mostrar apenas meus relatos"><UserCheck className="w-3.5 h-3.5" /><span className="hidden sm:inline">Meus</span></button>}<button onClick={toggleNearMe} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0', nearMe ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700')} aria-pressed={nearMe} title="Mostrar relatos perto de mim"><MapPin className="w-3.5 h-3.5" /><span className="hidden sm:inline">Perto de mim</span></button><button onClick={() => setShowFilters(!showFilters)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0', showFilters ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400')}><Filter className="w-3.5 h-3.5" /><span className="hidden sm:inline">Categorias</span><ChevronDown className={cn('w-3 h-3 transition-transform', showFilters && 'rotate-180')} /></button></div>{showFilters && <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">{Object.entries(postCategories).map(([key, def]) => { const Icon = catIcons[key] ?? HelpCircle; return <button key={key} onClick={() => setActiveCategory(activeCategory === key ? null : key as PostCategory)} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all', activeCategory === key ? 'bg-emerald-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700')}><Icon className="w-3.5 h-3.5" />{def.label}</button>; })}</div>}</Card>
