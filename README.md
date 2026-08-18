@@ -317,7 +317,7 @@ Ao criar outro ambiente, utilize as migrations versionadas do projeto e configur
 
 A versão pública é hospedada na Vercel:
 
-**https://no-meu-bairro.vercel.app/**
+**https://nomeubairro.vercel.app/**
 
 O fluxo de CI executa uma verificação de build no GitHub Actions e o projeto é publicado pela integração com a Vercel.
 
