@@ -69,6 +69,7 @@ const CompanyDashboard = lazyWithRetry(() => import('./pages/CompanyDashboard'),
 const CompanyPublicProfile = lazyWithRetry(() => import('./pages/CompanyPublicProfile'), 'empresa-publica');
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'notificacoes');
 const PostDetails = lazyWithRetry(() => import('./pages/PostDetails'), 'post');
+const Saved = lazyWithRetry(() => import('./pages/Saved'), 'salvos');
 const Admin = lazyWithRetry(() => import('./pages/Admin'), 'admin');
 const Privacy = lazyWithRetry(() => import('./pages/Privacy'), 'privacidade');
 const Terms = lazyWithRetry(() => import('./pages/Terms'), 'termos');
@@ -116,6 +117,7 @@ export default function App() {
                         <Route path="/empresa/:companyId" element={<CompanyPublicProfile />} />
                         <Route path="/notificacoes" element={<Notifications />} />
                         <Route path="/post/:postId" element={<PostDetails />} />
+                        <Route path="/salvos" element={<Saved />} />
                         <Route path="/admin" element={<Admin />} />
                         <Route path="/privacidade" element={<Privacy />} />
                         <Route path="/termos" element={<Terms />} />

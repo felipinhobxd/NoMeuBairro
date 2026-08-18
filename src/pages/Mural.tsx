@@ -5,11 +5,12 @@ import { useNavigate, Link } from 'react-router-dom';
 import {
   useNeighborhood, neighborhoodMatches, neighborhoodSearchText, normalizeNeighborhoodText,
 } from '../contexts/NeighborhoodContext';
-import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw, Search, X, LocateFixed, Map, AlertTriangle } from 'lucide-react';
+import { CalendarDays, MapPin, Plus, Clock, Trash2, Users, CheckCircle2, RefreshCw, Search, X, LocateFixed, Map, AlertTriangle, Bookmark } from 'lucide-react';
 import { EmptyState, Card, Modal, Input, Textarea, Select, Button, useToast } from '../components/UI';
 import MapPicker from '../components/MapPicker';
 import { cn } from '../utils/cn';
 import type { EventType } from '../types';
+import { useSavedItems } from '../hooks/useSavedItems';
 
 const evTypes: Record<EventType, { label: string; emoji: string }> = {
   feira: { label: 'Feira', emoji: '🛍️' }, saude: { label: 'Saúde', emoji: '❤️' },
@@ -45,6 +46,7 @@ export default function Mural() {
   } = useData();
   const { currentNeighborhood, isNeighborhoodSelected } = useNeighborhood();
   const { toast } = useToast();
+  const { isSaved: isEventSaved, toggleSaved: toggleSavedEvent } = useSavedItems('event');
 
   const [activeType, setActiveType] = useState<EventType | 'all'>('all');
   const [showCreate, setShowCreate] = useState(false);
@@ -323,6 +325,7 @@ export default function Mural() {
 
                     <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-50 dark:border-slate-800/50">
                       <button onClick={() => { if (!isAuthenticated) { navigate('/login'); return; } setShowReport({ eventId: ev.id, title: ev.title }); }} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"><AlertTriangle className="w-3.5 h-3.5" />Denunciar</button>
+                      <button type="button" onClick={() => void toggleSavedEvent(ev.id)} className={cn('inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors', isEventSaved(ev.id) ? 'text-orange-700 bg-orange-50 dark:text-orange-300 dark:bg-orange-500/10' : 'text-slate-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10')} aria-pressed={isEventSaved(ev.id)}><Bookmark className={cn('w-3.5 h-3.5', isEventSaved(ev.id) && 'fill-current')} />{isEventSaved(ev.id) ? 'Salvo' : 'Salvar'}</button>
                       <button onClick={() => openAttendees(ev.id, ev.title)} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100"><Users className="w-3.5 h-3.5" /><span>{ev.attendanceCount || 0}</span></button>
                       <Button size="sm" variant="secondary" className={cn('h-8 !px-3 !text-[11px]', isAttending && '!bg-emerald-600 !text-white !ring-0 hover:!bg-emerald-700')} onClick={() => void handleToggleAttendance(ev.id)} aria-pressed={isAttending}>
                         <CheckCircle2 className="w-3.5 h-3.5" />{isAttending ? 'Confirmado' : 'Vou comparecer'}

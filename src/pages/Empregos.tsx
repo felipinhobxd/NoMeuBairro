@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Briefcase, Search, MapPin, Mail, MessageCircle, Building2, Rocket, ArrowRight,
   SlidersHorizontal, X, FileText, ClipboardList, CheckCircle2, UserRoundCheck,
-  Pencil, Loader2, Undo2, LocateFixed,
+  Pencil, Loader2, Undo2, LocateFixed, Bookmark,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, EmptyState, Modal } from '../components/UI';
 import { supabase } from '../utils/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { neighborhoodSearchText, normalizeNeighborhoodText } from '../contexts/NeighborhoodContext';
+import { useSavedItems } from '../hooks/useSavedItems';
+import { cn } from '../utils/cn';
 import type {
   JobPost, EmploymentType, WorkModel, UserResume, JobApplication, JobApplicationStatus,
 } from '../types/jobs';
@@ -120,6 +122,7 @@ function distanceKm(a: UserPoint, b: UserPoint) {
 export default function Empregos() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isSaved: isJobSaved, toggleSaved: toggleSavedJob } = useSavedItems('job');
   const [jobs, setJobs] = useState<JobPost[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -402,8 +405,9 @@ export default function Empregos() {
             const activeApplication = application && application.status !== 'withdrawn' ? application : null;
             const area = [job.locality, job.neighborhood].filter(Boolean).join(' · ');
             const distance = userLocation && job.latitude != null && job.longitude != null ? distanceKm(userLocation, { lat: job.latitude, lng: job.longitude }) : null;
-            return <Card key={job.id} id={`job-${job.id}`} className="!p-4 sm:!p-6 scroll-mt-28">
-              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+            return <Card key={job.id} id={`job-${job.id}`} className="relative !p-4 sm:!p-6 scroll-mt-28">
+              <button type="button" onClick={() => void toggleSavedJob(job.id)} className={cn('absolute top-4 right-4 sm:top-5 sm:right-5 z-10 w-10 h-10 rounded-xl flex items-center justify-center ring-1 transition-all', isJobSaved(job.id) ? 'bg-orange-50 text-orange-700 ring-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/20' : 'bg-white/95 dark:bg-slate-900/95 text-slate-400 ring-slate-200 dark:ring-slate-700 hover:text-orange-600')} aria-label={isJobSaved(job.id) ? 'Remover vaga dos salvos' : 'Salvar vaga'} aria-pressed={isJobSaved(job.id)}><Bookmark className={cn('w-4.5 h-4.5', isJobSaved(job.id) && 'fill-current')} /></button>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pr-11 sm:pr-12">
                 <div className="flex items-start gap-3 min-w-0">
                   <button type="button" onClick={() => openCompanyProfile(job.companyId)} aria-label={`Ver perfil de ${job.companyName}`} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-transparent hover:ring-orange-300 dark:hover:ring-orange-500/40 transition-all">
                     {job.companyLogoUrl ? <img src={job.companyLogoUrl} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" /> : <Building2 className="w-6 h-6 text-emerald-600" />}

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2 } from 'lucide-react';
+import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2, Bookmark } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo, useToast } from '../components/UI';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
 import { shareContent } from '../utils/share';
+import { useSavedItems } from '../hooks/useSavedItems';
+import { cn } from '../utils/cn';
 import type { Comment, Post, PostStatus } from '../types';
 
 type StatusHistoryItem = { id: string; old_status?: PostStatus | null; new_status: PostStatus; source: string; changed_at: string };
@@ -117,6 +119,7 @@ export default function PostDetails() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
   const { toast } = useToast();
+  const { isSaved: isPostSaved, toggleSaved: toggleSavedPost } = useSavedItems('post');
   const { supportPost, addComment, commentsByPost, loadComments, deleteComment, updatePostStatus, isMyPost } = useData();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
@@ -328,7 +331,7 @@ export default function PostDetails() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 sm:gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
           <button onClick={handleSupport} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${supported ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
             <Heart className={supported ? 'w-5 h-5 fill-current' : 'w-5 h-5'} /> Apoiar {post.supports > 0 ? `(${post.supports})` : ''}
           </button>
@@ -337,6 +340,9 @@ export default function PostDetails() {
           </button>
           <button type="button" onClick={() => void handleShare()} className="flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300 text-xs sm:text-sm font-bold transition-all hover:bg-blue-100 dark:hover:bg-blue-500/20">
             <Share2 className="w-5 h-5" /> Compartilhar
+          </button>
+          <button type="button" onClick={() => post && void toggleSavedPost(post.id)} className={cn('flex items-center justify-center gap-1.5 sm:gap-2 py-3 rounded-xl text-xs sm:text-sm font-bold transition-all', post && isPostSaved(post.id) ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-300')} aria-pressed={post ? isPostSaved(post.id) : false}>
+            <Bookmark className={cn('w-5 h-5', post && isPostSaved(post.id) && 'fill-current')} /> {post && isPostSaved(post.id) ? 'Salvo' : 'Salvar'}
           </button>
         </div>
       </Card>

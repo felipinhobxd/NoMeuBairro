@@ -64,21 +64,21 @@ export function notificationDestination(notification: AppNotification) {
   if (notification.type === 'application_viewed' || notification.type === 'application_contacted') {
     try {
       sessionStorage.setItem('anb-open-applications', '1');
-      if (notification.jobId) sessionStorage.setItem('anb-focus-job', notification.jobId);
+      if (notification.jobId) sessionStorage.setItem('anb-job-focus', notification.jobId);
     } catch {}
     return '/empregos';
   }
 
   if (notification.type === 'event_attendance' || notification.type === 'neighborhood_event') {
     try {
-      if (notification.eventId) sessionStorage.setItem('anb-focus-event', notification.eventId);
+      if (notification.eventId) sessionStorage.setItem('anb-mural-focus-event', notification.eventId);
     } catch {}
     return '/mural';
   }
 
   if (notification.type === 'neighborhood_job') {
     try {
-      if (notification.jobId) sessionStorage.setItem('anb-focus-job', notification.jobId);
+      if (notification.jobId) sessionStorage.setItem('anb-job-focus', notification.jobId);
     } catch {}
     return '/empregos';
   }

@@ -13,7 +13,7 @@ import {
   MapPin, Sun, Moon, LogOut, LayoutGrid, Briefcase,
   CalendarDays, ShieldAlert, UserCircle, ArrowUp, Heart, Bell, MessageSquare, X, Map as MapIconIcon,
   BarChart3, Search, ChevronRight, Building2, Sparkles, MapPinned, Reply, CheckCircle2, Eye, PhoneCall, CalendarCheck,
-  ShieldCheck, MoreHorizontal, Download,
+  ShieldCheck, MoreHorizontal, Download, Bookmark,
 } from 'lucide-react';
 import { timeAgo, Button, Card, Input, useToast } from './UI';
 import type { AppNotification } from '../types';
@@ -346,7 +346,7 @@ export default function Layout({ children }: LayoutProps) {
     isAdmin ? [...navItems, { path: '/admin', label: 'Admin', icon: ShieldCheck }] : navItems
   ), [isAdmin]);
   const mobilePrimaryNavItems = useMemo(() => navItems.filter(item => ['/', '/mapa', '/empregos', '/mural'].includes(item.path)), []);
-  const mobileMoreActive = ['/estatisticas', '/denuncias', '/perfil', '/admin'].some(path => isActive(path));
+  const mobileMoreActive = ['/estatisticas', '/denuncias', '/perfil', '/salvos', '/admin'].some(path => isActive(path));
 
   useEffect(() => {
     let active = true;
@@ -423,6 +423,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="nmb-header-actions flex items-center gap-1 lg:gap-2 shrink-0">
               <button onClick={toggle} className="nmb-header-theme p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-all duration-200" aria-label={isDark ? 'Ativar modo claro' : 'Ativar modo escuro'}>{isDark ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}</button>
               <NotificationBell />
+              {isAuthenticated && <button onClick={() => navigate('/salvos')} className={cn('p-2.5 rounded-xl transition-all duration-200', isActive('/salvos') ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-label="Itens salvos" title="Itens salvos"><Bookmark className="w-[18px] h-[18px]" /></button>}
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5 lg:gap-2">
                   <button onClick={() => navigate('/perfil')} className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors" aria-label={`Perfil de ${user.name}`}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}</button>
@@ -484,6 +485,7 @@ export default function Layout({ children }: LayoutProps) {
                   { path: '/estatisticas', label: 'Dados', icon: BarChart3 },
                   { path: '/denuncias', label: 'Denúncias', icon: ShieldAlert },
                   { path: '/perfil', label: 'Perfil', icon: UserCircle },
+                  ...(isAuthenticated ? [{ path: '/salvos', label: 'Salvos', icon: Bookmark }] : []),
                   ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: ShieldCheck }] : []),
                 ].map((item) => {
                   const Icon = item.icon;
