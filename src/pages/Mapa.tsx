@@ -6,7 +6,7 @@ import { curitibaNeighborhoods, useNeighborhood } from '../contexts/Neighborhood
 import { Card } from '../components/UI';
 import MapClusterController, { type HeatPoint } from '../components/MapClusterController';
 import {
-  Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot,
+  Map as MapIcon, Info, AlertTriangle, Lightbulb, Shield, Trash2, Bus, HelpCircle, Zap, CircleDot, Droplets,
   Layers3, MapPin, ExternalLink, Loader2, LocateFixed, Flame, Eye,
 } from 'lucide-react';
 import { useMemo, useState, useEffect } from 'react';
@@ -21,17 +21,18 @@ const categoryIcons: Record<PostCategory, { emoji: string; label: string }> = {
   limpeza: { emoji: '🗑️', label: 'Limpeza' },
   transporte: { emoji: '🚌', label: 'Transporte' },
   fios: { emoji: '⚡', label: 'Fios' },
+  saneamento: { emoji: '💧', label: 'Água / Esgoto' },
   outros: { emoji: '❓', label: 'Outros' },
 };
 
 const categoryColors: Record<PostCategory, string> = {
   buraco: '#f59e0b', iluminacao: '#eab308', seguranca: '#ef4444', limpeza: '#10b981',
-  transporte: '#3b82f6', fios: '#f97316', outros: '#64748b',
+  transporte: '#3b82f6', fios: '#f97316', saneamento: '#0284c7', outros: '#64748b',
 };
 
 const lucideCategories: Record<PostCategory, typeof AlertTriangle> = {
   buraco: CircleDot, iluminacao: Lightbulb, seguranca: Shield, limpeza: Trash2,
-  transporte: Bus, fios: Zap, outros: HelpCircle,
+  transporte: Bus, fios: Zap, saneamento: Droplets, outros: HelpCircle,
 };
 
 const eventLabels: Record<string, { emoji: string; label: string }> = {

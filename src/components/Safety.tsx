@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { usePanicButton, executePanic } from '../hooks/usePanicButton';
-import { Shield, X, Phone, ExternalLink } from 'lucide-react';
+import { Shield, Phone, ExternalLink } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { hasCookieConsentChoice, saveCookieConsentChoice, type CookieConsentChoice } from '../utils/cookieConsent';
 
 // ─── Panic Button ──────────────────────────────────────────
 export function PanicButton() {
@@ -21,84 +22,60 @@ export function PanicButton() {
 
 // ─── Cookie Consent (LGPD) ─────────────────────────────────
 export function CookieConsent() {
-  const [visible, setVisible] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [visible, setVisible] = useState(() => !hasCookieConsentChoice());
 
-  useEffect(() => {
-    try {
-      const consent = localStorage.getItem('anb-cookie-consent');
-      if (!consent) {
-        const timer = setTimeout(() => setVisible(true), 1500);
-        return () => clearTimeout(timer);
-      }
-    } catch {}
-  }, []);
-
-  const handleAccept = () => {
-    try {
-      localStorage.setItem('anb-cookie-consent', Date.now().toString());
-    } catch {}
-    setDismissed(true);
+  const handleChoice = (choice: CookieConsentChoice) => {
+    saveCookieConsentChoice(choice);
+    setVisible(false);
   };
 
-  const handleDismiss = () => {
-    setDismissed(true);
-  };
-
-  if (!visible || dismissed) return null;
+  if (!visible) return null;
 
   return (
     <div
-      className="fixed bottom-24 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-md z-50 animate-slide-up"
+      className="fixed left-4 right-4 top-20 z-[200] max-h-[calc(100dvh-16rem)] overflow-y-auto rounded-2xl animate-slide-down md:bottom-6 md:left-6 md:right-auto md:top-auto md:max-h-none md:max-w-lg md:overflow-visible md:animate-slide-up"
       role="dialog"
-      aria-label="Aviso de cookies"
+      aria-modal="true"
+      aria-labelledby="cookie-consent-title"
+      aria-describedby="cookie-consent-description"
     >
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/30 ring-1 ring-slate-200 dark:ring-slate-700 p-5">
+      <div className="rounded-2xl bg-white p-5 shadow-2xl shadow-black/15 ring-1 ring-slate-200 dark:bg-slate-800 dark:shadow-black/30 dark:ring-slate-700 sm:p-6">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center shrink-0">
             <span className="text-lg" role="img" aria-hidden="true">🍪</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
-                Privacidade e Cookies
-              </h4>
-              <button
-                onClick={handleDismiss}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                aria-label="Fechar aviso"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
-              Utilizamos cookies para melhorar sua experiência. Em conformidade com a{' '}
-              <strong className="text-slate-600 dark:text-slate-300">LGPD</strong>, seus dados são protegidos
-              e nunca compartilhados com terceiros.{' '}
+            <h2 id="cookie-consent-title" className="text-base font-extrabold text-slate-900 dark:text-white">
+              Antes do guia: escolha os cookies
+            </h2>
+            <p id="cookie-consent-description" className="mb-4 mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              Para continuar e iniciar o guia do site, escolha uma opção abaixo. Se estiver de acordo,
+              aperte em <strong>“Concordo com cookies”</strong>. Você também pode manter somente os cookies essenciais.{' '}
               <a
-                href="#"
-                className="text-emerald-600 dark:text-emerald-400 hover:underline"
-                onClick={(e) => e.preventDefault()}
+                href="#/privacidade"
+                className="font-bold text-emerald-700 underline decoration-2 underline-offset-2 dark:text-emerald-400"
               >
-                Política de privacidade
+                Ver política de privacidade
               </a>
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
-                onClick={handleAccept}
+                type="button"
+                onClick={() => handleChoice('all')}
                 className={cn(
-                  'flex-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors',
+                  'min-h-11 flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-700',
                 )}
               >
-                Aceitar todos
+                Concordo com cookies
               </button>
               <button
-                onClick={handleDismiss}
+                type="button"
+                onClick={() => handleChoice('essential')}
                 className={cn(
-                  'flex-1 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors',
+                  'min-h-11 flex-1 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600',
                 )}
               >
-                Apenas essenciais
+                Somente essenciais
               </button>
             </div>
           </div>
@@ -149,13 +126,13 @@ export function EmergencyContacts({ compact = false }: { compact?: boolean }) {
         ))}
       </div>
       <a
-        href="https://www.google.com"
+        href="https://turismo.curitiba.pr.gov.br/conteudo/telefones-uteis/92"
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1.5 text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
       >
         <ExternalLink className="w-3 h-3" />
-        Mais canais de atendimento
+        Telefones úteis de Curitiba
       </a>
     </div>
   );

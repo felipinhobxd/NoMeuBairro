@@ -23,7 +23,7 @@ class CreatePostSchema(Schema):
     title = fields.Str(required=True, validate=validate.Length(min=3, max=255))
     description = fields.Str(required=True, validate=validate.Length(min=5))
     category = fields.Str(required=True, validate=validate.OneOf([
-        "buraco", "iluminacao", "fios", "limpeza", "transporte", "seguranca", "outros"
+        "buraco", "iluminacao", "fios", "saneamento", "limpeza", "transporte", "seguranca", "outros"
     ]))
     location = fields.Str(required=True, validate=validate.Length(min=2, max=255))
     imageUrl = fields.Str(load_default=None)

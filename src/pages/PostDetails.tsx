@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, MapPin, ShieldAlert, Heart, MessageSquare, Send, Trash2, Maximize2, X, CornerDownRight, Clock3, Settings2, Share2, Bookmark } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, StatusBadge, CategoryBadge, EmptyState, timeAgo, useToast } from '../components/UI';
+import PublicServiceContact from '../components/PublicServiceContact';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { supabase } from '../utils/supabase';
@@ -311,6 +312,7 @@ export default function PostDetails() {
           {area && <span className="inline-flex items-center gap-1 text-xs font-semibold text-orange-700 dark:text-orange-300"><MapPin className="w-3 h-3" /> {area}</span>}
           {post.location && <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" /> {post.location}</span>}
         </div>
+        <PublicServiceContact category={post.category} />
 
         {canManageStatus && (
           <div className="mt-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-800/50 p-4">

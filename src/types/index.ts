@@ -1,5 +1,5 @@
 export type PostStatus = 'pending' | 'in_progress' | 'resolved';
-export type PostCategory = 'buraco' | 'iluminacao' | 'fios' | 'limpeza' | 'transporte' | 'seguranca' | 'outros';
+export type PostCategory = 'buraco' | 'iluminacao' | 'fios' | 'saneamento' | 'limpeza' | 'transporte' | 'seguranca' | 'outros';
 export type AccountType = 'resident' | 'company';
 export type LocationPrecision = 'exact' | 'reverse' | 'neighborhood';
 

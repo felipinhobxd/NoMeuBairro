@@ -9,6 +9,7 @@ import {
 import { curitibaNeighborhoods, neighborhoodSearchText, useNeighborhood } from '../contexts/NeighborhoodContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
+import { COOKIE_CONSENT_EVENT, hasCookieConsentChoice } from '../utils/cookieConsent';
 
 type SearchResult = {
   result_type: 'post' | 'event' | 'job' | 'neighborhood' | string;
@@ -68,7 +69,7 @@ const tourSteps: TourStep[] = [
     kind: 'target',
     target: 'feed',
     title: 'Feed',
-    description: 'Aqui ficam os relatos e problemas publicados pela comunidade.',
+    description: 'Aqui ficam os relatos. Buraco, iluminação, limpeza e transporte levam ao 156; água/esgoto à Sanepar; fios/energia à Copel; segurança à Guarda Municipal 153.',
     icon: LayoutGrid,
     accent: 'from-orange-500 to-amber-600',
   },
@@ -76,7 +77,7 @@ const tourSteps: TourStep[] = [
     kind: 'target',
     target: 'create-post',
     title: 'Publicar relato',
-    description: 'O botão “+” fica sempre visível. Para publicar, basta entrar ou criar uma conta; se estiver deslogado, ele leva você direto ao acesso.',
+    description: 'Use o “+” e escolha a categoria mais próxima do problema. O contato oficial correspondente aparece antes de publicar; o relato comunitário não abre protocolo sozinho.',
     icon: Plus,
     accent: 'from-emerald-500 to-green-600',
   },
@@ -131,7 +132,7 @@ const tourSteps: TourStep[] = [
   {
     kind: 'done',
     title: 'Pronto!',
-    description: 'Agora você já sabe onde fica cada coisa. Se esquecer, abra “Como funciona” no rodapé.',
+    description: 'Agora você já sabe onde fica cada coisa. Lembre-se: publique para mobilizar o bairro e também use o canal oficial indicado para gerar um protocolo.',
     icon: CheckCircle2,
     accent: 'from-emerald-500 to-teal-600',
   },
@@ -149,7 +150,7 @@ const mobileTourSteps: TourStep[] = [
     kind: 'target',
     target: 'feed',
     title: 'Feed',
-    description: 'Relatos e problemas publicados pela comunidade ficam aqui.',
+    description: 'Os relatos ficam aqui. Buraco, iluminação, limpeza e transporte: 156; água/esgoto: Sanepar; fios/energia: Copel; segurança: Guarda Municipal 153.',
     icon: LayoutGrid,
     accent: 'from-orange-500 to-amber-600',
   },
@@ -157,7 +158,7 @@ const mobileTourSteps: TourStep[] = [
     kind: 'target',
     target: 'create-post',
     title: 'Publicar relato',
-    description: 'O “+” fica sempre disponível. Se você ainda não entrou, toque nele e faça login ou crie uma conta para publicar.',
+    description: 'Toque no “+” e escolha a categoria do problema. O contato oficial aparece antes de publicar; o relato não abre protocolo automaticamente.',
     icon: Plus,
     accent: 'from-emerald-500 to-green-600',
   },
@@ -228,7 +229,7 @@ const mobileTourSteps: TourStep[] = [
   {
     kind: 'done',
     title: 'Pronto!',
-    description: 'Os atalhos do dia a dia ficam embaixo. As opções secundárias ficam em “Mais”. Você pode rever este guia quando quiser.',
+    description: 'Use o relato para mobilizar o bairro e o telefone indicado para abrir o protocolo oficial. Você pode rever este guia quando quiser.',
     icon: CheckCircle2,
     accent: 'from-emerald-500 to-teal-600',
   },
@@ -386,6 +387,7 @@ export default function ProductExperience() {
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isStandalone, setIsStandalone] = useState(() => isStandaloneMode());
   const [isAdmin, setIsAdmin] = useState(false);
+  const [cookieChoiceMade, setCookieChoiceMade] = useState(() => hasCookieConsentChoice());
   const errorFingerprints = useRef(new Map<string, number>());
 
   const activeTourSteps = useMemo(() => {
@@ -438,6 +440,17 @@ export default function ProductExperience() {
     sync();
     media.addEventListener('change', sync);
     return () => media.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    const acceptCurrentChoice = () => setCookieChoiceMade(true);
+    const syncStoredChoice = () => setCookieChoiceMade(hasCookieConsentChoice());
+    window.addEventListener(COOKIE_CONSENT_EVENT, acceptCurrentChoice);
+    window.addEventListener('storage', syncStoredChoice);
+    return () => {
+      window.removeEventListener(COOKIE_CONSENT_EVENT, acceptCurrentChoice);
+      window.removeEventListener('storage', syncStoredChoice);
+    };
   }, []);
 
   useEffect(() => {
@@ -550,7 +563,7 @@ export default function ProductExperience() {
 
   useEffect(() => {
     const suppressed = ['/login', '/privacidade', '/termos'].some(path => location.pathname.startsWith(path));
-    if (!isNeighborhoodSelected || suppressed) return;
+    if (!cookieChoiceMade || !isNeighborhoodSelected || suppressed) return;
     let completed = false;
     try { completed = localStorage.getItem(ONBOARDING_KEY) === 'done'; } catch {}
     if (completed) return;
@@ -561,7 +574,7 @@ export default function ProductExperience() {
       setShowOnboarding(true);
     }, 650);
     return () => window.clearTimeout(timer);
-  }, [isNeighborhoodSelected, location.pathname]);
+  }, [cookieChoiceMade, isNeighborhoodSelected, location.pathname]);
 
   useEffect(() => {
     if (!showOnboarding) return;
@@ -646,6 +659,7 @@ export default function ProductExperience() {
   };
 
   const reopenOnboarding = () => {
+    if (!cookieChoiceMade) return;
     setSearchOpen(false);
     setShowInstallPrompt(false);
     setShowInstallHelp(false);

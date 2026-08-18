@@ -24,7 +24,7 @@ def _utcnow():
 # Enums (espelham os ENUMs do PostgreSQL)
 # ═══════════════════════════════════════════════════════════
 POST_STATUS = ("pending", "in_progress", "resolved")
-POST_CATEGORY = ("buraco", "iluminacao", "fios", "limpeza", "transporte", "seguranca", "outros")
+POST_CATEGORY = ("buraco", "iluminacao", "fios", "saneamento", "limpeza", "transporte", "seguranca", "outros")
 BUSINESS_CATEGORY = ("alimentacao", "saude", "servicos", "educacao", "comercio", "beleza", "outros")
 EVENT_TYPE = ("feira", "saude", "reuniao", "cultura", "esporte", "campanha", "outros")
 BADGE_TYPE = ("vizinho_engajado", "guardiao", "voz_ativa", "construtor", "embaixador")

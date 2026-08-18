@@ -17,7 +17,7 @@ DO $$ BEGIN
         CREATE TYPE post_status AS ENUM ('pending', 'in_progress', 'resolved');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'post_category') THEN
-        CREATE TYPE post_category AS ENUM ('buraco', 'iluminacao', 'fios', 'limpeza', 'transporte', 'seguranca', 'outros');
+        CREATE TYPE post_category AS ENUM ('buraco', 'iluminacao', 'fios', 'saneamento', 'limpeza', 'transporte', 'seguranca', 'outros');
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'business_category') THEN
         CREATE TYPE business_category AS ENUM ('alimentacao', 'saude', 'servicos', 'educacao', 'comercio', 'beleza', 'outros');

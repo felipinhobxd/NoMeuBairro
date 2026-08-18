@@ -28,8 +28,8 @@
 }
 
 :root { --brand-50:#fff7ed; --brand-100:#ffedd5; --brand-200:#fed7aa; --brand-300:#fdba74; --brand-400:#fb923c; --brand-500:#f97316; --brand-600:#ea580c; --brand-700:#c2410c; --brand-800:#9a3412; --brand-900:#7c2d12; --brand-brown:#78350f; --page-light:#ffffff; --page-dark:#17120f; }
-html { scroll-behavior:smooth; -webkit-tap-highlight-color:transparent; }
-body { font-family:var(--font-sans); font-size:1.0625rem; line-height:1.6; background-color:var(--page-light); color:#292524; transition:background-color .4s var(--ease-smooth),color .3s var(--ease-smooth); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+html { scroll-behavior:smooth; -webkit-tap-highlight-color:transparent; -webkit-text-size-adjust:100%; text-size-adjust:100%; text-rendering:optimizeLegibility; }
+body { font-family:var(--font-sans); font-size:1.0625rem; line-height:1.6; font-synthesis:none; background-color:var(--page-light); color:#292524; transition:background-color .4s var(--ease-smooth),color .3s var(--ease-smooth); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
 .dark body { background-color:var(--page-dark); color:#fff7ed; }
 ::-webkit-scrollbar { width:5px; height:5px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:#d6d3d1; border-radius:999px; } .dark ::-webkit-scrollbar-thumb { background:#5b463a; }
 .no-scrollbar::-webkit-scrollbar { display:none; } .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
