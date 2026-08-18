@@ -3,7 +3,7 @@
 Plataforma comunitária criada para aproximar moradores de Curitiba, dar visibilidade a problemas locais e concentrar, em um só lugar, relatos, eventos, oportunidades de emprego, dados do bairro e canais de denúncia.
 
 <p align="center">
-  <a href="https://no-meu-bairro.vercel.app/">
+  <a href="https://nomeubairro.vercel.app/">
     <strong>🌐 Acessar o No Meu Bairro</strong>
   </a>
 </p>
