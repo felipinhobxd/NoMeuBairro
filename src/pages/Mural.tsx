@@ -11,6 +11,7 @@ import MapPicker from '../components/MapPicker';
 import { cn } from '../utils/cn';
 import type { EventType } from '../types';
 import { useSavedItems } from '../hooks/useSavedItems';
+import { clearLocalDraft, readLocalDraft, saveLocalDraft } from '../utils/localDrafts';
 
 const evTypes: Record<EventType, { label: string; emoji: string }> = {
   feira: { label: 'Feira', emoji: '🛍️' }, saude: { label: 'Saúde', emoji: '❤️' },
@@ -70,6 +71,48 @@ export default function Mural() {
   const [fLat, setFLat] = useState<number | undefined>();
   const [fLng, setFLng] = useState<number | undefined>();
   const [expandedEvents, setExpandedEvents] = useState<Set<string>>(new Set());
+  const [eventDraftReady, setEventDraftReady] = useState(false);
+  const [eventDraftRestored, setEventDraftRestored] = useState(false);
+
+  useEffect(() => {
+    setEventDraftReady(false);
+    setEventDraftRestored(false);
+    if (!user?.id) return;
+    const key = `nmb-draft:event:${user.id}`;
+    const draft = readLocalDraft<{ title?: string; type?: EventType; date?: string; location?: string; description?: string; latitude?: number; longitude?: number }>(key);
+    if (draft) {
+      setFt(draft.title || '');
+      setFtype(draft.type || 'reuniao');
+      setFdate(draft.date || '');
+      setFloc(draft.location || '');
+      setFdesc(draft.description || '');
+      setFLat(typeof draft.latitude === 'number' ? draft.latitude : undefined);
+      setFLng(typeof draft.longitude === 'number' ? draft.longitude : undefined);
+      if (draft.title || draft.date || draft.location || draft.description) setEventDraftRestored(true);
+    }
+    setEventDraftReady(true);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !eventDraftReady) return;
+    const key = `nmb-draft:event:${user.id}`;
+    const hasContent = Boolean(ft.trim() || fdate || floc.trim() || fdesc.trim() || fLat != null || fLng != null);
+    if (!hasContent) {
+      clearLocalDraft(key);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      saveLocalDraft(key, { title: ft, type: ftype, date: fdate, location: floc, description: fdesc, latitude: fLat, longitude: fLng });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [user?.id, eventDraftReady, ft, ftype, fdate, floc, fdesc, fLat, fLng]);
+
+  const discardEventDraft = useCallback(() => {
+    if (user?.id) clearLocalDraft(`nmb-draft:event:${user.id}`);
+    setFt(''); setFtype('reuniao'); setFdate(''); setFloc(''); setFdesc(''); setFLat(undefined); setFLng(undefined);
+    setEventDraftRestored(false);
+    toast('Rascunho descartado.', 'info');
+  }, [user?.id, toast]);
 
   useEffect(() => {
     const focusedId = sessionStorage.getItem('anb-mural-focus-event');
@@ -165,6 +208,8 @@ export default function Mural() {
     });
 
     if (!error) {
+      if (user?.id) clearLocalDraft(`nmb-draft:event:${user.id}`);
+      setEventDraftRestored(false);
       setShowCreate(false);
       setFt(''); setFtype('reuniao'); setFdate(''); setFloc(''); setFdesc('');
       setFLat(undefined); setFLng(undefined);
@@ -343,11 +388,13 @@ export default function Mural() {
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Publicar Evento">
         <form onSubmit={e => { e.preventDefault(); void handleCreate(); }} className="space-y-4">
+          {eventDraftRestored && <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10"><div><p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Rascunho recuperado automaticamente</p><p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Seu evento ficou salvo neste dispositivo.</p></div><button type="button" onClick={discardEventDraft} className="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline shrink-0">Descartar</button></div>}
           <Input label="Título do evento" placeholder="Ex: Feira de orgânicos" value={ft} onChange={e => setFt(e.target.value)} required />
           <div className="grid grid-cols-2 gap-3"><Select label="Tipo" options={evTypeOpts} value={ftype} onChange={e => setFtype(e.target.value as EventType)} required /><Input label="Data" type="date" value={fdate} onChange={e => setFdate(e.target.value)} required /></div>
           <Input label="Local" placeholder="Ex: Praça, rua e número" value={floc} onChange={e => setFloc(e.target.value)} required />
           <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={floc} />
           <Textarea label="Descrição" placeholder="Detalhes do evento, horário, como participar..." value={fdesc} onChange={e => setFdesc(e.target.value)} required />
+          <p className="text-[10px] text-slate-400">O rascunho deste evento é salvo automaticamente neste dispositivo por até 30 dias.</p>
           <div className="flex gap-3 pt-2"><Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button><Button type="submit" className="flex-1" disabled={!ft.trim() || !fdate || !floc.trim() || !fdesc.trim()}>Publicar</Button></div>
         </form>
       </Modal>

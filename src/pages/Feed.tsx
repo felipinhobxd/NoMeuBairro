@@ -20,6 +20,7 @@ import { cn } from '../utils/cn';
 import { supabase } from '../utils/supabase';
 import { shareContent } from '../utils/share';
 import { useSavedItems } from '../hooks/useSavedItems';
+import { clearLocalDraft, readLocalDraft, saveLocalDraft } from '../utils/localDrafts';
 import type { PostCategory, PostStatus, Comment } from '../types';
 
 const catIcons: Record<string, typeof AlertTriangle> = {
@@ -111,6 +112,8 @@ export default function Feed() {
   const [followLoading, setFollowLoading] = useState(false);
   const [neighborhoodSummary, setNeighborhoodSummary] = useState<NeighborhoodWeeklySummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [postDraftReady, setPostDraftReady] = useState(false);
+  const [postDraftRestored, setPostDraftRestored] = useState(false);
 
   useEffect(() => { if (currentNeighborhood) setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude }); }, [currentNeighborhood]);
   useEffect(() => {
@@ -122,6 +125,45 @@ export default function Feed() {
       }
     } catch {}
   }, [isAuthenticated, user]);
+
+  useEffect(() => {
+    setPostDraftReady(false);
+    setPostDraftRestored(false);
+    if (!user?.id) return;
+    const key = `nmb-draft:post:${user.id}`;
+    const draft = readLocalDraft<{ title?: string; category?: PostCategory; location?: string; description?: string; latitude?: number; longitude?: number }>(key);
+    if (draft) {
+      setFt(draft.title || '');
+      setFc(draft.category || 'buraco');
+      setFl(draft.location || '');
+      setFd(draft.description || '');
+      setFLat(typeof draft.latitude === 'number' ? draft.latitude : undefined);
+      setFLng(typeof draft.longitude === 'number' ? draft.longitude : undefined);
+      if (draft.title || draft.location || draft.description) setPostDraftRestored(true);
+    }
+    setPostDraftReady(true);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !postDraftReady) return;
+    const key = `nmb-draft:post:${user.id}`;
+    const hasContent = Boolean(ft.trim() || fl.trim() || fd.trim() || fLat != null || fLng != null);
+    if (!hasContent) {
+      clearLocalDraft(key);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      saveLocalDraft(key, { title: ft, category: fc, location: fl, description: fd, latitude: fLat, longitude: fLng });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [user?.id, postDraftReady, ft, fc, fl, fd, fLat, fLng]);
+
+  const discardPostDraft = useCallback(() => {
+    if (user?.id) clearLocalDraft(`nmb-draft:post:${user.id}`);
+    setFt(''); setFc('buraco'); setFl(''); setFd(''); setFi(''); setFLat(undefined); setFLng(undefined);
+    setPostDraftRestored(false);
+    toast('Rascunho descartado.', 'info');
+  }, [user?.id, toast]);
 
   useEffect(() => {
     let active = true;
@@ -233,8 +275,10 @@ export default function Feed() {
       toast(result.error?.message || 'Não foi possível publicar o relato.', 'error');
       return;
     }
+    if (user?.id) clearLocalDraft(`nmb-draft:post:${user.id}`);
+    setPostDraftRestored(false);
     setShowCreate(false); setFt(''); setFc('buraco'); setFl(''); setFd(''); setFi(''); setFLat(undefined); setFLng(undefined); toast('Relato publicado com bairro identificado!');
-  }, [ft, fd, fl, fc, fi, fLat, fLng, addPost, toast]);
+  }, [ft, fd, fl, fc, fi, fLat, fLng, addPost, toast, user?.id]);
 
   const handlePostCepSearch = async (cep: string) => { const clean = cep.replace(/\D/g, ''); if (clean.length === 8) { try { const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`); const data = await res.json(); if (!data.erro) { setFl(data.bairro ? `${data.logradouro} — ${data.bairro}` : data.logradouro); toast('Rua e bairro localizados pelo CEP!'); } } catch {} } };
   const handleSupport = useCallback(async (id: string) => { if (!isAuthenticated || !user) { toast('Entre ou crie uma conta para apoiar um relato.', 'info'); navigate('/login'); return; } const isSupported = supported.has(id); const result = await supportPost(id); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o apoio.', 'error'); return; } const next = new Set(supported); if (isSupported) next.delete(id); else { next.add(id); setHeartsAnimating(prev => { const n = new Set(prev); n.add(id); return n; }); setTimeout(() => setHeartsAnimating(prev => { const n = new Set(prev); n.delete(id); return n; }), 500); } setSupported(next); try { localStorage.setItem('anb-supported', JSON.stringify([...next])); } catch {} }, [supported, supportPost, isAuthenticated, user, toast, navigate]);
@@ -327,7 +371,7 @@ export default function Feed() {
         </div>
       </>}
       <button onClick={openCreate} className="fixed bottom-24 lg:bottom-8 right-4 sm:right-6 z-30 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl shadow-emerald-600/30 hover:shadow-emerald-600/50 transition-all flex items-center justify-center active:scale-95 group" aria-label="Criar novo relato" title={isAuthenticated ? 'Criar novo relato' : 'Entre ou crie uma conta para publicar'}><Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" /></button>
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Novo Relato"><form onSubmit={e => { e.preventDefault(); void handleCreate(); }} className="space-y-4"><Input label="Título" placeholder="Ex: Buraco na Rua das Flores" value={ft} onChange={e => setFt(e.target.value)} required /><Select label="Categoria" options={catOpts} value={fc} onChange={e => setFc(e.target.value as PostCategory)} required /><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => setFl(e.target.value)} required /><Input label="Buscar por CEP" placeholder="Ex: 81460296" maxLength={8} onChange={e => handlePostCepSearch(e.target.value)} /></div><MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} /><Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required /><ImageUpload value={fi} onChange={setFi} /><div className="flex gap-3 pt-2"><Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button><Button type="submit" className="flex-1" disabled={!ft.trim() || !fd.trim() || !fl.trim()}>Publicar relato</Button></div></form></Modal>
+      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Novo Relato"><form onSubmit={e => { e.preventDefault(); void handleCreate(); }} className="space-y-4">{postDraftRestored && <div className="flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10"><div><p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Rascunho recuperado automaticamente</p><p className="text-[10px] text-emerald-700/70 dark:text-emerald-400/70 mt-0.5">Salvo neste dispositivo para você não perder o que estava escrevendo.</p></div><button type="button" onClick={discardPostDraft} className="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline shrink-0">Descartar</button></div>}<Input label="Título" placeholder="Ex: Buraco na Rua das Flores" value={ft} onChange={e => setFt(e.target.value)} required /><Select label="Categoria" options={catOpts} value={fc} onChange={e => setFc(e.target.value as PostCategory)} required /><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => setFl(e.target.value)} required /><Input label="Buscar por CEP" placeholder="Ex: 81460296" maxLength={8} onChange={e => handlePostCepSearch(e.target.value)} /></div><MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); }} address={fl} /><Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required /><ImageUpload value={fi} onChange={setFi} /><p className="text-[10px] text-slate-400">Título, categoria, localização e descrição são salvos automaticamente neste dispositivo por até 30 dias. Imagens não entram no rascunho.</p><div className="flex gap-3 pt-2"><Button type="button" variant="secondary" className="flex-1" onClick={() => setShowCreate(false)}>Cancelar</Button><Button type="submit" className="flex-1" disabled={!ft.trim() || !fd.trim() || !fl.trim()}>Publicar relato</Button></div></form></Modal>
       <Modal open={!!showReport} onClose={() => setShowReport(null)} title="Denunciar Conteúdo"><div className="space-y-4"><p className="text-sm text-slate-500">Ajude-nos a manter o bairro seguro. Por que você está denunciando este conteúdo?</p><Select label="Categoria da Denúncia" options={[{ value: '', label: 'Selecione uma categoria...' }, { value: 'Conteúdo ofensivo ou ódio', label: 'Conteúdo ofensivo ou ódio' }, { value: 'Informação falsa (Spam)', label: 'Informação falsa (Spam)' }, { value: 'Assédio ou perseguição', label: 'Assédio ou perseguição' }, { value: 'Conteúdo inadequado ou ilegal', label: 'Conteúdo inadequado ou ilegal' }, { value: 'Outros', label: 'Outros' }]} value={reportReason} onChange={e => setReportReason(e.target.value)} /><Textarea label="Detalhes da denúncia (opcional)" placeholder="Descreva melhor o problema para ajudar o administrador..." value={reportDetail} onChange={e => setReportDetail(e.target.value)} rows={3} /><div className="flex gap-3 pt-2"><Button variant="secondary" className="flex-1" onClick={() => setShowReport(null)}>Cancelar</Button><Button className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={handleSendReport} disabled={!reportReason}>Enviar Denúncia</Button></div></div></Modal>
       <ImageViewer src={zoomedImage || ''} open={!!zoomedImage} onClose={() => setZoomedImage(null)} />
     </div>
