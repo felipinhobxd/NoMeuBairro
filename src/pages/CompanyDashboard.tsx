@@ -18,6 +18,12 @@ const modelOptions: Array<[WorkModel, string]> = [
 const applicantStatusLabels: Record<JobApplicationStatus, string> = {
   interested: 'Interessado', viewed: 'Visualizado', contacted: 'Contatado', withdrawn: 'Retirado',
 };
+const COMPANY_SELECT = 'id,company_name,description,email,phone,whatsapp,website,address,neighborhood';
+const COMPANY_JOB_SELECT = 'id,company_id,title,description,requirements,benefits,salary_min,salary_max,employment_type,work_model,location,neighborhood,locality,latitude,longitude,location_precision,contact_email,contact_whatsapp,contact_email_enabled,contact_whatsapp_enabled,expires_at,is_active,created_at';
+const COMPANY_APPLICATION_SELECT = 'id,job_id,user_id,status,created_at,updated_at';
+const APPLICANT_RESUME_SELECT = 'user_id,email,phone,neighborhood,objective,experience,education,skills,users:user_id(name,avatar_url)';
+const COMPANY_JOB_LIMIT = 100;
+const COMPANY_APPLICATION_LIMIT = 300;
 const emptyForm: JobFormData = {
   title: '', description: '', requirements: '', benefits: '', salaryMin: '', salaryMax: '',
   employmentType: 'clt', workModel: 'presencial', location: '', neighborhood: '', locality: '',
@@ -58,8 +64,8 @@ export default function CompanyDashboard() {
     if (!user) return;
     setLoading(true);
     const [companyResult, jobsResult] = await Promise.all([
-      supabase.from('company_profiles').select('*').eq('id', user.id).maybeSingle(),
-      supabase.from('job_posts').select('*').eq('company_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('company_profiles').select(COMPANY_SELECT).eq('id', user.id).maybeSingle(),
+      supabase.from('job_posts').select(COMPANY_JOB_SELECT).eq('company_id', user.id).order('created_at', { ascending: false }).limit(COMPANY_JOB_LIMIT),
     ]);
     if (companyResult.error) setMessage({ type: 'error', text: companyResult.error.message });
     else if (jobsResult.error) setMessage({ type: 'error', text: jobsResult.error.message });
@@ -70,13 +76,13 @@ export default function CompanyDashboard() {
     if (loadedJobs.length > 0) {
       const jobIds = loadedJobs.map((job) => job.id);
       const applicationsResult = await supabase
-        .from('job_applications').select('*').in('job_id', jobIds).neq('status', 'withdrawn').order('created_at', { ascending: false });
+        .from('job_applications').select(COMPANY_APPLICATION_SELECT).in('job_id', jobIds).neq('status', 'withdrawn').order('created_at', { ascending: false }).limit(COMPANY_APPLICATION_LIMIT);
       if (!applicationsResult.error) {
         const loadedApplications = applicationsResult.data || [];
         setApplications(loadedApplications);
         const applicantIds = [...new Set(loadedApplications.map((application: any) => application.user_id))];
         if (applicantIds.length > 0) {
-          const resumesResult = await supabase.from('user_resumes').select('*, users(name, avatar_url)').in('user_id', applicantIds);
+          const resumesResult = await supabase.from('user_resumes').select(APPLICANT_RESUME_SELECT).in('user_id', applicantIds).limit(COMPANY_APPLICATION_LIMIT);
           if (!resumesResult.error) {
             const resumeMap: Record<string, any> = {};
             for (const resume of resumesResult.data || []) resumeMap[resume.user_id] = resume;
@@ -265,7 +271,7 @@ export default function CompanyDashboard() {
   };
 
   const updateApplicantStatus = async (applicationId: string, status: JobApplicationStatus) => {
-    const { data, error } = await supabase.from('job_applications').update({ status }).eq('id', applicationId).select('*').single();
+    const { data, error } = await supabase.from('job_applications').update({ status }).eq('id', applicationId).select(COMPANY_APPLICATION_SELECT).single();
     if (error || !data) {
       setMessage({ type: 'error', text: 'Não foi possível atualizar o candidato.' });
       return;

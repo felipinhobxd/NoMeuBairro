@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { canonicalNeighborhoodName, curitibaNeighborhoods, normalizeNeighborhoodText } from './NeighborhoodContext';
 import { supabase } from '../utils/supabase';
 import { storePostImage, deleteStoredPostImage } from '../utils/imageStorage';
+import { clearSessionQueryCache, readSessionQueryCache, writeSessionQueryCache } from '../utils/sessionQueryCache';
 
 type ActionResult = { ok: boolean; error?: string };
 type ResolvedLocation = {
@@ -75,6 +76,10 @@ const EVENT_LIMIT = 60;
 const COMMENT_PER_POST_LIMIT = 100;
 const NOTIFICATION_LIMIT = 40;
 const NOTIFICATION_SELECT = 'id,user_id,actor_id,type,post_id,comment_id,job_id,application_id,event_id,is_read,created_at,users:actor_id(name,avatar_url),posts:post_id(title),comments:comment_id(content),job_posts:job_id(title),events:event_id(title)';
+const POSTS_CACHE_KEY = 'nmb-query-cache:posts:v1';
+const EVENTS_CACHE_KEY = 'nmb-query-cache:events:v1';
+const POSTS_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
+const EVENTS_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
 
 function fallbackNeighborhoodFromText(location: string) {
   const normalized = normalizeNeighborhoodText(location);
@@ -189,12 +194,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const loadPosts = useCallback(async (force = false) => {
     if (postsRequestRef.current) return postsRequestRef.current;
     if (postsLoadedRef.current && !force) return;
+    const cached = readSessionQueryCache<Post[]>(POSTS_CACHE_KEY, POSTS_CACHE_MAX_AGE_MS);
+    if (!force && cached?.fresh && Array.isArray(cached.data)) {
+      setPosts(cached.data.slice(0, POST_LIMIT));
+      postsLoadedRef.current = true;
+      return;
+    }
     const request = (async () => {
       setPostsLoading(true);
       try {
         const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
-        if (error) { console.error('Erro ao carregar relatos:', error); return; }
-        setPosts((data || []).map(mapPost)); postsLoadedRef.current = true;
+        if (error) {
+          console.error('Erro ao carregar relatos:', error);
+          if (cached && Array.isArray(cached.data)) {
+            setPosts(cached.data.slice(0, POST_LIMIT));
+            postsLoadedRef.current = true;
+          }
+          return;
+        }
+        const nextPosts = (data || []).map(mapPost);
+        setPosts(nextPosts);
+        writeSessionQueryCache(POSTS_CACHE_KEY, nextPosts);
+        postsLoadedRef.current = true;
       } finally { setPostsLoading(false); postsRequestRef.current = null; }
     })();
     postsRequestRef.current = request; return request;
@@ -203,12 +224,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const loadEvents = useCallback(async (force = false) => {
     if (eventsRequestRef.current) return eventsRequestRef.current;
     if (eventsLoadedRef.current && !force) return;
+    const cached = readSessionQueryCache<CommunityEvent[]>(EVENTS_CACHE_KEY, EVENTS_CACHE_MAX_AGE_MS);
+    if (!force && cached?.fresh && Array.isArray(cached.data)) {
+      setEvents(cached.data.slice(0, EVENT_LIMIT));
+      eventsLoadedRef.current = true;
+      return;
+    }
     const request = (async () => {
       setEventsLoading(true);
       try {
         const { data, error } = await supabase.from('events').select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at,event_attendance(count)').order('event_date', { ascending: true }).limit(EVENT_LIMIT);
-        if (error) { console.error('Erro ao carregar eventos:', error); return; }
-        setEvents((data || []).map(mapEvent)); eventsLoadedRef.current = true;
+        if (error) {
+          console.error('Erro ao carregar eventos:', error);
+          if (cached && Array.isArray(cached.data)) {
+            setEvents(cached.data.slice(0, EVENT_LIMIT));
+            eventsLoadedRef.current = true;
+          }
+          return;
+        }
+        const nextEvents = (data || []).map(mapEvent);
+        setEvents(nextEvents);
+        writeSessionQueryCache(EVENTS_CACHE_KEY, nextEvents);
+        eventsLoadedRef.current = true;
       } finally { setEventsLoading(false); eventsRequestRef.current = null; }
     })();
     eventsRequestRef.current = request; return request;
@@ -341,6 +378,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return { data: inserted, error } as any;
     }
     const nextPost = mapPost({ ...inserted, users: { name: user.name, avatar_url: user.avatarUrl }, post_supports: [{ count: 0 }] });
+    clearSessionQueryCache(POSTS_CACHE_KEY);
     postsLoadedRef.current = true; setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
     return { data: inserted, error: null } as any;
   }, [user]);
@@ -383,6 +421,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const { data: row } = await supabase.from('posts').select('id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').eq('id', result.postId).maybeSingle();
     if (row) {
       const nextPost = mapPost({ ...row, author_id: null, is_anonymous: true, post_supports: [{ count: 0 }] });
+      clearSessionQueryCache(POSTS_CACHE_KEY);
       postsLoadedRef.current = true;
       setPosts(prev => [nextPost, ...prev.filter(post => post.id !== nextPost.id)].slice(0, POST_LIMIT));
     }
@@ -405,6 +444,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         if (error) return { ok: false, error: error.message };
         setPosts(prev => prev.map(post => post.id === postId ? { ...post, supports: post.supports + 1 } : post));
       }
+      clearSessionQueryCache(POSTS_CACHE_KEY);
       return { ok: true };
     } finally {
       processingRef.current.delete(postId);
@@ -420,6 +460,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     loadedCommentPostsRef.current.add(postId);
     setComments(prev => [...prev.filter(comment => comment.id !== nextComment.id), nextComment]);
     setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
+    clearSessionQueryCache(POSTS_CACHE_KEY);
     return { ok: true };
   }, [user]);
 
@@ -429,6 +470,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (error) return { ok: false, error: error.message };
     setComments(prev => prev.filter(comment => comment.id !== commentId));
     if (target?.postId) setPosts(prev => prev.map(post => post.id === target.postId ? { ...post, commentsCount: Math.max(0, post.commentsCount - 1) } : post));
+    clearSessionQueryCache(POSTS_CACHE_KEY);
     return { ok: true };
   }, [comments]);
 
@@ -437,11 +479,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (target?.authorId === 'anonymous') {
       const token = getAnonTokens()[postId] || ''; const { data, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'delete', postId, editToken: token } });
       if (error || !data?.ok) return { ok: false, error: data?.error || error?.message || 'Não foi possível excluir a denúncia.' };
-      clearAnonControl(postId); setPosts(prev => prev.filter(post => post.id !== postId)); setComments(prev => prev.filter(comment => comment.postId !== postId)); loadedCommentPostsRef.current.delete(postId); return { ok: true };
+      clearAnonControl(postId); clearSessionQueryCache(POSTS_CACHE_KEY); setPosts(prev => prev.filter(post => post.id !== postId)); setComments(prev => prev.filter(comment => comment.postId !== postId)); loadedCommentPostsRef.current.delete(postId); return { ok: true };
     }
     const { error } = await supabase.from('posts').delete().eq('id', postId);
     if (error) return { ok: false, error: error.message };
     await deleteStoredPostImage(target?.imageUrl);
+    clearSessionQueryCache(POSTS_CACHE_KEY);
     setPosts(prev => prev.filter(post => post.id !== postId)); setComments(prev => prev.filter(comment => comment.postId !== postId)); loadedCommentPostsRef.current.delete(postId); return { ok: true };
   }, [posts, getAnonTokens, clearAnonControl]);
 
@@ -459,17 +502,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (canUseAnonymousControl) {
       const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', { body: { action: 'update_status', postId, status, editToken: anonToken } });
       if (error || !result?.ok) return { ok: false, error: result?.error || error?.message || 'Não foi possível atualizar o status.' };
+      clearSessionQueryCache(POSTS_CACHE_KEY);
       setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));
       return { ok: true };
     }
 
     const { error } = await supabase.from('posts').update({ status }).eq('id', postId);
     if (error) return { ok: false, error: error.message };
+    clearSessionQueryCache(POSTS_CACHE_KEY);
     setPosts(prev => prev.map(post => post.id === postId ? { ...post, status, updatedAt: new Date().toISOString() } : post));
     return { ok: true };
   }, [posts, getAnonTokens, managedAnonIds]);
 
-  const deleteEvent = useCallback(async (eventId: string): Promise<ActionResult> => { const { error } = await supabase.from('events').delete().eq('id', eventId); if (error) return { ok: false, error: error.message }; setEvents(prev => prev.filter(event => event.id !== eventId)); return { ok: true }; }, []);
+  const deleteEvent = useCallback(async (eventId: string): Promise<ActionResult> => {
+    const { error } = await supabase.from('events').delete().eq('id', eventId);
+    if (error) return { ok: false, error: error.message };
+    clearSessionQueryCache(EVENTS_CACHE_KEY);
+    setEvents(prev => prev.filter(event => event.id !== eventId));
+    return { ok: true };
+  }, []);
 
   const toggleAttendance = useCallback(async (eventId: string): Promise<ActionResult> => {
     const userId = user?.id;
@@ -487,6 +538,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const next = new Set(attendanceIdsRef.current); next.add(eventId); setAttendanceIds(next);
       setEvents(prev => prev.map(event => event.id === eventId ? { ...event, attendanceCount: (event.attendanceCount || 0) + 1 } : event));
     }
+    clearSessionQueryCache(EVENTS_CACHE_KEY);
     return { ok: true };
   }, [user?.id, loadMyAttendance, setAttendanceIds]);
 
@@ -495,7 +547,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const addEvent = useCallback(async (data: { title: string; description: string; date: string; location: string; type: EventType; latitude?: number; longitude?: number }) => {
     if (!user) return { error: 'Not authenticated' }; const resolved = await resolveLocation(data.location, data.latitude, data.longitude);
     const { data: inserted, error } = await supabase.from('events').insert({ title: data.title, description: data.description, event_date: data.date, location: data.location, type: data.type, latitude: resolved.latitude, longitude: resolved.longitude, neighborhood: resolved.neighborhood || null, locality: resolved.locality || null, location_precision: resolved.precision || null, created_by: user.id }).select('id,title,description,event_date,location,neighborhood,locality,location_precision,latitude,longitude,type,created_by,created_at').single();
-    if (!error && inserted) { const nextEvent = mapEvent({ ...inserted, event_attendance: [{ count: 0 }] }); eventsLoadedRef.current = true; setEvents(prev => [...prev.filter(event => event.id !== nextEvent.id), nextEvent].sort((a, b) => a.date.localeCompare(b.date)).slice(0, EVENT_LIMIT)); }
+    if (!error && inserted) { const nextEvent = mapEvent({ ...inserted, event_attendance: [{ count: 0 }] }); clearSessionQueryCache(EVENTS_CACHE_KEY); eventsLoadedRef.current = true; setEvents(prev => [...prev.filter(event => event.id !== nextEvent.id), nextEvent].sort((a, b) => a.date.localeCompare(b.date)).slice(0, EVENT_LIMIT)); }
     return { data: inserted, error } as any;
   }, [user]);
 

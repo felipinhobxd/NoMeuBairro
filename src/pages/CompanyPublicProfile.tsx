@@ -87,7 +87,8 @@ export default function CompanyPublicProfile() {
           .from('public_job_posts')
           .select('id,title,description,neighborhood,locality,employment_type,work_model,salary_min,salary_max')
           .eq('company_id', companyId)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(100),
       ]);
       if (!active) return;
       if (companyResult.error || !companyResult.data) {

@@ -16,6 +16,8 @@ export default defineConfig({
     },
   },
   build: {
+    // Mantém o PWA utilizável também em navegadores móveis menos recentes.
+    target: 'es2019',
     rollupOptions: {
       output: {
         manualChunks(id) {

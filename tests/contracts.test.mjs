@@ -70,3 +70,59 @@ test('prevenção de duplicados ocorre antes do upload da imagem', async () => {
   assert.ok(anonymousDuplicateCheck >= 0, 'verificação de duplicados anônimos não encontrada');
   assert.ok(anonymousImageUpload > anonymousDuplicateCheck, 'imagem anônima não deve ser enviada antes da verificação de duplicados');
 });
+
+test('consultas frequentes usam cache curto e uma única leitura de permissões', async () => {
+  const [cache, dataContext, authContext, feed, layout, productExperience, postDetails] = await Promise.all([
+    read('src/utils/sessionQueryCache.ts'),
+    read('src/contexts/DataContext.tsx'),
+    read('src/contexts/AuthContext.tsx'),
+    read('src/pages/Feed.tsx'),
+    read('src/components/Layout.tsx'),
+    read('src/components/ProductExperience.tsx'),
+    read('src/pages/PostDetails.tsx'),
+  ]);
+
+  assert.match(cache, /window\.sessionStorage/);
+  assert.match(cache, /fresh: ageMs <= maxAgeMs/);
+  assert.match(dataContext, /POSTS_CACHE_MAX_AGE_MS = 2 \* 60 \* 1000/);
+  assert.match(dataContext, /EVENTS_CACHE_MAX_AGE_MS = 5 \* 60 \* 1000/);
+  assert.match(dataContext, /readSessionQueryCache<Post\[]>/);
+  assert.match(dataContext, /writeSessionQueryCache\(POSTS_CACHE_KEY/);
+  assert.match(authContext, /\.from\('app_roles'\)/);
+
+  for (const source of [feed, layout, productExperience, postDetails]) {
+    assert.doesNotMatch(source, /\.from\('app_roles'\)/);
+  }
+});
+
+test('feeds longos têm renderização progressiva e otimização fora da tela', async () => {
+  const [feed, polish] = await Promise.all([
+    read('src/pages/Feed.tsx'),
+    read('src/ux-polish.css'),
+  ]);
+  assert.match(feed, /FEED_RENDER_BATCH = 20/);
+  assert.match(feed, /renderedPosts\.map/);
+  assert.match(feed, /Mostrar mais relatos/);
+  assert.match(feed, /loading="lazy" decoding="async"/);
+  assert.match(polish, /content-visibility: auto/);
+});
+
+test('PWA sempre verifica a versão nova do service worker', async () => {
+  const [main, serviceWorker] = await Promise.all([
+    read('src/main.tsx'),
+    read('public/sw.js'),
+  ]);
+  assert.match(main, /updateViaCache: 'none'/);
+  assert.match(main, /registration\.update\(\)/);
+  assert.match(serviceWorker, /nmb-shell-v5/);
+});
+
+test('build e upload de imagens mantêm compatibilidade com celulares menos recentes', async () => {
+  const [viteConfig, imageStorage] = await Promise.all([
+    read('vite.config.ts'),
+    read('src/utils/imageStorage.ts'),
+  ]);
+  assert.match(viteConfig, /target: 'es2019'/);
+  assert.match(imageStorage, /typeof crypto\.randomUUID === 'function'/);
+  assert.match(imageStorage, /crypto\.getRandomValues\(bytes\)/);
+});

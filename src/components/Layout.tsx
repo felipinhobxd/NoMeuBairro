@@ -337,11 +337,10 @@ interface LayoutProps { children: ReactNode }
 export default function Layout({ children }: LayoutProps) {
   const { isDark, toggle } = useTheme();
   const { fontSize, openFontSizePicker } = useFontSize();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, logout, isAdmin } = useAuth();
   const { currentNeighborhood, isNeighborhoodSelected, clearSelection } = useNeighborhood();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isAdmin, setIsAdmin] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
 
   const isActive = (path: string) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
@@ -350,25 +349,6 @@ export default function Layout({ children }: LayoutProps) {
   ), [isAdmin]);
   const mobilePrimaryNavItems = useMemo(() => navItems.filter(item => ['/', '/mapa', '/empregos', '/mural'].includes(item.path)), []);
   const mobileMoreActive = ['/estatisticas', '/denuncias', '/perfil', '/salvos', '/admin'].some(path => isActive(path));
-
-  useEffect(() => {
-    let active = true;
-    if (!isAuthenticated || !user?.id) {
-      setIsAdmin(false);
-      return () => { active = false; };
-    }
-    void supabase
-      .from('app_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        setIsAdmin(!error && data?.role === 'admin');
-      });
-    return () => { active = false; };
-  }, [isAuthenticated, user?.id]);
 
   useEffect(() => { setMobileMoreOpen(false); }, [location.pathname]);
 

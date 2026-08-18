@@ -35,6 +35,7 @@ const statusOpts: { id: PostStatus | 'all'; label: string }[] = [
 ];
 const catOpts = Object.entries(postCategories).map(([v, d]) => ({ value: v, label: `${d.emoji} ${d.label}` }));
 const CREATE_POST_INTENT_KEY = 'nmb-after-login-action';
+const FEED_RENDER_BATCH = 20;
 
 type NeighborhoodWeeklySummary = {
   area: string;
@@ -76,7 +77,7 @@ function CommentItem({ comment, replies, allComments, onReply, replyingTo, onDel
 }
 
 export default function Feed() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, canModerate } = useAuth();
   const navigate = useNavigate();
   const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, reportContent, fetchData, loading } = useData();
   const { currentNeighborhood, isNeighborhoodSelected, setNeighborhoodByCep } = useNeighborhood();
@@ -116,13 +117,13 @@ export default function Feed() {
   const [fOfficialStatus, setFOfficialStatus] = useState<OfficialProtocolStatus>('submitted');
   const [similarPosts, setSimilarPosts] = useState<SimilarPost[]>([]);
   const [creatingPost, setCreatingPost] = useState(false);
-  const [canModerate, setCanModerate] = useState(false);
   const [isFollowingNeighborhood, setIsFollowingNeighborhood] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [neighborhoodSummary, setNeighborhoodSummary] = useState<NeighborhoodWeeklySummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [postDraftReady, setPostDraftReady] = useState(false);
   const [postDraftRestored, setPostDraftRestored] = useState(false);
+  const [renderLimit, setRenderLimit] = useState(FEED_RENDER_BATCH);
 
   useEffect(() => { if (currentNeighborhood) setUserLocation({ lat: currentNeighborhood.latitude, lng: currentNeighborhood.longitude }); }, [currentNeighborhood]);
   useEffect(() => {
@@ -173,16 +174,6 @@ export default function Feed() {
     setPostDraftRestored(false);
     toast('Rascunho descartado.', 'info');
   }, [user?.id, toast]);
-
-  useEffect(() => {
-    let active = true;
-    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }
-    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {
-      if (!active) return;
-      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');
-    });
-    return () => { active = false; };
-  }, [user?.id]);
 
   useEffect(() => {
     let active = true;
@@ -287,6 +278,13 @@ export default function Feed() {
     }
     return next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [filtered, sortMode, userLocation, commentsByPost]);
+
+  const renderedPosts = useMemo(() => visiblePosts.slice(0, renderLimit), [visiblePosts, renderLimit]);
+  const remainingPosts = Math.max(0, visiblePosts.length - renderedPosts.length);
+
+  useEffect(() => {
+    setRenderLimit(FEED_RENDER_BATCH);
+  }, [activeCategory, activeStatus, searchQuery, onlyMine, onlyWithImage, nearMe, nearRadius, sortMode, currentNeighborhood.name, isNeighborhoodSelected]);
 
   const toggleNearMe = useCallback(async () => {
     if (!nearMe) {
@@ -397,7 +395,7 @@ export default function Feed() {
       {visiblePosts.length === 0 ? <EmptyState icon={MessageSquare} title={searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum relato por enquanto'} description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : isNeighborhoodSelected ? `Nenhum relato identificado exatamente em ${displayNeighborhood}.` : 'Seja o primeiro a registrar um relato em Curitiba!'} action={searchQuery ? { label: 'Limpar busca', onClick: () => setSearchQuery('') } : { label: 'Criar relato', onClick: openCreate }} /> : <>
         {searchQuery && <p className="text-xs text-slate-400 -mt-2">{visiblePosts.length} resultado{filtered.length !== 1 ? 's' : ''} para "{searchQuery}"</p>}
         <div className="space-y-3 stagger">
-          {visiblePosts.map(post => {
+          {renderedPosts.map(post => {
             const isAnon = post.authorId === 'anonymous';
             const isExpanded = expandedPosts.has(post.id);
             const isDescriptionExpanded = expandedDescriptions.has(post.id);
@@ -409,11 +407,11 @@ export default function Feed() {
             const resolvedArea = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
             const canManageStatus = isMyPost(post) || canModerate;
             const distanceFromUser = userLocation && post.latitude != null && post.longitude != null ? calculateDistance(userLocation.lat, userLocation.lng, Number(post.latitude), Number(post.longitude)) : null;
-            return <Card key={post.id} id={`post-${post.id}`} className={cn(isAnon && 'ring-red-200 dark:ring-red-500/20', 'animate-card-enter active:scale-[0.99] md:active:scale-100 transition-transform')}>
+            return <Card key={post.id} id={`post-${post.id}`} className={cn(isAnon && 'ring-red-200 dark:ring-red-500/20', 'feed-card-optimized animate-card-enter active:scale-[0.99] md:active:scale-100 transition-transform')}>
               <div className="flex items-center gap-3 mb-4"><div className="flex items-center gap-3 flex-1 min-w-0">{isAnon ? <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></div> : <Link to={`/perfil/${post.authorId}`} className="relative group shrink-0"><div className="w-10 h-10 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-sm font-bold text-emerald-700 dark:text-emerald-400 ring-2 ring-transparent group-hover:ring-emerald-500/30 transition-all">{post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt={post.authorName} className="w-full h-full object-cover" /> : post.authorName.charAt(0).toUpperCase()}</div></Link>}<div className="min-w-0 flex-1">{isAnon ? <p className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">{post.authorName}</p> : <Link to={`/perfil/${post.authorId}`} className="text-sm font-semibold text-slate-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors truncate block">{post.authorName}</Link>}<p className="text-xs text-slate-400">{timeAgo(post.createdAt)}</p></div></div><StatusBadge status={post.status} />{isMyPost(post) && (confirmDeleteId === post.id ? <div className="flex items-center gap-1.5 animate-fade-in"><button onClick={() => handleDeletePost(post.id)} className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold transition-colors">Confirmar</button><button onClick={() => setConfirmDeleteId(null)} className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancelar</button></div> : <button onClick={() => setConfirmDeleteId(post.id)} className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all" aria-label="Excluir relato"><Trash2 className="w-4 h-4" /></button>)}</div>
               <Link to={`/post/${post.id}`} className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40"><h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">{post.title}</h3></Link>
               <div className="relative"><p className={cn('text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line break-words transition-all', !isDescriptionExpanded && 'line-clamp-4')}>{post.description}</p>{shouldShowReadMore && <button onClick={() => toggleDescription(post.id)} className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1 hover:underline underline-offset-2">{isDescriptionExpanded ? 'Ver menos' : 'Ler descrição completa'}</button>}</div>
-              {post.imageUrl && <div className="mt-3 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => setZoomedImage(post.imageUrl!)}><img src={post.imageUrl} alt="" className="w-full max-h-72 object-cover" loading="lazy" /></div>}
+              {post.imageUrl && <div className="mt-3 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => setZoomedImage(post.imageUrl!)}><img src={post.imageUrl} alt="" className="w-full max-h-72 object-cover" loading="lazy" decoding="async" /></div>}
               {post.latitude != null && post.longitude != null && <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-3 py-2.5"><MapPin className="w-4 h-4 shrink-0 text-emerald-600" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">Localização no mapa</p><p className="text-[10px] text-slate-400 truncate">{post.location}</p></div><button type="button" onClick={() => navigate('/mapa')} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-400 shrink-0">Ver mapa</button></div>}
               <div className="flex items-center gap-2 mt-3 flex-wrap"><CategoryBadge category={post.category} />{resolvedArea && <span className="inline-flex items-center gap-1 rounded-md bg-orange-50 dark:bg-orange-500/10 px-2 py-1 text-[11px] font-bold text-orange-800 dark:text-orange-300"><MapPin className="w-3 h-3" />{resolvedArea}</span>}{nearMe && distanceFromUser != null && <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300"><LocateFixed className="w-3 h-3" />{distanceFromUser < 1 ? `${Math.round(distanceFromUser * 1000)} m` : `${distanceFromUser.toFixed(1)} km`}</span>}{post.location && <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" />{post.location}</span>}</div>
               <PublicServiceContact category={post.category} compact />
@@ -434,6 +432,13 @@ export default function Feed() {
             </Card>;
           })}
         </div>
+        {remainingPosts > 0 && (
+          <div className="flex justify-center pt-2">
+            <Button variant="secondary" onClick={() => setRenderLimit(limit => limit + FEED_RENDER_BATCH)}>
+              Mostrar mais relatos ({remainingPosts} restantes)
+            </Button>
+          </div>
+        )}
       </>}
       <button onClick={openCreate} className="fixed bottom-24 lg:bottom-8 right-4 sm:right-6 z-30 w-14 h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl shadow-xl shadow-emerald-600/30 hover:shadow-emerald-600/50 transition-all flex items-center justify-center active:scale-95 group" aria-label="Criar novo relato" title={isAuthenticated ? 'Criar novo relato' : 'Entre ou crie uma conta para publicar'}><Plus className="w-6 h-6 group-hover:rotate-90 transition-transform duration-300" /></button>
       <Modal

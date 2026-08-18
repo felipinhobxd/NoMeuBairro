@@ -10,6 +10,7 @@ import { curitibaNeighborhoods, neighborhoodSearchText, useNeighborhood } from '
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import { COOKIE_CONSENT_EVENT, hasCookieConsentChoice } from '../utils/cookieConsent';
+import { shouldRunSessionTask } from '../utils/sessionQueryCache';
 
 type SearchResult = {
   result_type: 'post' | 'event' | 'job' | 'neighborhood' | string;
@@ -369,7 +370,7 @@ function getInstallInstructions(): InstallInstructions {
 export default function ProductExperience() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const { isNeighborhoodSelected, setNeighborhood } = useNeighborhood();
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
   const [footerTarget, setFooterTarget] = useState<HTMLElement | null>(null);
@@ -386,7 +387,6 @@ export default function ProductExperience() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isStandalone, setIsStandalone] = useState(() => isStandaloneMode());
-  const [isAdmin, setIsAdmin] = useState(false);
   const [cookieChoiceMade, setCookieChoiceMade] = useState(() => hasCookieConsentChoice());
   const errorFingerprints = useRef(new Map<string, number>());
 
@@ -402,25 +402,6 @@ export default function ProductExperience() {
   useEffect(() => {
     if (onboardingStep >= activeTourSteps.length) setOnboardingStep(Math.max(0, activeTourSteps.length - 1));
   }, [activeTourSteps.length, onboardingStep]);
-
-  useEffect(() => {
-    let active = true;
-    if (!isAuthenticated || !user?.id) {
-      setIsAdmin(false);
-      return () => { active = false; };
-    }
-    void supabase
-      .from('app_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        setIsAdmin(!error && data?.role === 'admin');
-      });
-    return () => { active = false; };
-  }, [isAuthenticated, user?.id]);
 
   useEffect(() => {
     const syncTargets = () => {
@@ -718,7 +699,9 @@ export default function ProductExperience() {
   };
 
   useEffect(() => {
-    void Promise.resolve(supabase.rpc('track_page_view', { p_path: canonicalRoute(location.pathname) })).then(({ error }) => {
+    const path = canonicalRoute(location.pathname);
+    if (!shouldRunSessionTask(`nmb-page-view:${path}`, 30_000)) return;
+    void Promise.resolve(supabase.rpc('track_page_view', { p_path: path })).then(({ error }) => {
       if (error) console.warn('Analytics agregado indisponível:', error.message);
     }).catch(() => {});
   }, [location.pathname]);

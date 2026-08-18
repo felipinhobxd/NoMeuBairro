@@ -124,7 +124,7 @@ function ThreadComment({
 export default function PostDetails() {
   const { postId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, canModerate } = useAuth();
   const { toast } = useToast();
   const { isSaved: isPostSaved, toggleSaved: toggleSavedPost } = useSavedItems('post');
   const { supportPost, addComment, commentsByPost, loadComments, deleteComment, updatePostStatus, isMyPost } = useData();
@@ -137,7 +137,6 @@ export default function PostDetails() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [deletingComment, setDeletingComment] = useState<string | null>(null);
   const [statusHistory, setStatusHistory] = useState<StatusHistoryItem[]>([]);
-  const [canModerate, setCanModerate] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<PostStatus | null>(null);
   const [savingProtocol, setSavingProtocol] = useState(false);
 
@@ -208,16 +207,6 @@ export default function PostDetails() {
     void load();
     return () => { mounted = false; };
   }, [postId, user?.id, loadComments]);
-
-  useEffect(() => {
-    let active = true;
-    if (!user?.id) { setCanModerate(false); return () => { active = false; }; }
-    void supabase.from('app_roles').select('role').eq('user_id', user.id).maybeSingle().then(({ data }) => {
-      if (!active) return;
-      setCanModerate(data?.role === 'admin' || data?.role === 'moderator');
-    });
-    return () => { active = false; };
-  }, [user?.id]);
 
   useEffect(() => {
     if (!post) return;

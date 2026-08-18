@@ -6,6 +6,8 @@ import { disconnectPushOnLogout } from '../utils/pushNotifications';
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+  canModerate: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string; pendingVerification?: boolean }>;
   logout: () => void;
@@ -49,6 +51,7 @@ function avatarStoragePath(url: string | undefined, userId: string) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<'admin' | 'moderator' | null>(null);
   const profileInFlightRef = useRef<string | null>(null);
   const lastProfileIdentityRef = useRef<string | null>(null);
 
@@ -56,6 +59,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const identity = `${id}|${email}|${metadata?.account_type || 'resident'}|${metadata?.name || ''}`;
     if (!force && (profileInFlightRef.current === identity || lastProfileIdentityRef.current === identity)) return;
     profileInFlightRef.current = identity;
+    const roleRequest = Promise.resolve(supabase
+      .from('app_roles')
+      .select('role')
+      .eq('user_id', id)
+      .maybeSingle());
 
     let attempts = 0;
     const maxAttempts = 3;
@@ -68,8 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (data && !error) {
+        const { data: roleData } = await roleRequest;
         lastProfileIdentityRef.current = identity;
         profileInFlightRef.current = null;
+        setRole(roleData?.role === 'admin' || roleData?.role === 'moderator' ? roleData.role : null);
         setUser({
           id: data.id,
           name: data.name,
@@ -91,6 +101,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     lastProfileIdentityRef.current = identity;
     profileInFlightRef.current = null;
+    const { data: roleData } = await roleRequest;
+    setRole(roleData?.role === 'admin' || roleData?.role === 'moderator' ? roleData.role : null);
     setUser({
       id,
       name: metadata?.name || 'Morador',
@@ -121,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           lastProfileIdentityRef.current = null;
           profileInFlightRef.current = null;
         }
+        setRole(null);
         setUser(null);
         return;
       }
@@ -168,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     lastProfileIdentityRef.current = null;
     profileInFlightRef.current = null;
+    setRole(null);
     setUser(null);
   }, []);
 
@@ -259,7 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, register, logout, updateProfile, changePassword }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isAdmin: role === 'admin', canModerate: role === 'admin' || role === 'moderator', login, register, logout, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

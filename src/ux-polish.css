@@ -317,3 +317,11 @@
 .nmb-admin-mobile {
   border: 1px solid rgba(249, 115, 22, 0.25);
 }
+
+/* Evita calcular layout e pintura de cards ainda fora da tela em feeds longos. */
+@supports (content-visibility: auto) {
+  .feed-card-optimized {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 620px;
+  }
+}
