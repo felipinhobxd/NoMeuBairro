@@ -265,7 +265,7 @@ export default function PostDetails() {
 
   const handleShare = async () => {
     if (!post) return;
-    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/post/${post.id}` });
+    const result = await shareContent({ title: `${post.title} · No Meu Bairro`, text: post.description.slice(0, 180), url: `/#/post/${post.id}` });
     if (result === 'copied') toast('Link do relato copiado!');
     else if (result === 'failed') toast('Não foi possível compartilhar este relato.', 'error');
   };
