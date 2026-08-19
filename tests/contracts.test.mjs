@@ -175,6 +175,8 @@ test('CEP usa endereço completo e geocodificação protegida pelo Supabase', as
   assert.doesNotMatch(mapPicker, /nominatim\.openstreetmap\.org/);
   assert.match(edgeFunction, /normalizeGeocodingAddress/);
   assert.match(edgeFunction, /bounded: '1'/);
+  assert.match(edgeFunction, /geocodeAddressWithPhoton/);
+  assert.match(edgeFunction, /insideCuritiba/);
 });
 
 test('categoria escolhida aparece com destaque antes do título do relato', async () => {
