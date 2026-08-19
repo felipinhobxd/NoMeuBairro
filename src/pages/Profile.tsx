@@ -10,6 +10,7 @@ import { cn } from '../utils/cn';
 import { communityBadges, EMPTY_COMMUNITY_CONTRIBUTION, getCommunityBadgeProgress, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
 import { supabase } from '../utils/supabase';
 import AccountDataControls from '../components/AccountDataControls';
+import { MIN_NEW_PASSWORD_LENGTH, minimumPasswordMessage } from '../config/authSecurity';
 
 type Point = { x: number; y: number };
 type SourceImage = { src: string; width: number; height: number };
@@ -228,7 +229,7 @@ export default function Profile() {
   const handleChangePassword = async () => {
     setPwdError('');
     if (!currentPwd || !newPwd || !confirmPwd) { setPwdError('Preencha todos os campos.'); return; }
-    if (newPwd.length < 6) { setPwdError('A nova senha deve ter pelo menos 6 caracteres.'); return; }
+    if (newPwd.length < MIN_NEW_PASSWORD_LENGTH) { setPwdError(minimumPasswordMessage('A nova senha')); return; }
     if (newPwd !== confirmPwd) { setPwdError('A nova senha e a confirmação não coincidem.'); return; }
     setSavingPwd(true);
     const result = await changePassword(currentPwd, newPwd);
@@ -314,8 +315,8 @@ export default function Profile() {
       <Modal open={showChangePassword} onClose={() => setShowChangePassword(false)} title="Alterar senha">
         <div className="space-y-4">
           <Input label="Senha atual" type="password" placeholder="••••••••" value={currentPwd} onChange={e => { setCurrentPwd(e.target.value); setPwdError(''); }} required />
-          <Input label="Nova senha" type="password" placeholder="Mínimo 6 caracteres" value={newPwd} onChange={e => { setNewPwd(e.target.value); setPwdError(''); }} required />
-          <Input label="Confirmar nova senha" type="password" placeholder="Repita a nova senha" value={confirmPwd} onChange={e => { setConfirmPwd(e.target.value); setPwdError(''); }} required />
+          <Input label="Nova senha" type="password" minLength={MIN_NEW_PASSWORD_LENGTH} placeholder={`Mínimo ${MIN_NEW_PASSWORD_LENGTH} caracteres`} value={newPwd} onChange={e => { setNewPwd(e.target.value); setPwdError(''); }} required />
+          <Input label="Confirmar nova senha" type="password" minLength={MIN_NEW_PASSWORD_LENGTH} placeholder="Repita a nova senha" value={confirmPwd} onChange={e => { setConfirmPwd(e.target.value); setPwdError(''); }} required />
           {pwdError && <p className="text-xs text-red-500 dark:text-red-400 px-1">{pwdError}</p>}
           <div className="flex flex-col sm:flex-row gap-3 pt-2"><Button type="button" variant="secondary" className="flex-1" onClick={() => setShowChangePassword(false)}>Cancelar</Button><Button className="flex-1" disabled={!currentPwd || !newPwd || !confirmPwd || savingPwd} onClick={handleChangePassword}>{savingPwd ? <><Loader2 className="w-4 h-4 animate-spin" /> Alterando...</> : 'Alterar senha'}</Button></div>
         </div>

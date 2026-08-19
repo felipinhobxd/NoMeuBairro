@@ -108,6 +108,20 @@ test('itens salvos compartilham uma única leitura por sessão', async () => {
   assert.doesNotMatch(savedItems, /select\(column\)/);
 });
 
+test('senhas novas exigem pelo menos oito caracteres sem bloquear logins antigos', async () => {
+  const [security, login, profile] = await Promise.all([
+    read('src/config/authSecurity.ts'),
+    read('src/pages/Login.tsx'),
+    read('src/pages/Profile.tsx'),
+  ]);
+  assert.match(security, /MIN_NEW_PASSWORD_LENGTH = 8/);
+  assert.match(login, /register \? MIN_NEW_PASSWORD_LENGTH : 6/);
+  assert.match(login, /password\.length < MIN_NEW_PASSWORD_LENGTH/);
+  assert.match(profile, /newPwd\.length < MIN_NEW_PASSWORD_LENGTH/);
+  assert.doesNotMatch(login, /pelo menos 6 caracteres/);
+  assert.doesNotMatch(profile, /pelo menos 6 caracteres/);
+});
+
 test('feeds longos têm renderização progressiva e otimização fora da tela', async () => {
   const [feed, polish] = await Promise.all([
     read('src/pages/Feed.tsx'),
