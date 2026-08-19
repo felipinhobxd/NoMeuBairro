@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   }
 
   const id = typeof req.query?.id === 'string' ? req.query.id : '';
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).end();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) return res.status(400).end();
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;

@@ -27,11 +27,12 @@ test('o guia só pode iniciar depois de uma escolha de cookies', async () => {
 });
 
 test('links de relatos usam uma página compartilhável com metadados sociais', async () => {
-  const [share, feed, details, api, vercel, serviceWorker] = await Promise.all([
+  const [share, feed, details, api, imageApi, vercel, serviceWorker] = await Promise.all([
     read('src/utils/share.ts'),
     read('src/pages/Feed.tsx'),
     read('src/pages/PostDetails.tsx'),
     read('api/share-post.js'),
+    read('api/post-image.js'),
     read('vercel.json'),
     read('public/sw.js'),
   ]);
@@ -41,6 +42,8 @@ test('links de relatos usam uma página compartilhável com metadados sociais', 
   assert.match(api, /property="og:title"/);
   assert.match(api, /name="twitter:card"/);
   assert.match(api, /escapeHtml\(summary\)/);
+  assert.match(imageApi, /\[1-5\]\[0-9a-f\]\{3\}/);
+  assert.match(imageApi, /\[89ab\]\[0-9a-f\]\{3\}/);
   assert.match(vercel, /"source": "\/relato\/:postId"/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\('\/relato\/'\)/);
   assert.match(serviceWorker, /event\.respondWith\(fetch\(request\)\)/);
@@ -108,13 +111,21 @@ test('feeds longos têm renderização progressiva e otimização fora da tela',
 });
 
 test('PWA sempre verifica a versão nova do service worker', async () => {
-  const [main, serviceWorker] = await Promise.all([
+  const [main, serviceWorker, manifest] = await Promise.all([
     read('src/main.tsx'),
     read('public/sw.js'),
+    read('public/manifest.webmanifest'),
   ]);
   assert.match(main, /updateViaCache: 'none'/);
   assert.match(main, /registration\.update\(\)/);
-  assert.match(serviceWorker, /nmb-shell-v5/);
+  assert.match(serviceWorker, /CACHE_VERSION = 'v6'/);
+  assert.match(serviceWorker, /IMAGE_CACHE_MAX_ENTRIES = 48/);
+  assert.match(serviceWorker, /IMAGE_CACHE_MAX_AGE_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(serviceWorker, /url\.pathname\.startsWith\('\/api\/post-image'\)/);
+  assert.match(serviceWorker, /networkFirst\(request, \{ cacheName: IMAGE_CACHE, image: true \}\)/);
+  assert.match(manifest, /icon-maskable-512\.png/);
+  assert.match(manifest, /"short_name": "Relatar"/);
+  assert.match(manifest, /"short_name": "Mapa"/);
 });
 
 test('build e upload de imagens mantêm compatibilidade com celulares menos recentes', async () => {

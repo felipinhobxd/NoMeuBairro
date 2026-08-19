@@ -1,28 +1,98 @@
-const CACHE_NAME = 'nmb-shell-v5';
-const SHELL = ['/', '/logo.png', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE_VERSION = 'v6';
+const CACHE_PREFIX = 'nmb-';
+const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
+const STATIC_CACHE = `${CACHE_PREFIX}static-${CACHE_VERSION}`;
+const IMAGE_CACHE = `${CACHE_PREFIX}images-${CACHE_VERSION}`;
+const CURRENT_CACHES = new Set([SHELL_CACHE, STATIC_CACHE, IMAGE_CACHE]);
+const IMAGE_CACHE_MAX_ENTRIES = 48;
+const IMAGE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const CACHE_TIME_HEADER = 'x-nmb-sw-cache-time';
+const SHELL = ['/', '/logo.png', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(SHELL_CACHE)
+      .then((cache) => cache.addAll(SHELL))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys
+        .filter((key) => key.startsWith(CACHE_PREFIX) && !CURRENT_CACHES.has(key))
+        .map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
 
-async function networkFirst(request, fallbackPath) {
+async function putInCache(cacheName, request, response, { timestamp = false, maxEntries, maxAgeMs } = {}) {
+  if (!response?.ok || response.type === 'opaque') return;
+  const cache = await caches.open(cacheName);
+  let cacheResponse = response.clone();
+
+  if (timestamp) {
+    const headers = new Headers(cacheResponse.headers);
+    headers.set(CACHE_TIME_HEADER, String(Date.now()));
+    cacheResponse = new Response(await cacheResponse.blob(), {
+      status: cacheResponse.status,
+      statusText: cacheResponse.statusText,
+      headers,
+    });
+  }
+
+  await cache.put(request, cacheResponse);
+
+  if (maxAgeMs) {
+    const keys = await cache.keys();
+    const expiredKeys = (await Promise.all(keys.map(async (key) => {
+      const cached = await cache.match(key);
+      return cached && !isFresh(cached, maxAgeMs) ? key : null;
+    }))).filter(Boolean);
+    await Promise.all(expiredKeys.map((key) => cache.delete(key)));
+  }
+
+  if (maxEntries) {
+    const keys = await cache.keys();
+    const excess = keys.length - maxEntries;
+    if (excess > 0) await Promise.all(keys.slice(0, excess).map((key) => cache.delete(key)));
+  }
+}
+
+function isFresh(response, maxAgeMs) {
+  const cachedAt = Number(response?.headers.get(CACHE_TIME_HEADER) || 0);
+  return cachedAt > 0 && Date.now() - cachedAt <= maxAgeMs;
+}
+
+async function networkFirst(request, { cacheName = STATIC_CACHE, fallbackPath, image = false } = {}) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then((cache) => cache.put(request.mode === 'navigate' ? '/' : request, copy)).catch(() => {});
-    }
+    try {
+      await putInCache(cacheName, request.mode === 'navigate' ? '/' : request, response, image
+        ? { timestamp: true, maxEntries: IMAGE_CACHE_MAX_ENTRIES, maxAgeMs: IMAGE_CACHE_MAX_AGE_MS }
+        : undefined);
+    } catch {}
     return response;
   } catch {
-    return (await caches.match(request)) || (fallbackPath ? await caches.match(fallbackPath) : null) || Response.error();
+    return (await caches.match(request))
+      || (fallbackPath ? await caches.match(fallbackPath) : null)
+      || Response.error();
+  }
+}
+
+async function cachedImage(request) {
+  const cache = await caches.open(IMAGE_CACHE);
+  const cached = await cache.match(request);
+
+  if (cached && isFresh(cached, IMAGE_CACHE_MAX_AGE_MS)) return cached;
+
+  try {
+    const response = await fetch(request);
+    try { await putInCache(IMAGE_CACHE, request, response, { timestamp: true, maxEntries: IMAGE_CACHE_MAX_ENTRIES, maxAgeMs: IMAGE_CACHE_MAX_AGE_MS }); } catch {}
+    return response;
+  } catch {
+    return cached || Response.error();
   }
 }
 
@@ -39,21 +109,44 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(fetch(request));
       return;
     }
-    event.respondWith(networkFirst(request, '/'));
+    event.respondWith(networkFirst(request, { cacheName: SHELL_CACHE, fallbackPath: '/' }));
     return;
   }
+
+  // Imagens de relatos são dinâmicas: consulte a rede primeiro e mantenha
+  // somente um fallback offline limitado, evitando mídia antiga ou cache infinito.
+  if (url.pathname.startsWith('/api/post-image')) {
+    event.respondWith(networkFirst(request, { cacheName: IMAGE_CACHE, image: true }));
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request));
+    return;
+  }
+
   if (request.destination === 'script' || request.destination === 'style') {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, { cacheName: STATIC_CACHE }));
     return;
   }
-  if (['image', 'font'].includes(request.destination) || url.pathname.endsWith('.webmanifest')) {
-    event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-      if (response.ok) {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => {});
-      }
+
+  if (request.destination === 'image') {
+    event.respondWith(cachedImage(request));
+    return;
+  }
+
+  if (request.destination === 'font') {
+    event.respondWith(caches.match(request).then(async (cached) => {
+      if (cached) return cached;
+      const response = await fetch(request);
+      try { await putInCache(STATIC_CACHE, request, response); } catch {}
       return response;
-    })));
+    }));
+    return;
+  }
+
+  if (url.pathname.endsWith('.webmanifest')) {
+    event.respondWith(networkFirst(request, { cacheName: SHELL_CACHE }));
   }
 });
 

@@ -1,5 +1,32 @@
-import { Database, Eye, LockKeyhole, MapPin, ShieldCheck, UserRound } from 'lucide-react';
+import { Clock3, Database, ExternalLink, Eye, LockKeyhole, MapPin, ShieldCheck, UserRound } from 'lucide-react';
 import { Card } from '../components/UI';
+
+const retentionRows = [
+  {
+    data: 'Conta e perfil',
+    period: 'Enquanto a conta estiver ativa. A exclusão pode ser solicitada pelo Perfil e passa por revisão administrativa para evitar fraude ou remoção indevida.',
+  },
+  {
+    data: 'Relatos, comentários e eventos',
+    period: 'Enquanto o conteúdo estiver publicado. O autor pode excluir o que a interface permitir; conteúdo também pode ser removido pela moderação ou no tratamento de uma solicitação de conta.',
+  },
+  {
+    data: 'Currículo e candidaturas',
+    period: 'Enquanto forem mantidos pela pessoa. O currículo pode ser atualizado; uma candidatura pode ser retirada, e ambos entram na análise quando houver solicitação de exclusão da conta.',
+  },
+  {
+    data: 'Denúncias e decisões de moderação',
+    period: 'Pelo período necessário para segurança, prevenção de abuso e auditoria das decisões. O acesso é restrito a quem possui permissão de moderação.',
+  },
+  {
+    data: 'Registros de erros',
+    period: 'Até 90 dias. A rotina de manutenção remove automaticamente registros técnicos mais antigos.',
+  },
+  {
+    data: 'Métricas agregadas',
+    period: 'Mantidas como contagens por página e dia, sem e-mail, ID de conta, IP ou identificador do dispositivo.',
+  },
+];
 
 const sections = [
   {
@@ -40,7 +67,7 @@ export default function Privacy() {
       <div>
         <div className="inline-flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-2"><ShieldCheck className="w-4 h-4" /> Transparência</div>
         <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">Política de Privacidade</h1>
-        <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">Esta página explica, em linguagem simples, quais informações o No Meu Bairro usa e por quê. Última atualização: 17 de agosto de 2026.</p>
+        <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">Esta página explica, em linguagem simples, quais informações o No Meu Bairro usa e por quê. Última atualização: 19 de agosto de 2026.</p>
       </div>
 
       <Card className="!p-5 sm:!p-6 bg-emerald-50/50 dark:bg-emerald-500/5 !border-emerald-100 dark:!border-emerald-500/15">
@@ -60,12 +87,39 @@ export default function Privacy() {
 
       <Card className="!p-5 sm:!p-6">
         <h2 className="text-lg font-black text-slate-900 dark:text-white">Armazenamento no seu navegador</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">O site usa armazenamento local e de sessão para lembrar escolhas úteis, como tema, tamanho da fonte, bairro selecionado, conclusão do guia inicial e qual conteúdo deve receber foco após uma navegação. O aplicativo instalado também usa um cache técnico limitado para abrir a interface de forma mais confiável; dados do Supabase, mapas e serviços externos não são colocados nesse cache pelo nosso service worker.</p>
+        <p className="mt-2 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">O site usa armazenamento local e de sessão para lembrar escolhas úteis, como tema, tamanho da fonte, bairro selecionado, conclusão do guia inicial e qual conteúdo deve receber foco após uma navegação. O aplicativo instalado também usa um cache técnico limitado para abrir a interface de forma mais confiável. Imagens exibidas pelo próprio site só são reutilizadas como suporte offline por até 7 dias, com limite de 48 arquivos; dados de consultas do Supabase, mapas e serviços externos não entram nesse cache de imagens.</p>
+      </Card>
+
+      <Card className="!p-5 sm:!p-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300"><Clock3 className="h-5 w-5" /></div>
+          <div>
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">Prazos e critérios de retenção</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">O prazo depende da finalidade e do controle disponível para cada tipo de informação.</p>
+          </div>
+        </div>
+        <dl className="mt-5 divide-y divide-slate-200 dark:divide-slate-800">
+          {retentionRows.map((row) => (
+            <div key={row.data} className="grid gap-1 py-4 sm:grid-cols-[11rem_minmax(0,1fr)] sm:gap-5">
+              <dt className="text-sm font-extrabold text-slate-900 dark:text-white">{row.data}</dt>
+              <dd className="text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">{row.period}</dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
+
+      <Card className="!p-5 sm:!p-6">
+        <h2 className="text-lg font-black text-slate-900 dark:text-white">Responsável e canais para solicitações</h2>
+        <p className="mt-2 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">A administração do projeto No Meu Bairro é responsável pelas decisões sobre o tratamento de dados dentro da plataforma. Para baixar seus dados ou pedir a exclusão da conta, use os controles disponíveis no Perfil. Se você não conseguir acessar a conta ou precisar relatar algo confidencial, utilize o canal privado de segurança do projeto. Não publique documentos ou dados pessoais em uma issue pública do GitHub.</p>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <a href="#/perfil" className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-700 px-5 py-3 text-sm font-extrabold text-white transition-colors hover:bg-emerald-800">Abrir controles no Perfil</a>
+          <a href="https://github.com/felipinhobxd/NoMeuBairro/security/advisories/new" target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-slate-100 px-5 py-3 text-sm font-extrabold text-slate-800 transition-colors hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Canal privado de segurança <ExternalLink className="h-4 w-4" aria-hidden="true" /></a>
+        </div>
       </Card>
 
       <Card className="!p-5 sm:!p-6">
         <h2 className="text-lg font-black text-slate-900 dark:text-white">Seus direitos e alterações desta política</h2>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">Você pode atualizar dados editáveis pelo próprio Perfil. Para pedidos que não estejam disponíveis pela interface, utilize os canais disponibilizados pelo projeto. Esta política pode ser atualizada quando o funcionamento da plataforma mudar; a data no início da página indicará a versão mais recente.</p>
+        <p className="mt-2 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">Você pode confirmar a existência de tratamento, acessar ou corrigir dados editáveis, baixar uma cópia em JSON e solicitar exclusão quando aplicável. Algumas informações podem precisar ser preservadas temporariamente por segurança, prevenção de abuso, auditoria ou obrigação legal; nesses casos, a justificativa deve acompanhar a análise. Esta política pode ser atualizada quando o funcionamento da plataforma mudar, e a data no início da página indicará a versão mais recente.</p>
       </Card>
     </div>
   );

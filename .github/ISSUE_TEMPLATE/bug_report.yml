@@ -1,0 +1,49 @@
+name: Relatar um problema
+description: Informe um erro reproduzível no site, PWA ou integração.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Não inclua dados pessoais, credenciais ou informações confidenciais. Para segurança, use o canal privado indicado na página inicial de issues.
+  - type: textarea
+    id: problem
+    attributes:
+      label: O que aconteceu?
+      description: Descreva o resultado observado e o que esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      placeholder: |
+        1. Abra...
+        2. Toque em...
+        3. Veja o erro...
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Dispositivo
+      options:
+        - Celular ou tablet Android
+        - iPhone ou iPad
+        - Computador Windows
+        - Computador macOS ou Linux
+        - Outro
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Navegador e versão
+      placeholder: Ex.: Chrome 151
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidências sem dados pessoais
+      description: Imagens ou mensagens de erro são opcionais. Remova nomes, e-mails, endereços e tokens.

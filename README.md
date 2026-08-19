@@ -137,6 +137,7 @@ O No Meu Bairro inclui recursos voltados à acessibilidade e facilidade de uso:
 - modo claro e modo escuro;
 - navegação por teclado e estados de foco visíveis;
 - áreas de toque maiores em telas pequenas;
+- escolha de fonte pequena, média, grande ou gigante antes do primeiro acesso;
 - textos e controles adaptados a diferentes tamanhos de tela;
 - tour interativo que ensina a usar a própria interface.
 
@@ -194,6 +195,9 @@ O projeto possui suporte a **PWA**:
 - ícones para instalação;
 - atalho **Instalar aplicativo**;
 - instruções específicas quando o navegador não oferece instalação automática.
+- ícone próprio para recorte `maskable` no Android;
+- atalhos de instalação para **Novo relato** e **Mapa**;
+- cache de imagens limitado a 48 itens, com reutilização por no máximo 7 dias.
 
 ---
 
@@ -280,10 +284,12 @@ Crie um arquivo `.env.local` na raiz:
 
 ```env
 VITE_SUPABASE_URL=sua_url_do_supabase
-VITE_SUPABASE_ANON_KEY=sua_chave_publicavel_do_supabase
+VITE_SUPABASE_PUBLISHABLE_KEY=sua_chave_publicavel_do_supabase
 ```
 
-> Nunca envie chaves privadas/service role para o frontend ou para o GitHub.
+`VITE_SUPABASE_ANON_KEY` continua aceito apenas como compatibilidade com configurações antigas. Em projetos novos, prefira `VITE_SUPABASE_PUBLISHABLE_KEY`.
+
+> Nunca envie chaves privadas, secret keys ou `service_role` para o frontend ou para o GitHub.
 
 ### 4. Inicie o ambiente de desenvolvimento
 
@@ -303,6 +309,19 @@ npm run build
 npm run preview
 ```
 
+### 7. Execute as verificações
+
+```bash
+npm run check
+```
+
+Os testes reais de navegador cobrem desktop, celular, primeira visita, navegação, acessibilidade e instalação PWA:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
+
 ---
 
 ## 🗄️ Banco de dados
@@ -320,6 +339,16 @@ A versão pública é hospedada na Vercel:
 **https://nomeubairro.vercel.app/**
 
 O fluxo de CI executa uma verificação de build no GitHub Actions e o projeto é publicado pela integração com a Vercel.
+
+O CI também executa os fluxos de navegador em Chromium para desktop e celular. Relatórios do Playwright são anexados automaticamente quando essa etapa falha.
+
+---
+
+## 🔒 Relato de segurança e privacidade
+
+Falhas de segurança, exposição de dados ou situações confidenciais não devem ser publicadas em issues abertas. Utilize o [canal privado de segurança do projeto](https://github.com/felipinhobxd/NoMeuBairro/security/advisories/new) e consulte o arquivo [SECURITY.md](SECURITY.md).
+
+Para baixar os próprios dados ou solicitar a exclusão da conta, utilize os controles disponíveis no Perfil do site.
 
 ---
 

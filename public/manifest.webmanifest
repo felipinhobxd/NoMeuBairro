@@ -6,9 +6,11 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#f8fafc",
   "theme_color": "#059669",
   "lang": "pt-BR",
+  "categories": ["social", "utilities", "local"],
   "prefer_related_applications": false,
   "icons": [
     {
@@ -21,7 +23,29 @@
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Novo relato",
+      "short_name": "Relatar",
+      "description": "Abra o feed para publicar um relato comunitário.",
+      "url": "/#/?acao=novo-relato",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Mapa comunitário",
+      "short_name": "Mapa",
+      "description": "Veja relatos, eventos e vagas no mapa.",
+      "url": "/#/mapa",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }
