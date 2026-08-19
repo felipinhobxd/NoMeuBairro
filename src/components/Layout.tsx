@@ -396,7 +396,7 @@ export default function Layout({ children }: LayoutProps) {
               {desktopNavItems.map((item) => {
                 const Icon = item.icon; const active = isActive(item.path);
                 return (
-                  <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0', active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-current={active ? 'page' : undefined}>
+                  <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0', active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-label={item.label} aria-current={active ? 'page' : undefined}>
                     <Icon className="w-4 h-4" /><span className="hidden xl:inline">{item.label}</span>
                   </button>
                 );

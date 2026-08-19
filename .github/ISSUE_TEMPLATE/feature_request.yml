@@ -1,0 +1,33 @@
+name: Sugerir uma melhoria
+description: Proponha uma mudança simples para a comunidade.
+title: "[Melhoria]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Qual necessidade da comunidade isso resolve?
+      description: Explique o problema antes da solução.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Como deveria funcionar?
+    validations:
+      required: true
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Onde a melhoria precisa funcionar?
+      options:
+        - label: Celular
+        - label: Desktop
+        - label: PWA instalado
+  - type: checkboxes
+    id: accessibility
+    attributes:
+      label: Acessibilidade
+      options:
+        - label: Considerei leitura, teclado, contraste e tamanho dos controles.
+          required: true
