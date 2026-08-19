@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
+import { MIN_NEW_PASSWORD_LENGTH, minimumPasswordMessage } from '../config/authSecurity';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { Building2, Eye, EyeOff, KeyRound, MapPin, MailCheck, ArrowLeft } from 'lucide-react';
 
@@ -34,7 +35,7 @@ function friendlyAuthError(message: string) {
   if (text.includes('invalid login credentials')) return 'E-mail ou senha incorretos. Se você acabou de criar a conta, confirme o e-mail recebido antes de entrar.';
   if (text.includes('email not confirmed')) return 'Seu e-mail ainda não foi confirmado. Abra o e-mail enviado pelo No Meu Bairro e clique no link de confirmação.';
   if (text.includes('user already registered') || text.includes('already been registered')) return 'Este e-mail já possui uma conta. Use o login ou recupere o acesso.';
-  if (text.includes('password should be at least')) return 'A senha precisa ter pelo menos 6 caracteres.';
+  if (text.includes('password should be at least')) return minimumPasswordMessage();
   if (text.includes('captcha')) return 'Confirme a verificação de segurança antes de continuar.';
   if (text.includes('same password')) return 'A nova senha precisa ser diferente da senha atual.';
   if (text.includes('expired') || text.includes('otp') || text.includes('code verifier')) return 'O link de recuperação expirou ou já foi utilizado. Solicite um novo link.';
@@ -170,8 +171,8 @@ export default function Login() {
   };
 
   const updateForgottenPassword = async () => {
-    if (password.length < 6) {
-      setError('A nova senha precisa ter pelo menos 6 caracteres.');
+    if (password.length < MIN_NEW_PASSWORD_LENGTH) {
+      setError(minimumPasswordMessage('A nova senha'));
       return;
     }
     if (password !== confirmPassword) {
@@ -222,6 +223,10 @@ export default function Login() {
     }
     if (!normalizedEmail) {
       setError('Informe um e-mail válido.');
+      return;
+    }
+    if (register && password.length < MIN_NEW_PASSWORD_LENGTH) {
+      setError(minimumPasswordMessage());
       return;
     }
     if (!captchaToken) {
@@ -315,11 +320,11 @@ export default function Login() {
             ? 'Entre ou crie uma conta para publicar seu relato.'
             : 'Entre para participar da comunidade.';
 
-  const renderPassword = (placeholder: string, autoComplete: string, value: string, onChange: (value: string) => void) => (
+  const renderPassword = (placeholder: string, autoComplete: string, value: string, onChange: (value: string) => void, minLength = 6) => (
     <div className="relative">
       <input
         required
-        minLength={6}
+        minLength={minLength}
         type={show ? 'text' : 'password'}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -365,10 +370,10 @@ export default function Login() {
 
             {mode === 'reset' && (
               <>
-                {renderPassword('Nova senha', 'new-password', password, setPassword)}
+                {renderPassword('Nova senha', 'new-password', password, setPassword, MIN_NEW_PASSWORD_LENGTH)}
                 <input
                   required
-                  minLength={6}
+                  minLength={MIN_NEW_PASSWORD_LENGTH}
                   type={show ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -400,7 +405,7 @@ export default function Login() {
                   autoComplete="email"
                   className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
                 />
-                {renderPassword('Senha', register ? 'new-password' : 'current-password', password, setPassword)}
+                {renderPassword('Senha', register ? 'new-password' : 'current-password', password, setPassword, register ? MIN_NEW_PASSWORD_LENGTH : 6)}
               </>
             )}
 
