@@ -98,6 +98,16 @@ test('consultas frequentes usam cache curto e uma única leitura de permissões'
   }
 });
 
+test('itens salvos compartilham uma única leitura por sessão', async () => {
+  const savedItems = await read('src/hooks/useSavedItems.ts');
+  assert.match(savedItems, /SAVED_ITEMS_CACHE_MAX_AGE_MS = 2 \* 60 \* 1000/);
+  assert.match(savedItems, /savedItemsInFlight/);
+  assert.match(savedItems, /select\('post_id,event_id,job_id'\)/);
+  assert.match(savedItems, /readSessionQueryCache<SavedSnapshot>/);
+  assert.match(savedItems, /SAVED_ITEMS_UPDATED_EVENT/);
+  assert.doesNotMatch(savedItems, /select\(column\)/);
+});
+
 test('feeds longos têm renderização progressiva e otimização fora da tela', async () => {
   const [feed, polish] = await Promise.all([
     read('src/pages/Feed.tsx'),

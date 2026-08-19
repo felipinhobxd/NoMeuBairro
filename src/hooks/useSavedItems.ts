@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/UI';
 import { supabase } from '../utils/supabase';
+import { readSessionQueryCache, writeSessionQueryCache } from '../utils/sessionQueryCache';
 
 type SavedKind = 'post' | 'event' | 'job';
 
@@ -11,6 +12,77 @@ const savedColumns: Record<SavedKind, 'post_id' | 'event_id' | 'job_id'> = {
   event: 'event_id',
   job: 'job_id',
 };
+
+type SavedSnapshot = Record<SavedKind, string[]>;
+type SavedItemsUpdate = { userId: string; snapshot: SavedSnapshot };
+
+const SAVED_ITEMS_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
+const SAVED_ITEMS_UPDATED_EVENT = 'nmb-saved-items-updated';
+const savedItemsInFlight = new Map<string, Promise<SavedSnapshot>>();
+
+function emptySavedSnapshot(): SavedSnapshot {
+  return { post: [], event: [], job: [] };
+}
+
+function savedItemsCacheKey(userId: string) {
+  return `nmb-query-cache:saved-items:v1:${userId}`;
+}
+
+function isSavedSnapshot(value: unknown): value is SavedSnapshot {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<SavedSnapshot>;
+  return Array.isArray(candidate.post) && Array.isArray(candidate.event) && Array.isArray(candidate.job);
+}
+
+function snapshotFromRows(rows: Array<Record<string, unknown>>): SavedSnapshot {
+  const snapshot = emptySavedSnapshot();
+  for (const row of rows) {
+    for (const [kind, column] of Object.entries(savedColumns) as Array<[SavedKind, typeof savedColumns[SavedKind]]>) {
+      const id = row[column];
+      if (id) snapshot[kind].push(String(id));
+    }
+  }
+  return snapshot;
+}
+
+async function loadSavedSnapshot(userId: string) {
+  const key = savedItemsCacheKey(userId);
+  const cached = readSessionQueryCache<SavedSnapshot>(key, SAVED_ITEMS_CACHE_MAX_AGE_MS);
+  if (cached?.fresh && isSavedSnapshot(cached.data)) return cached.data;
+
+  const pending = savedItemsInFlight.get(userId);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const { data, error } = await supabase
+      .from('saved_items')
+      .select('post_id,event_id,job_id')
+      .eq('user_id', userId);
+    if (error) {
+      if (cached && isSavedSnapshot(cached.data)) return cached.data;
+      throw error;
+    }
+    const snapshot = snapshotFromRows((data || []) as Array<Record<string, unknown>>);
+    writeSessionQueryCache(key, snapshot);
+    return snapshot;
+  })().finally(() => savedItemsInFlight.delete(userId));
+
+  savedItemsInFlight.set(userId, request);
+  return request;
+}
+
+function updateSavedSnapshot(userId: string, kind: SavedKind, itemId: string, saved: boolean) {
+  const key = savedItemsCacheKey(userId);
+  const cached = readSessionQueryCache<SavedSnapshot>(key, Number.MAX_SAFE_INTEGER);
+  const current = cached && isSavedSnapshot(cached.data) ? cached.data : emptySavedSnapshot();
+  const ids = new Set(current[kind]);
+  saved ? ids.add(itemId) : ids.delete(itemId);
+  const snapshot = { ...current, [kind]: [...ids] };
+  writeSessionQueryCache(key, snapshot);
+  window.dispatchEvent(new CustomEvent<SavedItemsUpdate>(SAVED_ITEMS_UPDATED_EVENT, {
+    detail: { userId, snapshot },
+  }));
+}
 
 export function useSavedItems(kind: SavedKind) {
   const { user } = useAuth();
@@ -26,20 +98,26 @@ export function useSavedItems(kind: SavedKind) {
       setSavedIds(new Set());
       return () => { active = false; };
     }
+
+    const userId = user.id;
+    const syncSnapshot = (snapshot: SavedSnapshot) => {
+      if (active) setSavedIds(new Set(snapshot[kind]));
+    };
+    const handleUpdate = (event: Event) => {
+      const detail = (event as CustomEvent<SavedItemsUpdate>).detail;
+      if (detail?.userId === userId && isSavedSnapshot(detail.snapshot)) syncSnapshot(detail.snapshot);
+    };
+    window.addEventListener(SAVED_ITEMS_UPDATED_EVENT, handleUpdate);
     setLoading(true);
-    void supabase.from('saved_items').select(column).eq('user_id', user.id).not(column, 'is', null).then(({ data, error }) => {
-      if (!active) return;
-      if (error) console.warn('Não foi possível carregar itens salvos:', error);
-      const ids = new Set<string>();
-      for (const row of data || []) {
-        const id = (row as any)[column];
-        if (id) ids.add(String(id));
-      }
-      setSavedIds(ids);
-      setLoading(false);
-    });
-    return () => { active = false; };
-  }, [user?.id, column]);
+    void loadSavedSnapshot(userId)
+      .then(syncSnapshot)
+      .catch((error) => console.warn('Não foi possível carregar itens salvos:', error))
+      .finally(() => { if (active) setLoading(false); });
+    return () => {
+      active = false;
+      window.removeEventListener(SAVED_ITEMS_UPDATED_EVENT, handleUpdate);
+    };
+  }, [user?.id, kind]);
 
   const toggleSaved = useCallback(async (itemId: string) => {
     if (!user?.id) {
@@ -55,6 +133,7 @@ export function useSavedItems(kind: SavedKind) {
       toast(result.error.message || 'Não foi possível atualizar seus itens salvos.', 'error');
       return false;
     }
+    updateSavedSnapshot(user.id, kind, itemId, !currentlySaved);
     setSavedIds(prev => {
       const next = new Set(prev);
       currentlySaved ? next.delete(itemId) : next.add(itemId);
@@ -62,7 +141,7 @@ export function useSavedItems(kind: SavedKind) {
     });
     toast(currentlySaved ? 'Removido dos salvos.' : 'Salvo para ver depois!');
     return true;
-  }, [user?.id, savedIds, column, toast, navigate]);
+  }, [user?.id, savedIds, column, kind, toast, navigate]);
 
   return {
     savedIds,
