@@ -3,6 +3,8 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet';
 import { Search, Loader2, MapPin } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
+import { normalizeAddressForGeocoding } from '../utils/address';
+import { resolveCuritibaLocation } from '../utils/locationResolver';
 
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -57,22 +59,23 @@ export default function MapPickerImpl({ onLocationSelect, initialLat, initialLng
   useEffect(() => {
     if (initialLat != null && initialLng != null && Number.isFinite(initialLat) && Number.isFinite(initialLng)) {
       setPosition([initialLat, initialLng]);
+    } else {
+      setPosition(null);
     }
   }, [initialLat, initialLng]);
+
+  useEffect(() => { setError(false); }, [address]);
 
   const searchAddress = useCallback(async (query: string) => {
     if (!query || query.length < 3) return;
     setLoading(true);
     setError(false);
     try {
-      const fullQuery = query.toLowerCase().includes('curitiba') ? query : `${query}, Curitiba, PR`;
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&countrycodes=br&q=${encodeURIComponent(fullQuery)}&limit=1`, {
-        headers: { 'Accept-Language': 'pt-BR,pt;q=0.9' },
-      });
-      const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const lat = Number(data[0].lat);
-        const lon = Number(data[0].lon);
+      const normalizedAddress = normalizeAddressForGeocoding(query);
+      const resolved = await resolveCuritibaLocation({ location: normalizedAddress });
+      if (resolved.latitude != null && resolved.longitude != null) {
+        const lat = Number(resolved.latitude);
+        const lon = Number(resolved.longitude);
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('Coordenadas inválidas');
         const newPos: [number, number] = [lat, lon];
         setPosition(newPos);
@@ -109,7 +112,7 @@ export default function MapPickerImpl({ onLocationSelect, initialLat, initialLng
         </div>
       )}
 
-      {error && <p className="text-[11px] text-red-500 font-medium animate-fade-in">⚠️ Não encontramos este endereço. Marque o ponto diretamente no mapa.</p>}
+      {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400 font-semibold animate-fade-in">⚠️ Não encontramos este endereço automaticamente. Confira a rua e o bairro ou marque o ponto diretamente no mapa.</p>}
 
       <div className="relative group">
         <div className={className}>

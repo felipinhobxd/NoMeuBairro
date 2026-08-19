@@ -144,10 +144,29 @@ async function reversePoint(latitude: number, longitude: number) {
   }
 }
 
+function normalizeGeocodingAddress(value: string) {
+  return value
+    .trim()
+    .replace(/\s+[—–]\s+/g, ', ')
+    .replace(/\s*;\s*/g, ', ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/(?:,\s*){2,}/g, ', ')
+    .replace(/^,\s*|,\s*$/g, '');
+}
+
 async function geocodeAddress(location: string, fallbackNeighborhood: string | null) {
-  const query = [location, fallbackNeighborhood, 'Curitiba', 'Paraná', 'Brasil'].filter(Boolean).join(', ');
+  const cleanedLocation = normalizeGeocodingAddress(location);
+  const normalizedLocation = normalize(cleanedLocation);
+  const queryParts = [cleanedLocation];
+  for (const part of [fallbackNeighborhood, 'Curitiba', 'Paraná', 'Brasil']) {
+    if (part && !normalizedLocation.includes(normalize(part))) queryParts.push(part);
+  }
+  const query = queryParts.join(', ');
   try {
-    const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1', q: query });
+    const params = new URLSearchParams({
+      format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1',
+      viewbox: '-49.43,-25.31,-49.15,-25.66', bounded: '1', q: query,
+    });
     const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
       headers: { 'Accept-Language': 'pt-BR,pt;q=0.9', 'User-Agent': 'NoMeuBairro/1.0' },
     });

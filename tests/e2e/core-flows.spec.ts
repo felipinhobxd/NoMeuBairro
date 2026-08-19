@@ -6,7 +6,32 @@ async function mockSupabase(page: Page) {
     const request = route.request();
     const url = new URL(request.url());
     const isAuth = url.pathname.includes('/auth/v1/');
-    const body = isAuth ? { user: null, session: null } : [];
+    const isPosts = url.pathname.endsWith('/rest/v1/posts');
+    const body = isAuth ? { user: null, session: null } : isPosts ? [{
+      id: '10000000-0000-4000-8000-000000000001',
+      author_id: '20000000-0000-4000-8000-000000000001',
+      category: 'iluminacao',
+      status: 'pending',
+      title: 'Lâmpada apagada na praça',
+      description: 'Poste sem iluminação há vários dias.',
+      image_url: null,
+      location: 'Praça de teste, Curitiba',
+      neighborhood: 'Centro',
+      locality: null,
+      location_precision: 'exact',
+      latitude: -25.4297,
+      longitude: -49.2711,
+      official_agency: null,
+      official_protocol: null,
+      official_status: null,
+      official_contacted_at: null,
+      is_anonymous: false,
+      created_at: '2026-08-19T12:00:00.000Z',
+      updated_at: '2026-08-19T12:00:00.000Z',
+      comments_count: 0,
+      post_supports: [{ count: 0 }],
+      users: { name: 'Morador de teste', avatar_url: null },
+    }] : [];
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -67,6 +92,14 @@ test('navegação principal funciona em desktop e celular', async ({ page, isMob
   await navigation.getByRole('button', { name: 'Mapa', exact: true }).click();
   await expect(page).toHaveURL(/#\/mapa$/);
   await expect(page.getByRole('heading', { name: 'Mapa Comunitário' })).toBeVisible();
+});
+
+test('feed mostra claramente a categoria escolhida no relato', async ({ page }) => {
+  await prepareReturningVisitor(page);
+  await page.goto('/');
+
+  await expect(page.getByLabel('Categoria: Iluminação').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lâmpada apagada na praça' })).toBeVisible();
 });
 
 test('fluxos críticos não têm violações graves de acessibilidade', async ({ page }) => {

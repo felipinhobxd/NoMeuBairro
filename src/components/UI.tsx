@@ -26,7 +26,21 @@ const statusConfig: Record<string, { label: string; cls: string }> = { pending: 
 export function StatusBadge({ status }: { status: string }) { const c = statusConfig[status] ?? statusConfig.pending; return <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wider ring-1 ring-inset', c.cls)}>{c.label}</span>; }
 interface CatDef { label: string; emoji: string }
 export const postCategories: Record<string, CatDef> = { buraco: { label: 'Buraco na via', emoji: '🕳️' }, iluminacao: { label: 'Iluminação', emoji: '💡' }, fios: { label: 'Fios / Energia', emoji: '⚡' }, saneamento: { label: 'Água / Esgoto', emoji: '💧' }, limpeza: { label: 'Limpeza', emoji: '🧹' }, transporte: { label: 'Transporte', emoji: '🚌' }, seguranca: { label: 'Segurança', emoji: '🛡️' }, outros: { label: 'Outros', emoji: '📌' } };
-export function CategoryBadge({ category }: { category: string }) { const d = postCategories[category] ?? postCategories.outros; return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-400"><span role="img" aria-hidden="true">{d.emoji}</span>{d.label}</span>; }
+const categoryBadgeStyles: Record<string, string> = {
+  buraco: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/25',
+  iluminacao: 'bg-yellow-50 text-yellow-800 ring-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-300 dark:ring-yellow-500/25',
+  fios: 'bg-orange-50 text-orange-800 ring-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:ring-orange-500/25',
+  saneamento: 'bg-cyan-50 text-cyan-800 ring-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-300 dark:ring-cyan-500/25',
+  limpeza: 'bg-emerald-50 text-emerald-800 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/25',
+  transporte: 'bg-blue-50 text-blue-800 ring-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:ring-blue-500/25',
+  seguranca: 'bg-red-50 text-red-800 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/25',
+  outros: 'bg-slate-100 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
+};
+export function CategoryBadge({ category }: { category: string }) {
+  const d = postCategories[category] ?? postCategories.outros;
+  const style = categoryBadgeStyles[category] ?? categoryBadgeStyles.outros;
+  return <span aria-label={`Categoria: ${d.label}`} className={cn('inline-flex min-h-7 items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-extrabold ring-1 ring-inset', style)}><span className="text-[10px] font-black uppercase tracking-wide opacity-70">Categoria:</span><span role="img" aria-hidden="true">{d.emoji}</span><span>{d.label}</span></span>;
+}
 export function Card({ children, className, ...props }: React.HTMLAttributes<HTMLDivElement>) { return <div className={cn('rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-5 transition-all duration-200 card-hover', className)} {...props}>{children}</div>; }
 type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> { variant?: BtnVariant; size?: 'sm' | 'md' | 'lg' }
