@@ -24,6 +24,8 @@ import { clearLocalDraft, readLocalDraft, saveLocalDraft } from '../utils/localD
 import type { PostCategory, PostStatus, Comment, OfficialProtocolStatus, SimilarPost } from '../types';
 import PublicServiceContact from '../components/PublicServiceContact';
 import { getPublicServiceContact } from '../utils/publicServices';
+import { formatViaCepAddress, type ViaCepAddress } from '../utils/address';
+import { resolveCuritibaLocation } from '../utils/locationResolver';
 
 const catIcons: Record<string, typeof AlertTriangle> = {
   buraco: AlertTriangle, iluminacao: Lightbulb, fios: Zap,
@@ -340,7 +342,41 @@ export default function Feed() {
     }
   }, [ft, fd, fl, fc, fi, fLat, fLng, fOfficialProtocol, fOfficialStatus, addPost, toast, user?.id]);
 
-  const handlePostCepSearch = async (cep: string) => { const clean = cep.replace(/\D/g, ''); if (clean.length === 8) { try { const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`); const data = await res.json(); if (!data.erro) { setFl(data.bairro ? `${data.logradouro} — ${data.bairro}` : data.logradouro); toast('Rua e bairro localizados pelo CEP!'); } } catch {} } };
+  const handlePostCepSearch = async (cep: string) => {
+    const clean = cep.replace(/\D/g, '');
+    if (clean.length !== 8) return;
+
+    setFLat(undefined);
+    setFLng(undefined);
+    setSimilarPosts([]);
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      if (!response.ok) throw new Error('Falha ao consultar o CEP');
+      const data = await response.json() as ViaCepAddress;
+      if (data.erro) {
+        toast('CEP não encontrado.', 'error');
+        return;
+      }
+
+      const resolvedAddress = formatViaCepAddress({ ...data, cep: data.cep || clean });
+      setFl(resolvedAddress);
+
+      const resolved = await resolveCuritibaLocation({
+        location: resolvedAddress,
+        neighborhood: data.bairro,
+      });
+      if (resolved.latitude != null && resolved.longitude != null) {
+        setFLat(Number(resolved.latitude));
+        setFLng(Number(resolved.longitude));
+        toast('Endereço e ponto no mapa localizados pelo CEP!');
+      } else {
+        toast('Endereço preenchido. Toque em “Localizar no mapa” para tentar novamente.', 'info');
+      }
+    } catch {
+      toast('Não foi possível consultar esse CEP agora.', 'error');
+    }
+  };
   const handleSupport = useCallback(async (id: string) => { if (!isAuthenticated || !user) { toast('Entre ou crie uma conta para apoiar um relato.', 'info'); navigate('/login'); return; } const isSupported = supported.has(id); const result = await supportPost(id); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o apoio.', 'error'); return; } const next = new Set(supported); if (isSupported) next.delete(id); else { next.add(id); setHeartsAnimating(prev => { const n = new Set(prev); n.add(id); return n; }); setTimeout(() => setHeartsAnimating(prev => { const n = new Set(prev); n.delete(id); return n; }), 500); } setSupported(next); try { localStorage.setItem('anb-supported', JSON.stringify([...next])); } catch {} }, [supported, supportPost, isAuthenticated, user, toast, navigate]);
   const toggleComments = useCallback((postId: string) => { setExpandedPosts(prev => { const n = new Set(prev); n.has(postId) ? n.delete(postId) : n.add(postId); return n; }); }, []);
   const handleSubmitComment = useCallback(async (postId: string) => { const text = (commentTexts[postId] ?? '').trim(); if (!text || !user) return; const result = await addComment(postId, text, replyingTo[postId] ?? undefined); if (!result.ok) { toast(result.error || 'Não foi possível adicionar o comentário.', 'error'); return; } setCommentTexts(prev => ({ ...prev, [postId]: '' })); setReplyingTo(prev => ({ ...prev, [postId]: null })); toast('Comentário adicionado!'); }, [commentTexts, replyingTo, user, addComment, toast]);
@@ -419,11 +455,12 @@ export default function Feed() {
             const distanceFromUser = userLocation && post.latitude != null && post.longitude != null ? calculateDistance(userLocation.lat, userLocation.lng, Number(post.latitude), Number(post.longitude)) : null;
             return <Card key={post.id} id={`post-${post.id}`} className={cn(isAnon && 'ring-red-200 dark:ring-red-500/20', 'feed-card-optimized animate-card-enter active:scale-[0.99] md:active:scale-100 transition-transform')}>
               <div className="flex items-center gap-3 mb-4"><div className="flex items-center gap-3 flex-1 min-w-0">{isAnon ? <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0"><ShieldAlert className="w-5 h-5" /></div> : <Link to={`/perfil/${post.authorId}`} className="relative group shrink-0"><div className="w-10 h-10 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-sm font-bold text-emerald-700 dark:text-emerald-400 ring-2 ring-transparent group-hover:ring-emerald-500/30 transition-all">{post.authorAvatarUrl ? <img src={post.authorAvatarUrl} alt={post.authorName} className="w-full h-full object-cover" /> : post.authorName.charAt(0).toUpperCase()}</div></Link>}<div className="min-w-0 flex-1">{isAnon ? <p className="text-sm font-semibold text-red-600 dark:text-red-400 truncate">{post.authorName}</p> : <Link to={`/perfil/${post.authorId}`} className="text-sm font-semibold text-slate-900 dark:text-white hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors truncate block">{post.authorName}</Link>}<p className="text-xs text-slate-400">{timeAgo(post.createdAt)}</p></div></div><StatusBadge status={post.status} />{isMyPost(post) && (confirmDeleteId === post.id ? <div className="flex items-center gap-1.5 animate-fade-in"><button onClick={() => handleDeletePost(post.id)} className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-[11px] font-semibold transition-colors">Confirmar</button><button onClick={() => setConfirmDeleteId(null)} className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Cancelar</button></div> : <button onClick={() => setConfirmDeleteId(post.id)} className="p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all" aria-label="Excluir relato"><Trash2 className="w-4 h-4" /></button>)}</div>
+              <div className="mb-2"><CategoryBadge category={post.category} /></div>
               <Link to={`/post/${post.id}`} className="block rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/40"><h3 className="text-base font-semibold text-slate-900 dark:text-white mb-1 hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">{post.title}</h3></Link>
               <div className="relative"><p className={cn('text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-line break-words transition-all', !isDescriptionExpanded && 'line-clamp-4')}>{post.description}</p>{shouldShowReadMore && <button onClick={() => toggleDescription(post.id)} className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1 hover:underline underline-offset-2">{isDescriptionExpanded ? 'Ver menos' : 'Ler descrição completa'}</button>}</div>
               {post.imageUrl && <div className="mt-3 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-zoom-in hover:opacity-90 transition-opacity" onClick={() => setZoomedImage(post.imageUrl!)}><img src={post.imageUrl} alt="" className="w-full max-h-72 object-cover" loading="lazy" decoding="async" /></div>}
               {post.latitude != null && post.longitude != null && <div className="mt-3 flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 px-3 py-2.5"><MapPin className="w-4 h-4 shrink-0 text-emerald-600" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">Localização no mapa</p><p className="text-[10px] text-slate-400 truncate">{post.location}</p></div><button type="button" onClick={() => navigate('/mapa')} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 dark:hover:text-emerald-400 shrink-0">Ver mapa</button></div>}
-              <div className="flex items-center gap-2 mt-3 flex-wrap"><CategoryBadge category={post.category} />{resolvedArea && <span className="inline-flex items-center gap-1 rounded-md bg-orange-50 dark:bg-orange-500/10 px-2 py-1 text-[11px] font-bold text-orange-800 dark:text-orange-300"><MapPin className="w-3 h-3" />{resolvedArea}</span>}{nearMe && distanceFromUser != null && <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300"><LocateFixed className="w-3 h-3" />{distanceFromUser < 1 ? `${Math.round(distanceFromUser * 1000)} m` : `${distanceFromUser.toFixed(1)} km`}</span>}{post.location && <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" />{post.location}</span>}</div>
+              <div className="flex items-center gap-2 mt-3 flex-wrap">{resolvedArea && <span className="inline-flex items-center gap-1 rounded-md bg-orange-50 dark:bg-orange-500/10 px-2 py-1 text-[11px] font-bold text-orange-800 dark:text-orange-300"><MapPin className="w-3 h-3" />{resolvedArea}</span>}{nearMe && distanceFromUser != null && <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 px-2 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300"><LocateFixed className="w-3 h-3" />{distanceFromUser < 1 ? `${Math.round(distanceFromUser * 1000)} m` : `${distanceFromUser.toFixed(1)} km`}</span>}{post.location && <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400"><MapPin className="w-3 h-3" />{post.location}</span>}</div>
               <PublicServiceContact category={post.category} compact />
               {post.officialProtocol && (
                 <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 dark:border-emerald-500/20 dark:bg-emerald-500/10">
@@ -487,10 +524,10 @@ export default function Feed() {
             </div>
           </details>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => { setFl(e.target.value); setSimilarPosts([]); }} required />
+            <Input label="Localização (Rua/Bairro)" placeholder="Ex: Rua das Flores, 123" value={fl} onChange={e => { setFl(e.target.value); setFLat(undefined); setFLng(undefined); setSimilarPosts([]); }} required />
             <Input label="Buscar por CEP" placeholder="Ex: 81460296" maxLength={8} onChange={e => handlePostCepSearch(e.target.value)} />
           </div>
-          <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); setSimilarPosts([]); }} address={fl} />
+          <MapPicker onLocationSelect={(lat, lng) => { setFLat(lat); setFLng(lng); setSimilarPosts([]); }} initialLat={fLat} initialLng={fLng} address={fl} />
           <Textarea label="Descrição" placeholder="Descreva o problema com detalhes..." value={fd} onChange={e => setFd(e.target.value)} required />
           <ImageUpload value={fi} onChange={setFi} />
           {similarPosts.length > 0 && (

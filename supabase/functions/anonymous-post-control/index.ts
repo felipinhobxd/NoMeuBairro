@@ -144,26 +144,96 @@ async function reversePoint(latitude: number, longitude: number) {
   }
 }
 
-async function geocodeAddress(location: string, fallbackNeighborhood: string | null) {
-  const query = [location, fallbackNeighborhood, 'Curitiba', 'Paraná', 'Brasil'].filter(Boolean).join(', ');
+function normalizeGeocodingAddress(value: string) {
+  return value
+    .trim()
+    .replace(/\s+[—–]\s+/g, ', ')
+    .replace(/\s*;\s*/g, ', ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/(?:,\s*){2,}/g, ', ')
+    .replace(/^,\s*|,\s*$/g, '');
+}
+
+function insideCuritiba(latitude: number, longitude: number) {
+  return latitude >= -25.66 && latitude <= -25.31 && longitude >= -49.43 && longitude <= -49.15;
+}
+
+async function geocodeAddressWithPhoton(query: string) {
   try {
-    const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1', q: query });
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
-      headers: { 'Accept-Language': 'pt-BR,pt;q=0.9', 'User-Agent': 'NoMeuBairro/1.0' },
+    const photonQuery = normalizeGeocodingAddress(query.replace(/\bCEP\s*:?[\s-]*\d{5}-?\d{3}\b/gi, ''));
+    const wantedName = normalize(photonQuery.split(',')[0].replace(/\b\d+[a-z]?\b/gi, ''));
+    const params = new URLSearchParams({
+      q: photonQuery, limit: '5', lat: '-25.50', lon: '-49.30',
+    });
+    const response = await fetch(`https://photon.komoot.io/api/?${params.toString()}`, {
+      headers: { 'User-Agent': 'NoMeuBairro/1.0' },
+      signal: AbortSignal.timeout(6000),
     });
     if (!response.ok) return null;
     const json = await response.json();
-    const first = Array.isArray(json) ? json[0] : null;
-    const latitude = Number(first?.lat);
-    const longitude = Number(first?.lon);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
-    return {
-      latitude, longitude,
-      displayAddress: typeof first?.display_name === 'string' ? first.display_name : null,
-    };
+    const features = Array.isArray(json?.features) ? json.features : [];
+    let best: { score: number; latitude: number; longitude: number; displayAddress: string | null } | null = null;
+    for (const feature of features) {
+      const coordinates = feature?.geometry?.coordinates;
+      const longitude = Number(coordinates?.[0]);
+      const latitude = Number(coordinates?.[1]);
+      const properties = feature?.properties || {};
+      const city = normalize(properties.city || properties.county);
+      const countryCode = normalize(properties.countrycode);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !insideCuritiba(latitude, longitude)) continue;
+      if (city && city !== 'curitiba') continue;
+      if (countryCode && countryCode !== 'br') continue;
+      const resultName = normalize(properties.name);
+      const score = wantedName && resultName === wantedName ? 2
+        : wantedName && (resultName.includes(wantedName) || wantedName.includes(resultName)) ? 1 : 0;
+      if (wantedName.length >= 4 && score === 0) continue;
+      const candidate = {
+        score, latitude, longitude,
+        displayAddress: [properties.name, properties.locality, properties.district, properties.city, properties.state, properties.country]
+          .filter(Boolean).join(', ') || null,
+      };
+      if (!best || candidate.score > best.score) best = candidate;
+    }
+    if (best) return { latitude: best.latitude, longitude: best.longitude, displayAddress: best.displayAddress };
   } catch {
-    return null;
+    // O Nominatim continua sendo a fonte principal; o Photon é apenas a
+    // alternativa para ruas brasileiras que não aparecem na primeira busca.
   }
+  return null;
+}
+
+async function geocodeAddress(location: string, fallbackNeighborhood: string | null) {
+  const cleanedLocation = normalizeGeocodingAddress(location);
+  const normalizedLocation = normalize(cleanedLocation);
+  const queryParts = [cleanedLocation];
+  for (const part of [fallbackNeighborhood, 'Curitiba', 'Paraná', 'Brasil']) {
+    if (part && !normalizedLocation.includes(normalize(part))) queryParts.push(part);
+  }
+  const query = queryParts.join(', ');
+  try {
+    const params = new URLSearchParams({
+      format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1',
+      viewbox: '-49.43,-25.31,-49.15,-25.66', bounded: '1', q: query,
+    });
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+      headers: { 'Accept-Language': 'pt-BR,pt;q=0.9', 'User-Agent': 'NoMeuBairro/1.0' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (response.ok) {
+      const json = await response.json();
+      const first = Array.isArray(json) ? json[0] : null;
+      const latitude = Number(first?.lat);
+      const longitude = Number(first?.lon);
+      if (Number.isFinite(latitude) && Number.isFinite(longitude) && insideCuritiba(latitude, longitude)) {
+        return {
+          latitude, longitude,
+          displayAddress: typeof first?.display_name === 'string' ? first.display_name : null,
+        };
+      }
+    }
+  } catch {}
+
+  return geocodeAddressWithPhoton(cleanedLocation);
 }
 
 async function resolveLocation(input: { location?: unknown; neighborhood?: unknown; latitude?: unknown; longitude?: unknown }): Promise<ResolvedLocation> {

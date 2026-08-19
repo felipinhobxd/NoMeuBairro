@@ -161,3 +161,32 @@ test('build e upload de imagens mantêm compatibilidade com celulares menos rece
   assert.match(imageStorage, /typeof crypto\.randomUUID === 'function'/);
   assert.match(imageStorage, /crypto\.getRandomValues\(bytes\)/);
 });
+
+test('CEP usa endereço completo e geocodificação protegida pelo Supabase', async () => {
+  const [feed, mapPicker, edgeFunction] = await Promise.all([
+    read('src/pages/Feed.tsx'),
+    read('src/components/MapPickerImpl.tsx'),
+    read('supabase/functions/anonymous-post-control/index.ts'),
+  ]);
+  assert.match(feed, /formatViaCepAddress/);
+  assert.match(feed, /initialLat=\{fLat\}/);
+  assert.match(feed, /initialLng=\{fLng\}/);
+  assert.match(mapPicker, /resolveCuritibaLocation/);
+  assert.doesNotMatch(mapPicker, /nominatim\.openstreetmap\.org/);
+  assert.match(edgeFunction, /normalizeGeocodingAddress/);
+  assert.match(edgeFunction, /bounded: '1'/);
+  assert.match(edgeFunction, /geocodeAddressWithPhoton/);
+  assert.match(edgeFunction, /insideCuritiba/);
+});
+
+test('categoria escolhida aparece com destaque antes do título do relato', async () => {
+  const [feed, ui] = await Promise.all([
+    read('src/pages/Feed.tsx'),
+    read('src/components/UI.tsx'),
+  ]);
+  const category = feed.indexOf('<div className="mb-2"><CategoryBadge category={post.category} /></div>');
+  const title = feed.indexOf('<Link to={`/post/${post.id}`}');
+  assert.ok(category >= 0 && category < title);
+  assert.match(ui, /aria-label=\{`Categoria: \$\{d\.label\}`\}/);
+  assert.match(ui, /text-xs font-extrabold/);
+});
