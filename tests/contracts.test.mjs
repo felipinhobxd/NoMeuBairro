@@ -190,3 +190,12 @@ test('categoria escolhida aparece com destaque antes do título do relato', asyn
   assert.match(ui, /aria-label=\{`Categoria: \$\{d\.label\}`\}/);
   assert.match(ui, /text-xs font-extrabold/);
 });
+
+test('barra de navegação acompanha os botões e respeita o limite da tela', async () => {
+  const polish = await read('src/components/DesktopUiPolish.tsx');
+  assert.match(polish, /nav\[aria-label="Navegação principal"\][\s\S]*?flex: 0 1 auto;/);
+  assert.match(polish, /nav\[aria-label="Navegação principal"\][\s\S]*?width: max-content;/);
+  assert.match(polish, /nav\[aria-label="Navegação principal"\][\s\S]*?max-width: 100%;/);
+  assert.match(polish, /\.nmb-desktop-nav[\s\S]*?justify-self: center;/);
+  assert.match(polish, /\.nmb-desktop-nav[\s\S]*?overflow-x: auto;/);
+});

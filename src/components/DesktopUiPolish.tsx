@@ -158,20 +158,32 @@ export default function DesktopUiPolish() {
 
         header[role="banner"] nav[aria-label="Navegação principal"] {
           min-width: 0;
-          flex: 1 1 auto;
-          justify-content: center;
+          flex: 0 1 auto;
+          width: max-content;
+          max-width: 100%;
+          justify-content: flex-start;
           align-items: center;
           gap: 3px;
           padding: 4px;
-          overflow: hidden;
+          overflow-x: auto;
+          overflow-y: hidden;
+          overscroll-behavior-inline: contain;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
           border: 1px solid rgb(226 232 240 / .82);
           border-radius: 16px;
           background: rgb(248 250 252 / .74);
+          box-shadow: 0 4px 14px rgb(15 23 42 / .05);
+        }
+
+        header[role="banner"] nav[aria-label="Navegação principal"]::-webkit-scrollbar {
+          display: none;
         }
 
         .dark header[role="banner"] nav[aria-label="Navegação principal"] {
           border-color: rgb(51 65 85 / .72);
           background: rgb(15 23 42 / .38);
+          box-shadow: 0 4px 18px rgb(0 0 0 / .16);
         }
 
         header[role="banner"] nav[aria-label="Navegação principal"] > button {
@@ -299,24 +311,28 @@ export default function DesktopUiPolish() {
         header[role="banner"] .nmb-desktop-nav {
           grid-column: 1 / -1;
           grid-row: 2;
-          width: 100%;
-          max-width: none;
+          width: max-content;
+          max-width: 100%;
           min-width: 0;
-          overflow: hidden;
+          justify-self: center;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scroll-snap-type: x proximity;
           padding: 3px !important;
           gap: 3px !important;
         }
 
         header[role="banner"] .nmb-desktop-nav > button {
-          flex: 1 1 0;
+          flex: 0 0 auto;
           width: auto !important;
-          min-width: 0 !important;
-          max-width: none;
+          min-width: max-content !important;
+          max-width: max-content;
           height: 38px;
           min-height: 38px;
           padding-left: 7px !important;
           padding-right: 7px !important;
           gap: 6px;
+          scroll-snap-align: center;
         }
 
         header[role="banner"] .nmb-desktop-nav > button > span,

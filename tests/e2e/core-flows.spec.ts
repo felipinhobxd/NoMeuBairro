@@ -113,6 +113,31 @@ test('interface se reorganiza sem rolagem horizontal', async ({ page }) => {
   }));
   expect(pageMetrics.documentWidth).toBeLessThanOrEqual(pageMetrics.viewportWidth + 1);
 
+  if (viewport && viewport.width >= 1024) {
+    const desktopNav = page.getByRole('navigation', { name: 'Navegação principal' });
+    const navSizing = await desktopNav.evaluate((element) => {
+      const navBox = element.getBoundingClientRect();
+      const controls = Array.from(element.children) as HTMLElement[];
+      const firstControl = controls[0]?.getBoundingClientRect();
+      const lastControl = controls[controls.length - 1]?.getBoundingClientRect();
+      const controlsWidth = firstControl && lastControl ? lastControl.right - firstControl.left : 0;
+
+      return {
+        navWidth: navBox.width,
+        controlsWidth,
+      };
+    });
+
+    // A moldura deve abraçar os controles; ela só atinge o limite da tela
+    // quando os próprios botões precisam de mais espaço.
+    const unusedWidth = navSizing.navWidth - Math.min(navSizing.controlsWidth, navSizing.navWidth);
+    expect(unusedWidth).toBeLessThanOrEqual(16);
+
+    if (viewport.width >= 1440 && viewport.width < 1650) {
+      expect(navSizing.navWidth).toBeLessThan(520);
+    }
+  }
+
   if (viewport && viewport.width >= 1024 && viewport.width < 1440) {
     const header = page.locator('.nmb-header-row');
     const desktopNav = page.getByRole('navigation', { name: 'Navegação principal' });
