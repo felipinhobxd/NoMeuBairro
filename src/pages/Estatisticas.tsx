@@ -130,7 +130,7 @@ export default function Estatisticas() {
 
       {error && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300">{error}</div>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {[
           { label: 'Total de relatos', value: stats.totalReports, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-500/10' },
           { label: 'Resolvidos', value: stats.resolved, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-500/10' },
@@ -200,7 +200,7 @@ export default function Estatisticas() {
           <div><h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-emerald-600" /> Transparência da moderação</h3><p className="text-xs text-slate-500 mt-1 max-w-2xl">Indicadores agregados dos últimos {moderation.periodDays} dias. Motivos, denunciantes e conteúdos individuais nunca aparecem aqui.</p></div>
           <span className="rounded-lg bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300 self-start">Dados públicos agregados</span>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 xl:grid-cols-5 gap-2 sm:gap-3">
           {[
             { label: 'Recebidas', value: moderation.reportsReceived, icon: AlertCircle, cls: 'text-orange-600 bg-orange-50 dark:bg-orange-500/10' },
             { label: 'Analisadas', value: moderation.handled, icon: ShieldCheck, cls: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10' },

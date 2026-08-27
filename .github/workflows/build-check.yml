@@ -50,7 +50,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Test desktop, mobile and accessibility flows
+      - name: Test notebooks, desktop, mobile and accessibility flows
         run: npm run test:e2e
 
       - name: Upload browser test report on failure

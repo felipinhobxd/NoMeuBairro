@@ -41,7 +41,7 @@ function ScrollToTop() {
   if (!visible) return null;
   return (
     <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      className="fixed bottom-28 md:bottom-8 left-6 z-30 w-11 h-11 bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl shadow-lg flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:ring-emerald-300 dark:hover:ring-emerald-500/30 transition-all duration-200 active:scale-95 animate-scale-in"
+      className="fixed bottom-24 sm:bottom-28 lg:bottom-8 left-4 sm:left-6 z-30 w-11 h-11 bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl shadow-lg flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:ring-emerald-300 dark:hover:ring-emerald-500/30 transition-all duration-200 active:scale-95 animate-scale-in"
       aria-label="Voltar ao topo">
       <ArrowUp className="w-5 h-5" />
     </button>
@@ -292,7 +292,7 @@ function NeighborhoodPicker() {
             </div>
           </button>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3">
             {filteredNeighborhoods.map((n) => {
               const count = neighborhoodCounts[n.name] || 0;
               return (
@@ -376,9 +376,9 @@ export default function Layout({ children }: LayoutProps) {
       <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300" role="banner">
         <div className="max-w-[1680px] mx-auto px-2.5 sm:px-4 lg:px-5">
-          <div className="flex items-center justify-between h-16 gap-2 sm:gap-3">
-            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 lg:flex-none">
-              <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
+          <div className="nmb-header-row flex items-center justify-between h-16 gap-2 sm:gap-3">
+            <div className="nmb-header-identity flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 lg:flex-none">
+              <button onClick={() => navigate('/')} className="nmb-header-home flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
                 <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
                 <div className="flex flex-col items-start hidden lg:flex"><span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span></div>
               </button>
@@ -392,7 +392,7 @@ export default function Layout({ children }: LayoutProps) {
               </button>
             </div>
 
-            <nav className="hidden lg:flex items-center gap-0.5 lg:gap-1 flex-1 justify-center min-w-0" role="navigation" aria-label="Navegação principal">
+            <nav className="nmb-desktop-nav hidden lg:flex items-center gap-0.5 lg:gap-1 flex-1 justify-center min-w-0" role="navigation" aria-label="Navegação principal">
               {desktopNavItems.map((item) => {
                 const Icon = item.icon; const active = isActive(item.path);
                 return (
@@ -430,7 +430,7 @@ export default function Layout({ children }: LayoutProps) {
       </header>
 
       <main className="flex-1 pb-24 lg:pb-0 overflow-x-clip" id="main-content" role="main">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
+        <div className="nmb-page-shell max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
         <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
             <div className="grid sm:grid-cols-3 gap-8">
