@@ -32,6 +32,10 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 1366, height: 768 } },
     },
     {
+      name: 'notebook-1536-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1536, height: 864 } },
+    },
+    {
       name: 'mobile-chromium',
       use: { ...devices['Pixel 5'] },
     },
