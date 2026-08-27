@@ -264,34 +264,122 @@ export default function DesktopUiPolish() {
         flex: 0 0 auto;
       }
 
-      /* Desktop compacto/notebook: preserva todos os destinos, mas usa ícones
-         para impedir que o filtro ou as ações entrem por baixo da navegação. */
+      /* Notebook: o cabeçalho ganha uma segunda linha só para a navegação.
+         Assim nenhum controle é esmagado em 1024–1366 px, inclusive com fonte grande. */
       @media (min-width: 1024px) and (max-width: 1439px) {
+        header[role="banner"] .nmb-header-row {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-rows: 48px 44px;
+          height: auto !important;
+          min-height: 102px !important;
+          column-gap: 12px !important;
+          row-gap: 4px !important;
+          padding-top: 3px;
+          padding-bottom: 3px;
+          align-items: center;
+        }
+
+        header[role="banner"] .nmb-header-identity {
+          grid-column: 1;
+          grid-row: 1;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
+        }
+
+        header[role="banner"] .nmb-header-home > div:last-child {
+          display: flex !important;
+        }
+
+        header[role="banner"] .nmb-neighborhood-filter {
+          max-width: min(48vw, 320px) !important;
+        }
+
+        header[role="banner"] .nmb-desktop-nav {
+          grid-column: 1 / -1;
+          grid-row: 2;
+          width: 100%;
+          max-width: none;
+          min-width: 0;
+          overflow: hidden;
+          padding: 3px !important;
+          gap: 3px !important;
+        }
+
+        header[role="banner"] .nmb-desktop-nav > button {
+          flex: 1 1 0;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none;
+          height: 38px;
+          min-height: 38px;
+          padding-left: 7px !important;
+          padding-right: 7px !important;
+          gap: 6px;
+        }
+
+        header[role="banner"] .nmb-desktop-nav > button > span,
+        header[role="banner"] .nmb-admin-nav-label {
+          display: inline !important;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        header[role="banner"] .nmb-header-actions {
+          grid-column: 2;
+          grid-row: 1;
+          align-self: center;
+        }
+
+        main[role="main"] > .nmb-page-shell {
+          padding-top: 1.25rem !important;
+          padding-bottom: 1.5rem !important;
+        }
+
+        main section + section {
+          scroll-margin-top: 124px;
+        }
+      }
+
+      /* Em notebooks baixos, recupera alguns pixels sem esconder controles. */
+      @media (min-width: 1024px) and (max-width: 1439px) and (max-height: 760px) {
+        header[role="banner"] .nmb-header-row {
+          grid-template-rows: 44px 40px;
+          min-height: 92px !important;
+          row-gap: 2px !important;
+          padding-top: 2px;
+          padding-bottom: 2px;
+        }
+
+        header[role="banner"] .nmb-desktop-nav > button {
+          height: 36px;
+          min-height: 36px;
+        }
+
+        main[role="main"] > .nmb-page-shell {
+          padding-top: 0.875rem !important;
+        }
+      }
+
+      /* Entre 1440 e 1649 px a barra volta a uma linha e usa ícones compactos. */
+      @media (min-width: 1440px) and (max-width: 1649px) {
         header[role="banner"] nav[aria-label="Navegação principal"] > button > span,
         header[role="banner"] .nmb-admin-nav-label {
           display: none !important;
         }
-
-        header[role="banner"] > div > div > div:first-child > button:first-child > div:last-child {
-          display: none !important;
-        }
-
-        header[role="banner"] > div > div > div:first-child > button:last-child {
-          max-width: 104px;
-        }
-
-        header[role="banner"] > div > div > div:first-child > button:last-child span:first-child {
-          display: none;
-        }
       }
 
       /* Em desktop amplo os nomes voltam, com espaço suficiente para Admin e ações. */
-      @media (min-width: 1440px) {
+      @media (min-width: 1650px) {
         header[role="banner"] nav[aria-label="Navegação principal"] > button {
           padding-left: 11px !important;
           padding-right: 11px !important;
         }
 
+        header[role="banner"] nav[aria-label="Navegação principal"] > button > span,
         header[role="banner"] .nmb-admin-nav-label {
           display: inline !important;
         }

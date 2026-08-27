@@ -362,7 +362,7 @@ export default function Mapa() {
   };
 
   return (
-    <div className="min-h-[650px] h-[calc(100dvh-132px)] flex flex-col gap-4">
+    <div className="nmb-map-page flex flex-col gap-4">
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
@@ -431,7 +431,7 @@ export default function Mapa() {
 
       {locationError && <p className="-mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{locationError}</p>}
 
-      <Card className="flex-1 min-h-[390px] !p-0 overflow-hidden relative !border-slate-200 dark:!border-slate-800 shadow-xl">
+      <Card className="nmb-map-canvas flex-1 !p-0 overflow-hidden relative !border-slate-200 dark:!border-slate-800 shadow-xl">
         <MapContainer center={defaultCenter} zoom={defaultZoom} style={{ height: '100%', width: '100%' }} className="z-10" zoomAnimation markerZoomAnimation zoomAnimationThreshold={6} zoomSnap={1} wheelDebounceTime={28} wheelPxPerZoomLevel={70}>
           <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 

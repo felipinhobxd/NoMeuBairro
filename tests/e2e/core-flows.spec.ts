@@ -41,13 +41,13 @@ async function mockSupabase(page: Page) {
   });
 }
 
-async function prepareReturningVisitor(page: Page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('nmb-font-size-v1', 'medium');
+async function prepareReturningVisitor(page: Page, fontSize: 'medium' | 'giant' = 'medium') {
+  await page.addInitScript((preferredFontSize) => {
+    localStorage.setItem('nmb-font-size-v1', preferredFontSize);
     localStorage.setItem('anb-cookie-consent', 'essential');
     localStorage.setItem('nmb-onboarding-v6', 'done');
     localStorage.setItem('nmb-pwa-install-dismissed-at', String(Date.now()));
-  });
+  }, fontSize);
 }
 
 function seriousViolations(violations: Awaited<ReturnType<AxeBuilder['analyze']>>['violations']) {
@@ -100,6 +100,62 @@ test('feed mostra claramente a categoria escolhida no relato', async ({ page }) 
 
   await expect(page.getByLabel('Categoria: Iluminação').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lâmpada apagada na praça' })).toBeVisible();
+});
+
+test('interface se reorganiza sem rolagem horizontal', async ({ page }) => {
+  await prepareReturningVisitor(page);
+  await page.goto('/');
+
+  const viewport = page.viewportSize();
+  const pageMetrics = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(pageMetrics.documentWidth).toBeLessThanOrEqual(pageMetrics.viewportWidth + 1);
+
+  if (viewport && viewport.width >= 1024 && viewport.width < 1440) {
+    const header = page.locator('.nmb-header-row');
+    const desktopNav = page.getByRole('navigation', { name: 'Navegação principal' });
+    const [headerBox, navBox] = await Promise.all([header.boundingBox(), desktopNav.boundingBox()]);
+    expect(headerBox?.height ?? 0).toBeGreaterThanOrEqual(viewport.height <= 760 ? 88 : 98);
+    expect(navBox?.y ?? 0).toBeGreaterThan((headerBox?.y ?? 0) + 40);
+    await expect(desktopNav.getByText('Empregos', { exact: true })).toBeVisible();
+  }
+
+  await page.getByRole('navigation', { name: viewport && viewport.width < 1024 ? 'Navegação mobile' : 'Navegação principal' })
+    .getByRole('button', { name: 'Mapa', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Mapa Comunitário' })).toBeVisible();
+  await expect(page.locator('.nmb-map-canvas')).toBeVisible();
+
+  const mapMetrics = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(mapMetrics.documentWidth).toBeLessThanOrEqual(mapMetrics.viewportWidth + 1);
+});
+
+test('fonte gigante continua utilizável em telas estreitas', async ({ page }) => {
+  await prepareReturningVisitor(page, 'giant');
+  await page.goto('/');
+
+  await expect(page.locator('html')).toHaveAttribute('data-font-size', 'giant');
+  const metrics = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentWidth: document.documentElement.scrollWidth,
+  }));
+  expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth + 1);
+
+  const viewport = page.viewportSize();
+  if (viewport && viewport.width >= 1024 && viewport.width < 1440) {
+    const filter = page.locator('.nmb-neighborhood-filter');
+    const filterMetrics = await filter.evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(filterMetrics.scrollWidth).toBeLessThanOrEqual(filterMetrics.clientWidth + 1);
+    await expect(page.getByRole('navigation', { name: 'Navegação principal' }).getByText('Denúncias', { exact: true })).toBeVisible();
+  }
 });
 
 test('fluxos críticos não têm violações graves de acessibilidade', async ({ page }) => {
