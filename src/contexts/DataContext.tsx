@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { canonicalNeighborhoodName, curitibaNeighborhoods, normalizeNeighborhoodText } from './NeighborhoodContext';
 import { supabase } from '../utils/supabase';
 import { storePostImage, deleteStoredPostImage } from '../utils/imageStorage';
+import { createPostThumbnailDataUrl } from '../utils/imageOptimization';
 import { clearSessionQueryCache, readSessionQueryCache, writeSessionQueryCache } from '../utils/sessionQueryCache';
 
 type ActionResult = { ok: boolean; error?: string };
@@ -76,7 +77,7 @@ const EVENT_LIMIT = 60;
 const COMMENT_PER_POST_LIMIT = 100;
 const NOTIFICATION_LIMIT = 40;
 const NOTIFICATION_SELECT = 'id,user_id,actor_id,type,post_id,comment_id,job_id,application_id,event_id,is_read,created_at,users:actor_id(name,avatar_url),posts:post_id(title),comments:comment_id(content),job_posts:job_id(title),events:event_id(title)';
-const POSTS_CACHE_KEY = 'nmb-query-cache:posts:v1';
+const POSTS_CACHE_KEY = 'nmb-query-cache:posts:v2';
 const EVENTS_CACHE_KEY = 'nmb-query-cache:events:v1';
 const POSTS_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
 const EVENTS_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
@@ -119,7 +120,9 @@ function mapPost(p: any): Post {
     authorName: p.is_anonymous ? 'Denúncia Anônima' : (p.users?.name || 'Morador'),
     authorAvatarUrl: p.is_anonymous ? undefined : p.users?.avatar_url,
     category: p.category, status: p.status, title: p.title, description: p.description,
-    imageUrl: p.image_url || undefined, location: p.location || '',
+    imageUrl: p.image_url || undefined,
+    imageThumbnailUrl: p.image_thumbnail_url || undefined,
+    location: p.location || '',
     neighborhood: p.neighborhood || undefined, locality: p.locality || undefined,
     locationPrecision: p.location_precision || undefined,
     latitude: p.latitude == null ? undefined : Number(p.latitude),
@@ -203,7 +206,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const request = (async () => {
       setPostsLoading(true);
       try {
-        const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
+        const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,image_thumbnail_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
         if (error) {
           console.error('Erro ao carregar relatos:', error);
           if (cached && Array.isArray(cached.data)) {
@@ -361,6 +364,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       title: data.title,
       description: data.description,
       image_url: stored.url,
+      image_thumbnail_url: stored.thumbnailUrl,
       location: data.location,
       latitude: resolved.latitude,
       longitude: resolved.longitude,
@@ -372,9 +376,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       official_protocol: protocol,
       official_status: protocol ? data.officialStatus || 'submitted' : null,
       official_contacted_at: protocol ? new Date().toISOString() : null,
-    }).select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').single();
+    }).select('id,author_id,category,status,title,description,image_url,image_thumbnail_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').single();
     if (error || !inserted) {
-      await deleteStoredPostImage(stored.url);
+      await deleteStoredPostImage(stored.url, stored.thumbnailUrl);
       return { data: inserted, error } as any;
     }
     const nextPost = mapPost({ ...inserted, users: { name: user.name, avatar_url: user.avatarUrl }, post_supports: [{ count: 0 }] });
@@ -385,6 +389,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const addAnonymousPost = useCallback(async (data: { tipo: string; description: string; location: string; imageUrl?: string; latitude?: number; longitude?: number; allowDuplicate?: boolean }): Promise<AddPostResult> => {
     const editToken = createAnonymousEditToken();
+    let imageThumbnailData: string | undefined;
+    try {
+      imageThumbnailData = data.imageUrl ? await createPostThumbnailDataUrl(data.imageUrl) : undefined;
+    } catch (thumbnailError) {
+      return { error: { message: thumbnailError instanceof Error ? thumbnailError.message : 'Não foi possível preparar a miniatura da foto.' } };
+    }
     const { data: result, error } = await supabase.functions.invoke('anonymous-post-control', {
       body: {
         action: 'create',
@@ -392,6 +402,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         description: data.description,
         location: data.location || 'Local Privado',
         imageData: data.imageUrl || null,
+        imageThumbnailData: imageThumbnailData || null,
         latitude: data.latitude,
         longitude: data.longitude,
         editToken,
@@ -418,7 +429,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return { error: { message: result?.error || error?.message || 'Não foi possível enviar a denúncia.' } };
     }
     saveAnonControl(result.postId, editToken);
-    const { data: row } = await supabase.from('posts').select('id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').eq('id', result.postId).maybeSingle();
+    const { data: row } = await supabase.from('posts').select('id,category,status,title,description,image_url,image_thumbnail_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,created_at,updated_at,comments_count').eq('id', result.postId).maybeSingle();
     if (row) {
       const nextPost = mapPost({ ...row, author_id: null, is_anonymous: true, post_supports: [{ count: 0 }] });
       clearSessionQueryCache(POSTS_CACHE_KEY);
@@ -483,7 +494,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from('posts').delete().eq('id', postId);
     if (error) return { ok: false, error: error.message };
-    await deleteStoredPostImage(target?.imageUrl);
+    await deleteStoredPostImage(target?.imageUrl, target?.imageThumbnailUrl);
     clearSessionQueryCache(POSTS_CACHE_KEY);
     setPosts(prev => prev.filter(post => post.id !== postId)); setComments(prev => prev.filter(comment => comment.postId !== postId)); loadedCommentPostsRef.current.delete(postId); return { ok: true };
   }, [posts, getAnonTokens, clearAnonControl]);

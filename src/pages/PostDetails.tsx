@@ -152,7 +152,7 @@ export default function PostDetails() {
 
       const postPromise = supabase
         .from('posts')
-        .select('id,author_id,category,status,title,description,image_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,users(name,avatar_url),post_supports(count)')
+        .select('id,author_id,category,status,title,description,image_url,image_thumbnail_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,users(name,avatar_url),post_supports(count)')
         .eq('id', postId)
         .maybeSingle();
       const commentsPromise = loadComments(postId);
@@ -183,6 +183,7 @@ export default function PostDetails() {
           title: data.title,
           description: data.description,
           imageUrl: data.image_url || undefined,
+          imageThumbnailUrl: data.image_thumbnail_url || undefined,
           location: data.location || '',
           neighborhood: data.neighborhood || undefined,
           locality: data.locality || undefined,

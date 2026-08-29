@@ -15,6 +15,7 @@ async function mockSupabase(page: Page) {
       title: 'Lâmpada apagada na praça',
       description: 'Poste sem iluminação há vários dias.',
       image_url: null,
+      image_thumbnail_url: null,
       location: 'Praça de teste, Curitiba',
       neighborhood: 'Centro',
       locality: null,
@@ -100,6 +101,51 @@ test('feed mostra claramente a categoria escolhida no relato', async ({ page }) 
 
   await expect(page.getByLabel('Categoria: Iluminação').first()).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Lâmpada apagada na praça' })).toBeVisible();
+});
+
+test('otimização de fotos cria versões leves para detalhe e feed', async ({ page }) => {
+  await prepareReturningVisitor(page);
+  await page.goto('/');
+
+  const result = await page.evaluate(async () => {
+    const { optimizePostImageFile, createPostThumbnailDataUrl } = await import('/src/utils/imageOptimization.ts');
+    const canvas = document.createElement('canvas');
+    canvas.width = 2400;
+    canvas.height = 1200;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas indisponível');
+    const gradient = context.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#f97316');
+    gradient.addColorStop(1, '#047857');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const originalBlob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('PNG indisponível')), 'image/png'));
+    const optimized = await optimizePostImageFile(new File([originalBlob], 'foto-grande.png', { type: 'image/png' }));
+    const thumbnailDataUrl = await createPostThumbnailDataUrl(optimized.dataUrl);
+    if (!thumbnailDataUrl) throw new Error('Miniatura não criada');
+
+    const dimensions = async (src: string) => {
+      const image = new Image();
+      image.src = src;
+      await image.decode();
+      return { width: image.naturalWidth, height: image.naturalHeight };
+    };
+
+    return {
+      full: await dimensions(optimized.dataUrl),
+      thumbnail: await dimensions(thumbnailDataUrl),
+      fullBytes: optimized.blob.size,
+      fullType: optimized.mime,
+      thumbnailType: thumbnailDataUrl.slice(0, thumbnailDataUrl.indexOf(';')),
+    };
+  });
+
+  expect(Math.max(result.full.width, result.full.height)).toBeLessThanOrEqual(1600);
+  expect(Math.max(result.thumbnail.width, result.thumbnail.height)).toBeLessThanOrEqual(640);
+  expect(result.fullBytes).toBeLessThanOrEqual(3 * 1024 * 1024);
+  expect(result.fullType).toBe('image/webp');
+  expect(result.thumbnailType).toBe('data:image/webp');
 });
 
 test('interface se reorganiza sem rolagem horizontal', async ({ page }) => {

@@ -454,7 +454,7 @@ export default function Mapa() {
                   <p className="text-xs font-semibold text-slate-600 mb-2">Por {post.authorName}</p>
                   <p className="text-xs text-slate-600 line-clamp-3 mb-3">{post.description}</p>
                   <p className="text-xs text-slate-500 mb-3 flex items-start gap-1"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />{post.location}{approximate ? ' · posição aproximada' : ''}</p>
-                  {post.imageUrl && <img src={post.imageUrl} alt="Imagem do relato" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" decoding="async" />}
+                  {post.imageUrl && <img src={post.imageThumbnailUrl || post.imageUrl} alt="Imagem do relato" className="w-full h-36 object-cover rounded-xl mb-3" loading="lazy" decoding="async" />}
                   <button onClick={() => navigate(`/post/${post.id}`)} type="button" className="w-full py-2.5 bg-orange-700 hover:bg-orange-800 text-white text-xs font-bold rounded-lg transition-colors">Ver detalhes no post</button>
                 </div>
               </Popup>
