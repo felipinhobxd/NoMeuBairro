@@ -279,38 +279,60 @@ async function resolveLocation(input: { location?: unknown; neighborhood?: unkno
   };
 }
 
-function decodeAnonymousImage(value: unknown) {
+function decodeAnonymousImage(value: unknown, label = 'imagem', maxBytes = 3 * 1024 * 1024) {
   if (value == null || value === '') return { bytes: null as Uint8Array | null, mime: null as string | null, extension: null as string | null };
-  if (typeof value !== 'string') throw new Error('Imagem inválida.');
+  if (typeof value !== 'string') throw new Error(`${label} inválida.`);
   const match = value.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/i);
-  if (!match) throw new Error('Use uma imagem JPEG, PNG ou WebP.');
+  if (!match) throw new Error(`Use ${label.toLowerCase()} JPEG, PNG ou WebP.`);
   const mime = match[1].toLowerCase();
   let binary: string;
-  try { binary = atob(match[2]); } catch { throw new Error('Imagem inválida.'); }
-  if (binary.length === 0 || binary.length > 3 * 1024 * 1024) throw new Error('A imagem deve ter no máximo 3 MB.');
+  try { binary = atob(match[2]); } catch { throw new Error(`${label} inválida.`); }
+  if (binary.length === 0 || binary.length > maxBytes) throw new Error(`${label} deve ter no máximo ${Math.round(maxBytes / (1024 * 1024))} MB.`);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
   return { bytes, mime, extension };
 }
 
-async function uploadAnonymousImage(value: unknown) {
-  const parsed = decodeAnonymousImage(value);
-  if (!parsed.bytes || !parsed.mime || !parsed.extension) return { url: null as string | null, path: null as string | null };
-  const path = `anonymous/${crypto.randomUUID()}.${parsed.extension}`;
-  const { error } = await admin.storage.from('post-images').upload(path, parsed.bytes, {
-    contentType: parsed.mime,
-    cacheControl: '31536000',
-    upsert: false,
+async function uploadAnonymousImages(imageValue: unknown, thumbnailValue: unknown) {
+  const image = decodeAnonymousImage(imageValue, 'A imagem');
+  const thumbnail = decodeAnonymousImage(thumbnailValue, 'A miniatura', 1024 * 1024);
+  if (!image.bytes || !image.mime || !image.extension) {
+    return { url: null as string | null, path: null as string | null, thumbnailUrl: null as string | null, thumbnailPath: null as string | null };
+  }
+
+  const storageId = crypto.randomUUID();
+  const path = `anonymous/${storageId}.${image.extension}`;
+  const thumbnailPath = thumbnail.bytes && thumbnail.mime && thumbnail.extension
+    ? `anonymous/${storageId}-thumb.${thumbnail.extension}`
+    : null;
+  const imageUpload = admin.storage.from('post-images').upload(path, image.bytes, {
+    contentType: image.mime, cacheControl: '31536000', upsert: false,
   });
-  if (error) throw new Error('Não foi possível salvar a imagem da denúncia.');
+  const thumbnailUpload = thumbnailPath && thumbnail.bytes && thumbnail.mime
+    ? admin.storage.from('post-images').upload(thumbnailPath, thumbnail.bytes, {
+      contentType: thumbnail.mime, cacheControl: '31536000', upsert: false,
+    })
+    : Promise.resolve({ error: null });
+  const [imageResult, thumbnailResult] = await Promise.all([imageUpload, thumbnailUpload]);
+  if (imageResult.error || thumbnailResult.error) {
+    await removeAnonymousImages(path, thumbnailPath);
+    throw new Error(imageResult.error
+      ? 'Não foi possível salvar a imagem da denúncia.'
+      : 'Não foi possível salvar a miniatura da denúncia.');
+  }
+
   const { data } = admin.storage.from('post-images').getPublicUrl(path);
-  return { url: data.publicUrl, path };
+  const thumbnailUrl = thumbnailPath
+    ? admin.storage.from('post-images').getPublicUrl(thumbnailPath).data.publicUrl
+    : null;
+  return { url: data.publicUrl, path, thumbnailUrl, thumbnailPath };
 }
 
-async function removeAnonymousImage(path: string | null) {
-  if (!path) return;
-  await admin.storage.from('post-images').remove([path]).catch(() => {});
+async function removeAnonymousImages(...paths: Array<string | null>) {
+  const uniquePaths = [...new Set(paths.filter((path): path is string => Boolean(path)))];
+  if (uniquePaths.length === 0) return;
+  await admin.storage.from('post-images').remove(uniquePaths).catch(() => {});
 }
 
 function anonymousImagePath(url: unknown) {
@@ -384,9 +406,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // A imagem só é enviada depois da verificação de duplicados.
-    let uploaded: { url: string | null; path: string | null } = { url: null, path: null };
+    let uploaded: { url: string | null; path: string | null; thumbnailUrl: string | null; thumbnailPath: string | null } = {
+      url: null, path: null, thumbnailUrl: null, thumbnailPath: null,
+    };
     try {
-      uploaded = await uploadAnonymousImage(body?.imageData);
+      uploaded = await uploadAnonymousImages(body?.imageData, body?.imageThumbnailData);
     } catch (error) {
       return reply(400, { ok: false, error: error instanceof Error ? error.message : 'Imagem inválida.' });
     }
@@ -400,6 +424,7 @@ Deno.serve(async (req: Request) => {
         title: `Denúncia: ${tipo}`,
         description,
         image_url: uploaded.url,
+        image_thumbnail_url: uploaded.thumbnailUrl,
         location,
         latitude: resolved.latitude,
         longitude: resolved.longitude,
@@ -412,7 +437,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (postError || !post) {
-      await removeAnonymousImage(uploaded.path);
+      await removeAnonymousImages(uploaded.path, uploaded.thumbnailPath);
       return reply(postError?.code === 'P0001' ? 429 : 500, { ok: false, error: postError?.message || 'Não foi possível publicar a denúncia.' });
     }
 
@@ -422,7 +447,7 @@ Deno.serve(async (req: Request) => {
 
     if (controlError) {
       await admin.from('posts').delete().eq('id', post.id);
-      await removeAnonymousImage(uploaded.path);
+      await removeAnonymousImages(uploaded.path, uploaded.thumbnailPath);
       return reply(500, { ok: false, error: 'Não foi possível criar o controle privado da denúncia.' });
     }
 
@@ -465,11 +490,12 @@ Deno.serve(async (req: Request) => {
   }
 
   if (action === 'delete') {
-    const { data: post } = await admin.from('posts').select('image_url').eq('id', postId).eq('is_anonymous', true).maybeSingle();
+    const { data: post } = await admin.from('posts').select('image_url,image_thumbnail_url').eq('id', postId).eq('is_anonymous', true).maybeSingle();
     const path = anonymousImagePath(post?.image_url);
+    const thumbnailPath = anonymousImagePath(post?.image_thumbnail_url);
     const { error } = await admin.from('posts').delete().eq('id', postId).eq('is_anonymous', true);
     if (error) return reply(500, { ok: false, error: 'Não foi possível excluir a denúncia.' });
-    await removeAnonymousImage(path);
+    await removeAnonymousImages(path, thumbnailPath);
     return reply(200, { ok: true });
   }
 

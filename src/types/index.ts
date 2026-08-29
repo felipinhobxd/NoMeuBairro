@@ -33,6 +33,7 @@ export interface Post {
   title: string;
   description: string;
   imageUrl?: string;
+  imageThumbnailUrl?: string;
   location: string;
   neighborhood?: string;
   locality?: string;

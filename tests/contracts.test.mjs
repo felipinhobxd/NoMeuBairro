@@ -69,7 +69,7 @@ test('prevenção de duplicados ocorre antes do upload da imagem', async () => {
   assert.ok(duplicateCheck >= 0, 'RPC de relatos similares não encontrada');
   assert.ok(imageUpload > duplicateCheck, 'a imagem não deve ser enviada antes da verificação de duplicados');
   const anonymousDuplicateCheck = anonymousFunction.indexOf("admin.rpc('find_similar_posts'");
-  const anonymousImageUpload = anonymousFunction.indexOf('uploadAnonymousImage(body?.imageData)');
+  const anonymousImageUpload = anonymousFunction.indexOf('uploadAnonymousImages(body?.imageData, body?.imageThumbnailData)');
   assert.ok(anonymousDuplicateCheck >= 0, 'verificação de duplicados anônimos não encontrada');
   assert.ok(anonymousImageUpload > anonymousDuplicateCheck, 'imagem anônima não deve ser enviada antes da verificação de duplicados');
 });
@@ -198,4 +198,34 @@ test('barra de navegação acompanha os botões e respeita o limite da tela', as
   assert.match(polish, /nav\[aria-label="Navegação principal"\][\s\S]*?max-width: 100%;/);
   assert.match(polish, /\.nmb-desktop-nav[\s\S]*?justify-self: center;/);
   assert.match(polish, /\.nmb-desktop-nav[\s\S]*?overflow-x: auto;/);
+});
+
+test('fotos novas são otimizadas e usam miniaturas leves no feed e no mapa', async () => {
+  const [optimizer, storage, dataContext, feed, map, anonymousFunction, migration, grantMigration] = await Promise.all([
+    read('src/utils/imageOptimization.ts'),
+    read('src/utils/imageStorage.ts'),
+    read('src/contexts/DataContext.tsx'),
+    read('src/pages/Feed.tsx'),
+    read('src/pages/Mapa.tsx'),
+    read('supabase/functions/anonymous-post-control/index.ts'),
+    read('supabase/migrations/20260829155750_add_post_image_thumbnails.sql'),
+    read('supabase/migrations/20260829160218_grant_post_image_thumbnail_insert.sql'),
+  ]);
+
+  assert.match(optimizer, /POST_IMAGE_MAX_SOURCE_BYTES = 10 \* 1024 \* 1024/);
+  assert.match(optimizer, /POST_IMAGE_MAX_DIMENSION = 1600/);
+  assert.match(optimizer, /POST_IMAGE_THUMBNAIL_MAX_DIMENSION = 640/);
+  assert.match(optimizer, /canvasToBlob\(canvas, 'image\/webp'/);
+  assert.match(optimizer, /canvasToBlob\(canvas, 'image\/jpeg'/);
+  assert.match(storage, /-thumb\.\$\{extensionForMime\(thumbnailBlob\.type\)\}/);
+  assert.match(storage, /cacheControl: '31536000'/);
+  assert.match(dataContext, /image_thumbnail_url: stored\.thumbnailUrl/);
+  assert.match(dataContext, /imageThumbnailData: imageThumbnailData \|\| null/);
+  assert.match(feed, /post\.imageThumbnailUrl \|\| post\.imageUrl/);
+  assert.match(map, /post\.imageThumbnailUrl \|\| post\.imageUrl/);
+  assert.match(anonymousFunction, /image_thumbnail_url: uploaded\.thumbnailUrl/);
+  assert.match(anonymousFunction, /removeAnonymousImages\(path, thumbnailPath\)/);
+  assert.match(migration, /add column if not exists image_thumbnail_url text/);
+  assert.match(migration, /char_length\(image_thumbnail_url\) <= 2048/);
+  assert.match(grantMigration, /grant insert \(image_thumbnail_url\) on table public\.posts to authenticated/);
 });
