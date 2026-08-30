@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 const ownerId = '20000000-0000-4000-8000-000000000001';
 const publicId = '20000000-0000-4000-8000-000000000002';
@@ -44,6 +44,11 @@ const posts = [...photos.map((photo, index) => ({
 }];
 
 async function prepare(page: Page, options: { authenticated?: boolean; font?: 'medium' | 'giant'; dark?: boolean } = {}) {
+  const state = {
+    profile: { id: ownerId, name: userName, avatar_url: null as string | null, reputation: 5, created_at: '2026-01-01T12:00:00Z' },
+    profileWrites: 0,
+    avatarUploads: 0,
+  };
   await page.addInitScript(({ id, name, authenticated, font, dark }) => {
     localStorage.setItem('nmb-font-size-v1', font || 'medium');
     localStorage.setItem('anb-cookie-consent', 'essential');
@@ -67,10 +72,22 @@ async function prepare(page: Page, options: { authenticated?: boolean; font?: 'm
     await route.fulfill({ contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${photo.width}" height="${photo.height}"><rect width="100%" height="100%" fill="#e7c6a1"/><rect x="0" y="0" width="100%" height="30%" fill="#a8c2c8"/><rect x="0" y="80%" width="100%" height="20%" fill="#5b715c"/></svg>` });
   });
   await page.route('**/supabase-mock/**', async route => {
-    const url = new URL(route.request().url());
+    const request = route.request();
+    const url = new URL(request.url());
     let body: unknown = [];
     if (url.pathname.endsWith('/users') || url.pathname.endsWith('/public_user_profiles')) {
-      body = { id: url.pathname.endsWith('/public_user_profiles') ? publicId : ownerId, name: userName, avatar_url: null, reputation: 5, created_at: '2026-01-01T12:00:00Z' };
+      if (request.method() === 'PATCH') {
+        expect(url.searchParams.get('id')).toBe(`eq.${ownerId}`);
+        state.profileWrites++;
+        Object.assign(state.profile, request.postDataJSON());
+      }
+      body = { ...state.profile, id: url.pathname.endsWith('/public_user_profiles') ? publicId : ownerId };
+    } else if (url.pathname.includes('/storage/v1/object/avatars/') && request.method() === 'POST') {
+      state.avatarUploads++;
+      body = { Key: url.pathname.split('/object/')[1] };
+    } else if (url.pathname.includes('/storage/v1/object/public/avatars/')) {
+      await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" fill="#c2410c"/></svg>' });
+      return;
     } else if (url.pathname.endsWith('/posts')) {
       const idFilter = url.searchParams.get('id');
       body = idFilter?.startsWith('eq.') ? posts.find(post => post.id === idFilter.slice(3)) || null : posts;
@@ -85,6 +102,7 @@ async function prepare(page: Page, options: { authenticated?: boolean; font?: 'm
     }
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*', 'content-range': `0-3/${Array.isArray(body) ? body.length : 1}` }, body: JSON.stringify(body) });
   });
+  return state;
 }
 
 async function noHorizontalOverflow(page: Page) {
@@ -94,6 +112,11 @@ async function noHorizontalOverflow(page: Page) {
 
 async function capture(page: Page, info: TestInfo, name: string) {
   await info.attach(name, { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
+}
+
+async function clickProfileControl(control: Locator) {
+  await control.evaluate(node => node.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+  await control.click();
 }
 
 test('fotos inteiras têm altura limitada e proporção preservada em cada tela', async ({ page }, info) => {
@@ -198,6 +221,70 @@ test('perfil próprio prioriza atividade e mantém edição e conta acessíveis'
   await expect(page.getByRole('button', { name: 'Baixar meus dados', exact: true })).toBeVisible();
   await page.locator('.nmb-profile-more-badges > summary').click();
   await expect(page.locator('.nmb-profile-badge:visible')).toHaveCount(10);
+});
+
+test('recorte exibe só suas três ações e restaura o salvamento do perfil', async ({ page }, info) => {
+  const state = await prepare(page, { authenticated: true });
+  await page.goto('/#/perfil');
+  await page.locator('.nmb-profile-header').getByRole('button', { name: 'Editar perfil', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Editar perfil' });
+  const updatedName = 'Marina Oliveira de teste';
+  await dialog.getByRole('textbox', { name: 'Nome', exact: true }).fill(updatedName);
+  // Synthetic image and mocked uploads only: never changes production photos.
+  const imageBase64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640; canvas.height = 480;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#047857'; context.fillRect(0, 0, 640, 480);
+    context.fillStyle = '#f97316'; context.fillRect(240, 100, 160, 280);
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  const image = { name: 'avatar-fixture.png', mimeType: 'image/png', buffer: Buffer.from(imageBase64, 'base64') };
+  const choosePhoto = async () => {
+    await dialog.locator('input[type="file"]').setInputFiles(image);
+    await expect(dialog.getByRole('img', { name: 'Recorte da foto de perfil' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Recentrar', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Usar foto', exact: true })).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: 'Cancelar', exact: true })).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: 'Salvar', exact: true })).toHaveCount(0);
+    await expect(dialog.getByText('Finalize o recorte acima', { exact: true })).toHaveCount(0);
+  };
+
+  await choosePhoto();
+  const zoom = dialog.getByRole('slider', { name: 'Zoom da foto' });
+  await zoom.press('ArrowRight');
+  await expect(zoom).toHaveValue('1.01');
+  await clickProfileControl(dialog.getByRole('button', { name: 'Recentrar', exact: true }));
+  await expect(zoom).toHaveValue('1');
+  await noHorizontalOverflow(page);
+  await capture(page, info, 'perfil-recorte-sem-botoes-duplicados');
+  await clickProfileControl(dialog.getByRole('button', { name: 'Cancelar', exact: true }));
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Escolher foto' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Salvar', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('textbox', { name: 'Nome', exact: true })).toHaveValue(updatedName);
+
+  await choosePhoto();
+  await clickProfileControl(dialog.getByRole('button', { name: 'Usar foto', exact: true }));
+  const preview = dialog.getByRole('img', { name: 'Foto de perfil', exact: true });
+  await expect(preview).toHaveAttribute('src', /^data:image\/jpeg;base64,/);
+  await expect(preview).toHaveJSProperty('naturalWidth', 512);
+  await expect(preview).toHaveJSProperty('naturalHeight', 512);
+  const croppedPhoto = await preview.getAttribute('src');
+  await expect(dialog.getByRole('button', { name: 'Salvar', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('button', { name: 'Cancelar', exact: true })).toHaveCount(1);
+
+  await choosePhoto();
+  await clickProfileControl(dialog.getByRole('button', { name: 'Cancelar', exact: true }));
+  await expect(preview).toHaveAttribute('src', croppedPhoto!);
+  expect(state.avatarUploads).toBe(0);
+  expect(state.profileWrites).toBe(0);
+  await clickProfileControl(dialog.getByRole('button', { name: 'Salvar', exact: true }));
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading', { name: updatedName, exact: true })).toBeVisible();
+  expect(state.avatarUploads).toBe(1);
+  expect(state.profileWrites).toBe(1);
+  expect(state.profile.avatar_url).toContain(`/storage/v1/object/public/avatars/${ownerId}/avatar-`);
 });
 
 test('fonte gigante e tema escuro preservam reflow no feed e perfil', async ({ page }, info) => {
