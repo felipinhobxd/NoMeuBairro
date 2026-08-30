@@ -216,12 +216,14 @@ test('fonte gigante e tema escuro preservam reflow no feed e perfil', async ({ p
 
 test('feed e perfil não têm violações graves de acessibilidade', async ({ page }) => {
   await prepare(page, { authenticated: true });
+  const violations: Array<{ page: string; id: string; help: string; targets: unknown[] }> = [];
   for (const [url, selector] of [['/', '.nmb-feed'], ['/#/perfil', '.nmb-profile']] as const) {
     await page.goto(url);
     await expect(page.locator(selector)).toBeVisible();
     if (url.includes('perfil')) await expect(page.locator('.nmb-profile-activity-item')).toHaveCount(4);
     else await expect(page.locator('.nmb-post-card')).toHaveCount(4);
     const results = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-    expect(results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => ({ id: v.id, help: v.help, targets: v.nodes.map(n => n.target) }))).toEqual([]);
+    violations.push(...results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => ({ page: url, id: v.id, help: v.help, targets: v.nodes.map(n => n.target) })));
   }
+  expect(violations).toEqual([]);
 });

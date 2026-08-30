@@ -62,6 +62,9 @@ details[open] > summary > .nmb-disclosure-arrow { transform: rotate(180deg); }
 main[role="main"] .nmb-post-time { line-height: 1.35 !important; }
 .nmb-post-category { margin-block: .35rem; }
 .nmb-post-category > span { padding: .2rem .5rem; max-width: 100%; flex-wrap: wrap; }
+/* O prefixo usa a cor integral do selo para manter o contraste nos dois temas. */
+.nmb-post-category .opacity-70,
+.nmb-profile-post-meta .opacity-70 { opacity: 1; }
 main[role="main"] .nmb-post-title { line-height: 1.35; overflow-wrap: anywhere; }
 .nmb-post-title {
   display: -webkit-box;
@@ -114,6 +117,7 @@ main[role="main"] .nmb-post-description {
   width: auto;
   height: auto;
   max-width: 100%;
+  max-height: 280px;
   max-height: clamp(160px, 32vh, 340px);
   object-fit: contain;
 }
@@ -218,8 +222,9 @@ main[role="main"] .nmb-profile-badge-description { font-size: var(--text-xs); li
 .nmb-profile-activity-heading, .nmb-profile-activity-filters, .nmb-profile-activity-list { padding: .75rem 1rem; }
 main[role="main"] .nmb-profile-activity-heading p { font-size: var(--text-xs); line-height: 1.4; }
 .nmb-profile-activity-tabs { gap: .35rem; }
-.nmb-profile-activity-tabs > button { min-height: 2.75rem; gap: .35rem; padding: .4rem .6rem; font-size: var(--text-xs); }
+.nmb-profile-activity-tabs > button { min-height: 2.75rem; gap: .25rem; padding: .4rem .5rem; font-size: var(--text-xs); }
 .nmb-profile-activity-item { min-width: 0; padding: .75rem; overflow-wrap: anywhere; }
+main[role="main"] button.nmb-profile-activity-item { font-weight: 400; }
 .nmb-profile-post-meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .5rem; }
 .nmb-profile-post-meta > span { font-size: var(--text-xs) !important; text-transform: none; letter-spacing: 0; }
 .nmb-profile-post-link { display: block; border-radius: 1rem; }
@@ -281,11 +286,16 @@ main[role="main"] .nmb-profile-post p { line-height: 1.45; }
   .nmb-profile { gap: .75rem; }
   .nmb-profile-header { padding: .875rem; }
   .nmb-profile-identity { grid-template-columns: auto minmax(0, 1fr); gap: .75rem; }
+  main[role="main"] .nmb-profile-name { font-size: var(--text-xl) !important; }
   .nmb-profile-avatar { width: 4rem; height: 4rem; }
   .nmb-profile-header-actions { grid-column: 1 / -1; }
   .nmb-profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
-  .nmb-profile-stat { padding: .625rem .75rem; }
+  .nmb-profile-stat { grid-template-columns: auto minmax(0, 1fr); min-height: 3rem; padding: .5rem .625rem; column-gap: .5rem; }
+  .nmb-profile-stat > svg { display: none; }
+  .nmb-profile-stat > dd { grid-column: 1; grid-row: 1; align-self: center; font-size: var(--text-lg); }
+  .nmb-profile-stat > dt { grid-column: 2; grid-row: 1; align-self: center; }
   .nmb-profile-activity-heading, .nmb-profile-activity-filters, .nmb-profile-activity-list { padding: .75rem; }
+  .nmb-profile-activity-heading p { display: none; }
 }
 @media (min-width: 640px) and (max-width: 1023px) {
   .nmb-feed, .nmb-profile { max-width: 44rem; }
