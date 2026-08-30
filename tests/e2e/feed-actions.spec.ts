@@ -161,7 +161,7 @@ async function setup(page: Page, options: { authenticated?: boolean; dark?: bool
 
 const firstCard = (page: Page) => page.locator(`#post-${postId}`);
 const total = (page: Page) => firstCard(page).locator('.nmb-post-comment-total');
-const commentsButton = (page: Page) => firstCard(page).getByRole('button', { name: /^Comentários \(/ });
+const commentsButton = (page: Page) => firstCard(page).getByRole('button', { name: /^Comentar — \d+ comentários?$/ });
 
 async function clickFeedControl(control: Locator) {
   // Scroll as a reader would: a point merely inside the viewport can still be

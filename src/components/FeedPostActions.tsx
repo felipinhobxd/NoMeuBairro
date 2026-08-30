@@ -50,7 +50,7 @@ export default function FeedPostActions(props: Props) {
       <button type="button" onClick={props.onSupport} aria-label="Apoiar" aria-pressed={props.supported} className="nmb-post-action">
         <Heart aria-hidden="true" className={cn(props.supported && 'fill-current', props.heartAnimating && 'animate-heart-pop')} /><span>{props.supported ? 'Apoiado' : 'Apoiar'}</span>
       </button>
-      <button type="button" onClick={props.onComments} aria-label={`Comentários (${props.commentsCount})`} aria-expanded={props.commentsExpanded} aria-controls={props.commentsExpanded ? `post-comments-${props.postId}` : undefined} className="nmb-post-action">
+      <button type="button" onClick={props.onComments} aria-label={`Comentar — ${props.commentsCount} ${props.commentsCount === 1 ? 'comentário' : 'comentários'}`} aria-expanded={props.commentsExpanded} aria-controls={props.commentsExpanded ? `post-comments-${props.postId}` : undefined} className="nmb-post-action">
         <MessageSquare aria-hidden="true" /><span>Comen&shy;tar</span>
       </button>
       <button type="button" onClick={props.onShare} aria-label="Compartilhar relato" className="nmb-post-action">

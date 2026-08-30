@@ -150,7 +150,7 @@ test('filtros, atendimento oficial, comentários e localização continuam dispo
   const card = page.locator('.nmb-post-card');
   await card.locator('.nmb-post-contact > summary').click();
   await expect(card.getByRole('link', { name: /Ligar para Central 156/ })).toBeVisible();
-  await card.getByRole('button', { name: 'Comentários' }).click();
+  await card.getByRole('button', { name: /^Comentar — / }).click();
   await expect(card.getByRole('button', { name: 'Entre na sua conta para comentar' })).toBeVisible();
   await card.getByRole('button', { name: 'Ver mapa', exact: true }).click();
   await expect(page).toHaveURL(/#\/mapa$/);
