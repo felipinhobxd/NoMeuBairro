@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import "./ux-polish.css";
+import "./feed-profile.css";
 import App from "./App";
 
 // O botão "Ver mapa" do Feed já navega para /mapa. Antes da navegação,

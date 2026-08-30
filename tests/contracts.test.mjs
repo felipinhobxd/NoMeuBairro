@@ -184,11 +184,29 @@ test('categoria escolhida aparece com destaque antes do título do relato', asyn
     read('src/pages/Feed.tsx'),
     read('src/components/UI.tsx'),
   ]);
-  const category = feed.indexOf('<div className="mb-2"><CategoryBadge category={post.category} /></div>');
+  const category = feed.indexOf('<CategoryBadge category={post.category} />');
   const title = feed.indexOf('<Link to={`/post/${post.id}`}');
   assert.ok(category >= 0 && category < title);
   assert.match(ui, /aria-label=\{`Categoria: \$\{d\.label\}`\}/);
   assert.match(ui, /text-xs font-extrabold/);
+});
+
+test('feed e perfis usam layout responsivo sem alterar a escala de fonte global', async () => {
+  const [css, feed, profile, publicProfile, text] = await Promise.all([
+    read('src/feed-profile.css'), read('src/pages/Feed.tsx'), read('src/pages/Profile.tsx'),
+    read('src/pages/PublicProfile.tsx'), read('src/components/ExpandablePostText.tsx'),
+  ]);
+  assert.match(css, /object-fit: contain/);
+  assert.match(css, /32svh/);
+  assert.match(css, /data-font-size="giant"/);
+  assert.match(feed, /nmb-post-location/);
+  assert.doesNotMatch(feed, /Localização no mapa<\/p>/);
+  assert.match(feed, /<details className="nmb-post-contact">/);
+  assert.match(feed, /Ampliar foto do relato/);
+  assert.match(profile, /<ProfileSections/);
+  assert.match(publicProfile, /<ProfileSections/);
+  assert.match(text, /scrollHeight > element.clientHeight/);
+  assert.match(text, /observer.disconnect/);
 });
 
 test('barra de navegação acompanha os botões e respeita o limite da tela', async () => {
