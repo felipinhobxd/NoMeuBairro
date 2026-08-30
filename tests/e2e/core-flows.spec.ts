@@ -82,12 +82,12 @@ test('primeira visita respeita fonte, cookies e guia nessa ordem', async ({ page
   await expect(page.getByText(/Aprenda (clicando|tocando)/)).toBeVisible();
 });
 
-test('navegação principal funciona em desktop e celular', async ({ page, isMobile }) => {
+test('navegação principal funciona em desktop e celular', async ({ page }) => {
   await prepareReturningVisitor(page);
   await page.goto('/');
 
   const navigation = page.getByRole('navigation', {
-    name: isMobile ? 'Navegação mobile' : 'Navegação principal',
+    name: (page.viewportSize()?.width ?? 0) < 1024 ? 'Navegação mobile' : 'Navegação principal',
   });
   await expect(navigation).toBeVisible();
   await navigation.getByRole('button', { name: 'Mapa', exact: true }).click();

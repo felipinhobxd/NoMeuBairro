@@ -4,7 +4,7 @@ import {
   Briefcase, CalendarDays, ChevronRight, Heart, Loader2, MapPin, MessageSquare, ShieldAlert,
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
-import { Card } from './UI';
+import { Card, CategoryBadge } from './UI';
 import { cn } from '../utils/cn';
 import type { AccountType } from '../types';
 
@@ -237,14 +237,14 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
   const currentLength = activeTab === 'posts' ? visiblePosts.length : (data[activeTab] || []).length;
 
   return (
-    <Card className="!p-0 overflow-hidden">
-      <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800">
-        <h3 className="text-base font-bold text-slate-900 dark:text-white">Minha atividade</h3>
+    <Card className="nmb-profile-activity !p-0 overflow-hidden">
+      <div className="nmb-profile-activity-heading p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800">
+        <h2 className="nmb-profile-section-title">Minha atividade</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">Acompanhe tudo o que você fez no No Meu Bairro em um só lugar.</p>
       </div>
 
-      <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Tipos de atividade">
+      <div className="nmb-profile-activity-filters p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+        <div className="nmb-profile-activity-tabs flex gap-2 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="Tipos de atividade">
           {visibleTabs.map(({ id, label, shortLabel, icon: Icon }) => (
             <button
               key={id}
@@ -285,7 +285,7 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
         )}
       </div>
 
-      <div className="p-4 sm:p-5 min-h-48">
+      <div className="nmb-profile-activity-list p-4 sm:p-5 min-h-48">
         {loading ? (
           <div className="py-10 flex items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="w-5 h-5 animate-spin" /> Carregando sua atividade...</div>
         ) : (
@@ -301,12 +301,13 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
                 {activeTab === 'posts' && visiblePosts.map((post) => {
                   const status = postStatus[post.status] || postStatus.pending;
                   return (
-                    <button key={post.id} type="button" onClick={() => navigate(`/post/${post.id}`)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <button key={post.id} type="button" onClick={() => navigate(`/post/${post.id}`)} className="nmb-profile-activity-item w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0"><p className="font-bold text-slate-900 dark:text-white truncate">{post.title}</p><p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mt-1">{post.description}</p></div>
+                        <div className="min-w-0"><p className="text-sm font-bold text-slate-900 dark:text-white line-clamp-2 break-words">{post.title}</p><p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mt-1">{post.description}</p></div>
                         <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" />
                       </div>
-                      <div className="flex flex-wrap items-center gap-2 mt-3 text-xs">
+                      <div className="nmb-profile-post-meta flex flex-wrap items-center gap-2 mt-2 text-xs">
+                        <CategoryBadge category={post.category} />
                         <span className={cn('rounded-full px-2.5 py-1 font-bold', status.cls)}>{status.label}</span>
                         {post.is_anonymous && <span className="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-1 font-semibold text-slate-600 dark:text-slate-300">Denúncia anônima deste navegador</span>}
                         <span className="text-slate-500">{activityDate(post.created_at)}</span>
@@ -316,28 +317,28 @@ export default function ProfileActivity({ userId, accountType }: { userId: strin
                 })}
 
                 {activeTab === 'comments' && data.comments.map((comment) => (
-                  <button key={comment.id} type="button" onClick={() => navigate(`/post/${comment.post_id}`)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <button key={comment.id} type="button" onClick={() => navigate(`/post/${comment.post_id}`)} className="nmb-profile-activity-item w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                     <div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300">Comentário em {comment.posts?.title || 'relato'}</p><p className="text-sm text-slate-800 dark:text-slate-100 mt-1.5 line-clamp-3">“{comment.content}”</p><p className="text-xs text-slate-500 mt-2">{activityDate(comment.created_at)}</p></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
                   </button>
                 ))}
 
                 {activeTab === 'supports' && data.supports.map((support) => (
-                  <button key={support.id} type="button" onClick={() => navigate(`/post/${support.post_id}`)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <div className="flex items-start gap-3"><div className="w-9 h-9 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center shrink-0"><Heart className="w-4 h-4 text-rose-500 fill-rose-500" /></div><div className="flex-1 min-w-0"><p className="font-bold text-slate-900 dark:text-white truncate">{support.posts?.title || 'Relato'}</p><div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500">{support.posts?.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{support.posts.location}</span>}<span>{activityDate(support.created_at)}</span></div></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
+                  <button key={support.id} type="button" onClick={() => navigate(`/post/${support.post_id}`)} className="nmb-profile-activity-item w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <div className="flex items-start gap-3"><div className="w-9 h-9 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center shrink-0"><Heart className="w-4 h-4 text-rose-500 fill-rose-500" /></div><div className="flex-1 min-w-0"><p className="text-sm font-bold text-slate-900 dark:text-white line-clamp-2 break-words">{support.posts?.title || 'Relato'}</p><div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-slate-500">{support.posts?.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{support.posts.location}</span>}<span>{activityDate(support.created_at)}</span></div></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
                   </button>
                 ))}
 
                 {activeTab === 'events' && data.events.map((event) => (
-                  <button key={event.id} type="button" onClick={() => openEvent(event.id)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <div className="flex items-start gap-3"><div className="w-11 h-11 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center shrink-0"><CalendarDays className="w-5 h-5 text-violet-600 dark:text-violet-300" /></div><div className="flex-1 min-w-0"><p className="font-bold text-slate-900 dark:text-white truncate">{event.title}</p><p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mt-1">{event.description}</p><div className="flex flex-wrap gap-2 mt-2 text-xs text-slate-500"><span>{new Date(`${event.event_date}T12:00:00`).toLocaleDateString('pt-BR')}</span>{event.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>}</div></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
+                  <button key={event.id} type="button" onClick={() => openEvent(event.id)} className="nmb-profile-activity-item w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <div className="flex items-start gap-3"><div className="w-11 h-11 rounded-xl bg-violet-50 dark:bg-violet-500/10 flex items-center justify-center shrink-0"><CalendarDays className="w-5 h-5 text-violet-600 dark:text-violet-300" /></div><div className="flex-1 min-w-0"><p className="text-sm font-bold text-slate-900 dark:text-white line-clamp-2 break-words">{event.title}</p><p className="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mt-1">{event.description}</p><div className="flex flex-wrap gap-2 mt-2 text-xs text-slate-500"><span>{new Date(`${event.event_date}T12:00:00`).toLocaleDateString('pt-BR')}</span>{event.location && <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{event.location}</span>}</div></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
                   </button>
                 ))}
 
                 {activeTab === 'applications' && data.applications.map((application) => {
                   const status = applicationStatus[application.status] || applicationStatus.interested;
                   return (
-                    <button key={application.id} type="button" onClick={() => openApplication(application)} className="w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                      <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0"><Briefcase className="w-5 h-5 text-blue-600 dark:text-blue-300" /></div><div className="flex-1 min-w-0"><p className="font-bold text-slate-900 dark:text-white truncate">{application.job?.title || 'Vaga'}</p><p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{application.job?.company_name || 'Empresa'}</p><div className="flex flex-wrap items-center gap-2 mt-2"><span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', status.cls)}>{status.label}</span>{application.job?.neighborhood && <span className="text-xs text-slate-500 inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{application.job.neighborhood}</span>}<span className="text-xs text-slate-500">{activityDate(application.created_at)}</span></div><ApplicationProgress status={application.status} /></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
+                    <button key={application.id} type="button" onClick={() => openApplication(application)} className="nmb-profile-activity-item w-full text-left rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                      <div className="flex items-start gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0"><Briefcase className="w-5 h-5 text-blue-600 dark:text-blue-300" /></div><div className="flex-1 min-w-0"><p className="text-sm font-bold text-slate-900 dark:text-white line-clamp-2 break-words">{application.job?.title || 'Vaga'}</p><p className="text-sm text-slate-600 dark:text-slate-300 mt-0.5">{application.job?.company_name || 'Empresa'}</p><div className="flex flex-wrap items-center gap-2 mt-2"><span className={cn('rounded-full px-2.5 py-1 text-xs font-bold', status.cls)}>{status.label}</span>{application.job?.neighborhood && <span className="text-xs text-slate-500 inline-flex items-center gap-1"><MapPin className="w-3 h-3" />{application.job.neighborhood}</span>}<span className="text-xs text-slate-500">{activityDate(application.created_at)}</span></div><ApplicationProgress status={application.status} /></div><ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-1" /></div>
                     </button>
                   );
                 })}

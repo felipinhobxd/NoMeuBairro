@@ -20,6 +20,10 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'desktop-1920-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 1920, height: 1080 } },
+    },
+    {
       name: 'desktop-chromium',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } },
     },
@@ -38,6 +42,14 @@ export default defineConfig({
     {
       name: 'mobile-chromium',
       use: { ...devices['Pixel 5'] },
+    },
+    {
+      name: 'mobile-small-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true },
+    },
+    {
+      name: 'tablet-chromium',
+      use: { ...devices['Desktop Chrome'], viewport: { width: 820, height: 1180 }, hasTouch: true },
     },
   ],
   webServer: {

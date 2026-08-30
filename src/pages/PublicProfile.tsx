@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import {
-  MessageSquare, Heart, Award, CheckCircle2,
-  CalendarDays, ArrowLeft, ShieldAlert,
+  MessageSquare, Heart,
+  ArrowLeft, ShieldAlert,
   MapPin, Loader2,
 } from 'lucide-react';
 import { Card, Button, StatusBadge, CategoryBadge, timeAgo } from '../components/UI';
-import { cn } from '../utils/cn';
-import { communityBadges, EMPTY_COMMUNITY_CONTRIBUTION, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
+import ProfileSections from '../components/ProfileSections';
+import { ContributionBadges, ContributionStats } from '../components/ProfileContribution';
+import { EMPTY_COMMUNITY_CONTRIBUTION, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
 
 type PublicPost = {
   id: string;
@@ -118,16 +119,16 @@ export default function PublicProfile() {
   const displayName = typeof profileUser.name === 'string' && profileUser.name.trim() ? profileUser.name.trim() : 'Morador';
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+    <div className="nmb-profile animate-fade-in">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-slate-500 hover:text-emerald-600 transition-colors"><ArrowLeft className="w-4 h-4" /> Voltar</button>
 
-      <Card>
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
+      <Card className="nmb-profile-header">
+        <div className="nmb-profile-identity">
+          <div className="nmb-profile-avatar w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
             {profileUser.avatar_url ? <img src={profileUser.avatar_url} alt={displayName} className="w-full h-full object-cover" decoding="async" /> : displayName.charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{displayName}</h2>
+            <h1 className="nmb-profile-name text-lg font-bold text-slate-900 dark:text-white">{displayName}</h1>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
               <span className="text-xs text-slate-400">Morador do bairro</span><span className="w-1 h-1 rounded-full bg-slate-300" />
               <span className="text-xs text-slate-400">Ativo desde {profileUser.created_at ? new Date(profileUser.created_at).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }) : 'recentemente'}</span>
@@ -136,47 +137,32 @@ export default function PublicProfile() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { icon: MessageSquare, value: stats.postsCount, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' },
-          { icon: CheckCircle2, value: stats.resolvedCount, label: 'Resolvidos', iconCls: 'text-teal-600 dark:text-teal-400', bgCls: 'bg-teal-50 dark:bg-teal-500/10' },
-          { icon: Heart, value: stats.supportsReceived, label: 'Apoios recebidos', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' },
-          { icon: CalendarDays, value: stats.eventsCount, label: 'Eventos', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' },
-        ].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
-          <Card key={label} className="text-center !p-4"><div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}><Icon className={cn('w-5 h-5', iconCls)} /></div><p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="text-[11px] text-slate-500 font-medium">{label}</p></Card>
-        ))}
-      </div>
-
-      <Card>
-        <div className="mb-4"><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos de contribuição de {displayName.split(' ')[0]}</h3><p className="text-[11px] text-slate-500 mt-1">Reconhecimentos por participação comunitária; não formam um ranking.</p></div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {communityBadges.map(badge => {
-            const earned = stats.earnedBadges.includes(badge.key);
-            if (!earned) return null;
-            return <div key={badge.key} className="flex flex-col items-center gap-2 p-3 rounded-xl text-center bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20"><span className="text-2xl">{badge.emoji}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500">{badge.desc}</p></div><CheckCircle2 className="w-4 h-4 text-amber-500" /></div>;
-          })}
-          {stats.earnedBadges.length === 0 && <p className="col-span-full text-xs text-slate-400 text-center py-4 italic">Ainda não possui selos públicos.</p>}
-        </div>
-      </Card>
-
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 px-1"><MessageSquare className="w-4 h-4 text-emerald-500" /> Relatos Públicos</h3>
+      <ContributionStats summary={stats} />
+      <ProfileSections
+        activityLabel="Relatos públicos"
+        information={<ContributionBadges summary={stats} earnedBadges={stats.earnedBadges} />}
+        activity={
+      <div className="nmb-profile-posts space-y-3">
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2 px-1"><MessageSquare className="w-4 h-4 text-emerald-500" /> Relatos Públicos</h2>
         {stats.posts.length === 0 ? <Card className="text-center py-12"><p className="text-sm text-slate-400 italic">Nenhum relato publicado ainda.</p></Card> : stats.posts.map(post => {
           const area = post.locality && post.neighborhood ? `${post.locality} · ${post.neighborhood}` : post.locality || post.neighborhood;
           return (
-            <Card key={post.id} className="animate-card-enter cursor-pointer" onClick={() => navigate(`/post/${post.id}`)}>
-              <div className="flex items-center justify-between gap-3 mb-3"><div className="flex items-center gap-2"><CategoryBadge category={post.category} /><span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span></div><StatusBadge status={post.status} /></div>
-              <h4 className="text-base font-semibold text-slate-900 dark:text-white mb-1">{post.title}</h4>
-              <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-3 mb-3">{post.description}</p>
-              <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+            <Link key={post.id} to={`/post/${post.id}`} className="nmb-profile-post-link" aria-label={`Abrir relato: ${post.title}`}>
+            <Card className="nmb-profile-post animate-card-enter">
+              <div className="nmb-profile-post-meta"><div className="flex flex-wrap items-center gap-2"><CategoryBadge category={post.category} /><span className="text-[10px] text-slate-400">{timeAgo(post.createdAt)}</span></div><StatusBadge status={post.status} /></div>
+              <h3 className="nmb-profile-post-title text-base font-semibold text-slate-900 dark:text-white mb-1">{post.title}</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">{post.description}</p>
+              <div className="nmb-profile-post-footer flex flex-wrap items-center gap-2 text-xs text-slate-500">
                 {area && <span className="flex items-center gap-1 font-semibold text-orange-700 dark:text-orange-300"><MapPin className="w-3 h-3" />{area}</span>}
                 {post.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{post.location}</span>}
                 <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-rose-500 fill-rose-500" />{post.supports} apoios</span>
               </div>
             </Card>
+            </Link>
           );
         })}
-      </div>
+      </div>}
+      />
     </div>
   );
 }

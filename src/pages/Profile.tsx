@@ -3,13 +3,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
   UserCircle, LogOut, Award, Camera, Pencil,
-  MessageSquare, Heart, CheckCircle2, Shield, CalendarDays, Loader2, Check, RotateCcw, ZoomIn, ImageIcon,
+  MessageSquare, Heart, Shield, Loader2, Check, RotateCcw, ZoomIn, ImageIcon,
 } from 'lucide-react';
 import { Card, Button, Modal, Input, useToast } from '../components/UI';
-import { cn } from '../utils/cn';
-import { communityBadges, EMPTY_COMMUNITY_CONTRIBUTION, getCommunityBadgeProgress, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
+import { EMPTY_COMMUNITY_CONTRIBUTION, getEarnedCommunityBadges, normalizeCommunityContribution, type CommunityContributionSummary } from '../utils/communityBadges';
 import { supabase } from '../utils/supabase';
 import AccountDataControls from '../components/AccountDataControls';
+import ProfileActivity from '../components/ProfileActivity';
+import ProfileSections from '../components/ProfileSections';
+import { ContributionBadges, ContributionStats } from '../components/ProfileContribution';
 import { MIN_NEW_PASSWORD_LENGTH, minimumPasswordMessage } from '../config/authSecurity';
 
 type Point = { x: number; y: number };
@@ -262,33 +264,25 @@ export default function Profile() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-      <Card>
-        <div className="flex items-start gap-4">
+    <div className="nmb-profile animate-fade-in">
+      <Card className="nmb-profile-header">
+        <div className="nmb-profile-identity">
           <div className="relative group shrink-0">
-            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
+            <div className="nmb-profile-avatar w-20 h-20 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-3xl font-bold shadow-lg shadow-emerald-600/20">
               {user.avatarUrl ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" decoding="async" /> : user.name.charAt(0).toUpperCase()}
             </div>
             <button onClick={openEditProfile} className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 flex items-center justify-center text-slate-500 hover:text-emerald-600 hover:ring-emerald-300 dark:hover:text-emerald-400 dark:hover:ring-emerald-500/30 transition-all shadow-sm" aria-label="Editar foto de perfil"><Camera className="w-4 h-4" /></button>
           </div>
-          <div className="flex-1 min-w-0"><h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">{user.name}</h2><p className="text-sm text-slate-500 dark:text-slate-400 truncate">{user.email}</p><p className="text-xs text-slate-400 mt-1">Membro desde {new Date(user.createdAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p></div>
-          <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Sair"><LogOut className="w-4 h-4" /></Button>
+          <div className="flex-1 min-w-0"><h1 className="nmb-profile-name text-lg font-bold text-slate-900 dark:text-white">{user.name}</h1><p className="nmb-profile-email text-sm text-slate-500 dark:text-slate-400">{user.email}</p><p className="text-xs text-slate-400 mt-1">Membro desde {new Date(user.createdAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p></div>
+          <div className="nmb-profile-header-actions"><Button size="sm" onClick={openEditProfile}><Pencil className="w-4 h-4" />Editar perfil</Button><Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Sair"><LogOut className="w-4 h-4" /></Button></div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[{ icon: MessageSquare, value: stats.postsCount, label: 'Relatos', iconCls: 'text-emerald-600 dark:text-emerald-400', bgCls: 'bg-emerald-50 dark:bg-emerald-500/10' }, { icon: CheckCircle2, value: stats.resolvedCount, label: 'Resolvidos', iconCls: 'text-teal-600 dark:text-teal-400', bgCls: 'bg-teal-50 dark:bg-teal-500/10' }, { icon: Heart, value: stats.supportsGiven, label: 'Apoios dados', iconCls: 'text-rose-500 dark:text-rose-400', bgCls: 'bg-rose-50 dark:bg-rose-500/10' }, { icon: CalendarDays, value: stats.eventsAttended, label: 'Participações', iconCls: 'text-blue-600 dark:text-blue-400', bgCls: 'bg-blue-50 dark:bg-blue-500/10' }].map(({ icon: Icon, value, label, iconCls, bgCls }) => (
-          <Card key={label} className="text-center !p-4"><div className={cn('w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2', bgCls)}><Icon className={cn('w-5 h-5', iconCls)} /></div><p className="text-2xl font-bold text-slate-900 dark:text-white">{value}</p><p className="text-[11px] text-slate-500 font-medium">{label}</p></Card>
-        ))}
-      </div>
-
-      <Card>
-        <div className="flex items-start justify-between gap-3 mb-4"><div><h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-500" /> Selos de contribuição</h3><p className="text-[11px] text-slate-500 mt-1">Reconhecimentos por ações comunitárias — sem ranking entre moradores.</p></div><span className="text-xs text-slate-400 shrink-0">{stats.earnedBadges.length}/{communityBadges.length}</span></div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {communityBadges.map(badge => { const earned = stats.earnedBadges.includes(badge.key); const progress = getCommunityBadgeProgress(badge, stats); return <div key={badge.key} className={cn('flex flex-col items-center gap-2 p-3 rounded-xl text-center transition-all', earned ? 'bg-amber-50 dark:bg-amber-500/10 ring-1 ring-amber-200 dark:ring-amber-500/20' : 'bg-slate-50 dark:bg-slate-800/70 ring-1 ring-slate-100 dark:ring-slate-700')}><span className={cn('text-2xl', !earned && 'grayscale opacity-45')}>{badge.emoji}</span><div><p className="text-xs font-semibold text-slate-900 dark:text-white">{badge.name}</p><p className="text-[10px] text-slate-500 min-h-7">{badge.desc}</p></div>{earned ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400"><CheckCircle2 className="w-3.5 h-3.5" /> Conquistado</span> : <div className="w-full"><div className="h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${Math.round(progress.ratio * 100)}%` }} /></div><p className="mt-1 text-[9px] font-bold text-slate-400">Progresso {progress.text}</p></div>}</div>; })}
-        </div>
-      </Card>
-
+      <ContributionStats summary={stats} owner />
+      <ProfileSections
+        activity={<ProfileActivity userId={user.id} accountType={user.accountType} />}
+        information={<>
+          <ContributionBadges summary={stats} earnedBadges={stats.earnedBadges} owner />
       <Card>
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Conta</h3>
         <div className="space-y-1">
@@ -298,7 +292,9 @@ export default function Profile() {
         </div>
       </Card>
 
-      <AccountDataControls />
+      <div className="nmb-profile-privacy"><AccountDataControls /></div>
+        </>}
+      />
 
       <Modal open={showEditProfile} onClose={closeEditProfile} title="Editar perfil">
         <div className="space-y-5 pb-8 sm:pb-0">
