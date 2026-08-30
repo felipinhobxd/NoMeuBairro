@@ -154,7 +154,7 @@ export default function AccountDataControls() {
             {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />} {exporting ? 'Preparando...' : 'Baixar meus dados'}
           </Button>
           {!request && !loadingRequest && (
-            <Button type="button" variant="secondary" className="min-h-11 !text-red-600 dark:!text-red-400" onClick={() => setShowDeletionModal(true)}>
+            <Button type="button" variant="secondary" className="min-h-11 !text-red-700 dark:!text-red-300" onClick={() => setShowDeletionModal(true)}>
               <UserX className="h-4 w-4" /> Solicitar exclusão
             </Button>
           )}
