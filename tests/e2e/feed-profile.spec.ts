@@ -27,6 +27,7 @@ const posts = [...photos.map((photo, index) => ({
   is_anonymous: false,
   created_at: '2026-08-29T12:00:00.000Z',
   comments_count: 0,
+  comments: [{ count: 0 }],
   post_supports: [{ count: 2 }],
   users: { name: userName, avatar_url: null },
 })), {
@@ -38,6 +39,7 @@ const posts = [...photos.map((photo, index) => ({
   location: 'Rua de teste, Curitiba', neighborhood: 'Centro', locality: null,
   latitude: -25.43, longitude: -49.27, is_anonymous: false,
   created_at: '2026-08-28T12:00:00.000Z', comments_count: 0,
+  comments: [{ count: 0 }],
   post_supports: [{ count: 0 }], users: { name: userName, avatar_url: null },
 }];
 

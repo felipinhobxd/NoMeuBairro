@@ -30,6 +30,7 @@ async function mockSupabase(page: Page) {
       created_at: '2026-08-19T12:00:00.000Z',
       updated_at: '2026-08-19T12:00:00.000Z',
       comments_count: 0,
+      comments: [{ count: 0 }],
       post_supports: [{ count: 0 }],
       users: { name: 'Morador de teste', avatar_url: null },
     }] : [];

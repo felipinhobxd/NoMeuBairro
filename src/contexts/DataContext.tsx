@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabase';
 import { storePostImage, deleteStoredPostImage } from '../utils/imageStorage';
 import { createPostThumbnailDataUrl } from '../utils/imageOptimization';
 import { clearSessionQueryCache, readSessionQueryCache, writeSessionQueryCache } from '../utils/sessionQueryCache';
+import { commentThreadIds, createPostCommentCountSync, POST_COMMENT_COUNT_SELECT, readPostCommentCount } from '../utils/postCommentCounts';
 
 type ActionResult = { ok: boolean; error?: string };
 type ResolvedLocation = {
@@ -47,6 +48,7 @@ interface DataContextType {
   loadPosts: (force?: boolean) => Promise<void>;
   loadEvents: (force?: boolean) => Promise<void>;
   loadComments: (postId: string, force?: boolean) => Promise<void>;
+  refreshCommentCounts: (postIds: string[]) => Promise<void>;
   loadMyAttendance: (force?: boolean) => Promise<void>;
   fetchData: () => Promise<void>;
   addPost: (data: AddPostInput) => Promise<AddPostResult>;
@@ -77,7 +79,7 @@ const EVENT_LIMIT = 60;
 const COMMENT_PER_POST_LIMIT = 100;
 const NOTIFICATION_LIMIT = 40;
 const NOTIFICATION_SELECT = 'id,user_id,actor_id,type,post_id,comment_id,job_id,application_id,event_id,is_read,created_at,users:actor_id(name,avatar_url),posts:post_id(title),comments:comment_id(content),job_posts:job_id(title),events:event_id(title)';
-const POSTS_CACHE_KEY = 'nmb-query-cache:posts:v2';
+const POSTS_CACHE_KEY = 'nmb-query-cache:posts:v3';
 const EVENTS_CACHE_KEY = 'nmb-query-cache:events:v1';
 const POSTS_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
 const EVENTS_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
@@ -132,7 +134,7 @@ function mapPost(p: any): Post {
     officialStatus: p.official_status || undefined,
     officialContactedAt: p.official_contacted_at || undefined,
     supports: p.post_supports?.[0]?.count ?? p.supports ?? 0,
-    commentsCount: p.comments_count ?? 0,
+    commentsCount: readPostCommentCount(p),
     createdAt: p.created_at, updatedAt: p.updated_at,
   };
 }
@@ -183,10 +185,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const postsLoadedRef = useRef(false); const eventsLoadedRef = useRef(false);
   const postsRequestRef = useRef<Promise<void> | null>(null); const eventsRequestRef = useRef<Promise<void> | null>(null);
   const commentRequestsRef = useRef<Map<string, Promise<void>>>(new Map()); const loadedCommentPostsRef = useRef<Set<string>>(new Set());
+  const commentMutationVersionsRef = useRef(new Map<string, number>());
   const processingRef = useRef<Set<string>>(new Set());
   const notificationRequestRef = useRef<Promise<void> | null>(null); const notificationLoadedUserRef = useRef<string | null>(null);
   const attendanceRequestRef = useRef<Promise<void> | null>(null); const attendanceLoadedUserRef = useRef<string | null>(null);
   const attendanceIdsRef = useRef<Set<string>>(new Set());
+
+  const [commentCountSync] = useState(() => createPostCommentCountSync(async ids => {
+    const { data, error } = await supabase.from('posts').select(POST_COMMENT_COUNT_SELECT).in('id', ids).limit(100);
+    if (error) throw error;
+    return data || [];
+  }, counts => {
+    setPosts(previous => {
+      let changed = false;
+      const next = previous.map(post => {
+        const count = counts.get(post.id);
+        if (count === undefined || count === post.commentsCount) return post;
+        changed = true;
+        return { ...post, commentsCount: count };
+      });
+      return changed ? next : previous;
+    });
+  }));
+  const refreshCommentCounts = useCallback((postIds: string[]) => commentCountSync.refresh(postIds), [commentCountSync]);
 
   const setAttendanceIds = useCallback((next: Set<string>) => { attendanceIdsRef.current = next; setAttendingEventIds(new Set(next)); }, []);
   const getMyAnonIds = useCallback((): Set<string> => { try { return new Set(JSON.parse(localStorage.getItem(SK_MY_ANON) || '[]')); } catch { return new Set(); } }, []);
@@ -198,15 +219,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (postsRequestRef.current) return postsRequestRef.current;
     if (postsLoadedRef.current && !force) return;
     const cached = readSessionQueryCache<Post[]>(POSTS_CACHE_KEY, POSTS_CACHE_MAX_AGE_MS);
-    if (!force && cached?.fresh && Array.isArray(cached.data)) {
-      setPosts(cached.data.slice(0, POST_LIMIT));
-      postsLoadedRef.current = true;
-      return;
-    }
     const request = (async () => {
       setPostsLoading(true);
       try {
-        const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,image_thumbnail_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments_count,post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
+        const countSnapshot = commentCountSync.snapshotRevision();
+        const withFreshCount = (post: Post) => ({ ...post, commentsCount: commentCountSync.countAfter(post.id, countSnapshot) ?? post.commentsCount });
+        if (!force && cached?.fresh && Array.isArray(cached.data)) {
+          const cachedPosts = cached.data.slice(0, POST_LIMIT);
+          // Keep the lightweight feed cache, but verify counts before showing it.
+          await refreshCommentCounts(cachedPosts.map(post => post.id));
+          setPosts(cachedPosts.map(withFreshCount));
+          postsLoadedRef.current = true;
+          return;
+        }
+        const { data, error } = await supabase.from('posts').select('id,author_id,category,status,title,description,image_url,image_thumbnail_url,location,neighborhood,locality,location_precision,latitude,longitude,official_agency,official_protocol,official_status,official_contacted_at,is_anonymous,created_at,updated_at,comments!comments_post_id_fkey(count),post_supports(count),users(name,avatar_url)').order('created_at', { ascending: false }).limit(POST_LIMIT);
         if (error) {
           console.error('Erro ao carregar relatos:', error);
           if (cached && Array.isArray(cached.data)) {
@@ -215,14 +241,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
-        const nextPosts = (data || []).map(mapPost);
+        const nextPosts = (data || []).map(mapPost).map(withFreshCount);
         setPosts(nextPosts);
         writeSessionQueryCache(POSTS_CACHE_KEY, nextPosts);
         postsLoadedRef.current = true;
       } finally { setPostsLoading(false); postsRequestRef.current = null; }
     })();
     postsRequestRef.current = request; return request;
-  }, []);
+  }, [commentCountSync, refreshCommentCounts]);
 
   const loadEvents = useCallback(async (force = false) => {
     if (eventsRequestRef.current) return eventsRequestRef.current;
@@ -260,10 +286,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (loadedCommentPostsRef.current.has(postId) && !force) return;
     const request = (async () => {
       try {
-        const { data, error } = await supabase.from('comments').select('id,post_id,author_id,content,parent_id,created_at,users(name,avatar_url)').eq('post_id', postId).order('created_at', { ascending: true }).limit(COMMENT_PER_POST_LIMIT);
-        if (error) { console.error('Erro ao carregar comentários:', error); return; }
-        setComments(prev => [...prev.filter(comment => comment.postId !== postId), ...(data || []).map(mapComment)]);
-        loadedCommentPostsRef.current.add(postId);
+        let stable = false;
+        while (!stable) {
+          const version = commentMutationVersionsRef.current.get(postId) || 0;
+          const { data, error } = await supabase.from('comments').select('id,post_id,author_id,content,parent_id,created_at,users(name,avatar_url)').eq('post_id', postId).order('created_at', { ascending: true }).limit(COMMENT_PER_POST_LIMIT);
+          if (error) { console.error('Erro ao carregar comentários:', error); return; }
+          // Do not let an older read resurrect a deleted thread or hide a new reply.
+          stable = version === (commentMutationVersionsRef.current.get(postId) || 0);
+          if (stable) {
+            setComments(prev => [...prev.filter(comment => comment.postId !== postId), ...(data || []).map(mapComment)]);
+            loadedCommentPostsRef.current.add(postId);
+          }
+        }
       } finally { commentRequestsRef.current.delete(postId); }
     })();
     commentRequestsRef.current.set(postId, request); return request;
@@ -468,22 +502,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const { data: inserted, error } = await supabase.from('comments').insert({ post_id: postId, author_id: user.id, parent_id: parentId, content: content.trim() }).select('id,post_id,author_id,content,parent_id,created_at').single();
     if (error || !inserted) return { ok: false, error: error?.message || 'Não foi possível adicionar o comentário.' };
     const nextComment: Comment = { id: inserted.id, postId: inserted.post_id, authorId: inserted.author_id, authorName: user.name || 'Morador', authorAvatarUrl: user.avatarUrl, content: inserted.content, parentId: inserted.parent_id || undefined, createdAt: inserted.created_at };
-    loadedCommentPostsRef.current.add(postId);
+    commentMutationVersionsRef.current.set(postId, (commentMutationVersionsRef.current.get(postId) || 0) + 1);
     setComments(prev => [...prev.filter(comment => comment.id !== nextComment.id), nextComment]);
-    setPosts(prev => prev.map(post => post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
     clearSessionQueryCache(POSTS_CACHE_KEY);
+    await refreshCommentCounts([postId]);
     return { ok: true };
-  }, [user]);
+  }, [user, refreshCommentCounts]);
 
   const deleteComment = useCallback(async (commentId: string): Promise<ActionResult> => {
     const target = comments.find(comment => comment.id === commentId);
-    const { error } = await supabase.from('comments').delete().eq('id', commentId);
+    const { data: deleted, error } = await supabase.from('comments').delete().eq('id', commentId).select('id,post_id');
     if (error) return { ok: false, error: error.message };
-    setComments(prev => prev.filter(comment => comment.id !== commentId));
-    if (target?.postId) setPosts(prev => prev.map(post => post.id === target.postId ? { ...post, commentsCount: Math.max(0, post.commentsCount - 1) } : post));
+    if (!deleted?.length) return { ok: false, error: 'O comentário já foi removido ou você não tem permissão para excluí-lo.' };
+    const postId = deleted[0].post_id || target?.postId;
+    if (postId) commentMutationVersionsRef.current.set(postId, (commentMutationVersionsRef.current.get(postId) || 0) + 1);
+    setComments(prev => {
+      const removed = commentThreadIds(prev.filter(comment => comment.postId === postId), commentId);
+      return prev.filter(comment => !removed.has(comment.id));
+    });
     clearSessionQueryCache(POSTS_CACHE_KEY);
+    if (postId) await refreshCommentCounts([postId]);
     return { ok: true };
-  }, [comments]);
+  }, [comments, refreshCommentCounts]);
 
   const deletePost = useCallback(async (postId: string): Promise<ActionResult> => {
     const target = posts.find(post => post.id === postId);
@@ -573,7 +613,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const commentsByPost = useMemo(() => { const map: Record<string, Comment[]> = {}; for (const c of comments) (map[c.postId] ??= []).push(c); return map; }, [comments]);
   const loading = postsLoading || eventsLoading;
 
-  const contextValue = useMemo(() => ({ posts, events, comments, notifications, reports, unreadCount, commentsByPost, attendingEventIds, loading, postsLoading, eventsLoading, loadPosts, loadEvents, loadComments, loadMyAttendance, fetchData, addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteEvent, toggleAttendance, getEventAttendees, reportContent, updateReportStatus, markNotificationAsRead, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyEvent }), [posts, events, comments, notifications, reports, unreadCount, commentsByPost, attendingEventIds, loading, postsLoading, eventsLoading, loadPosts, loadEvents, loadComments, loadMyAttendance, fetchData, addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteEvent, toggleAttendance, getEventAttendees, reportContent, updateReportStatus, markNotificationAsRead, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyEvent]);
+  const contextValue = useMemo(() => ({ posts, events, comments, notifications, reports, unreadCount, commentsByPost, attendingEventIds, loading, postsLoading, eventsLoading, loadPosts, loadEvents, loadComments, refreshCommentCounts, loadMyAttendance, fetchData, addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteEvent, toggleAttendance, getEventAttendees, reportContent, updateReportStatus, markNotificationAsRead, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyEvent }), [posts, events, comments, notifications, reports, unreadCount, commentsByPost, attendingEventIds, loading, postsLoading, eventsLoading, loadPosts, loadEvents, loadComments, refreshCommentCounts, loadMyAttendance, fetchData, addPost, addAnonymousPost, addEvent, supportPost, addComment, deleteComment, deletePost, updatePostStatus, deleteEvent, toggleAttendance, getEventAttendees, reportContent, updateReportStatus, markNotificationAsRead, markNotificationsAsRead, deleteAllNotifications, isMyPost, isMyEvent]);
 
   return <DataContext.Provider value={contextValue}>{children}</DataContext.Provider>;
 }
