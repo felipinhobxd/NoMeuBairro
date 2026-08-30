@@ -301,10 +301,10 @@ export default function Profile() {
           <div className="flex flex-col items-center gap-3"><div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-emerald-700 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-1 ring-slate-200 dark:ring-slate-700">{editAvatar ? <img src={editAvatar} alt="Preview" className="w-full h-full object-cover" decoding="async" /> : editName.charAt(0).toUpperCase() || '?'}</div></div>
           <Input label="Nome" placeholder="Seu nome" value={editName} onChange={e => setEditName(e.target.value)} required />
           <AvatarCropper value={editAvatar} onEditingChange={setAvatarCropPending} onChange={(value) => { setEditAvatar(value); setAvatarChanged(true); }} />
-          <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0">
+          {!avatarCropPending && <div className="flex flex-col sm:flex-row gap-3 pt-6 mt-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 sticky bottom-0">
             <Button type="button" variant="secondary" className="flex-1 h-11" onClick={closeEditProfile}>Cancelar</Button>
-            <Button className="flex-1 h-11" disabled={!editName.trim() || savingProfile || avatarCropPending} onClick={handleSaveProfile}>{savingProfile ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : avatarCropPending ? 'Finalize o recorte acima' : 'Salvar'}</Button>
-          </div>
+            <Button className="flex-1 h-11" disabled={!editName.trim() || savingProfile} onClick={handleSaveProfile}>{savingProfile ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : 'Salvar'}</Button>
+          </div>}
         </div>
       </Modal>
 
