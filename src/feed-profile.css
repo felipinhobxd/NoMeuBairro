@@ -19,6 +19,12 @@ main[role="main"] .nmb-feed-title {
 .nmb-feed-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: .875rem; align-items: start; }
 .nmb-feed-tools { display: flex; flex-direction: column; gap: .75rem; min-width: 0; }
 .nmb-feed-results { min-width: 0; }
+.nmb-feed :is(button, a, input, textarea, select) {
+  scroll-margin-top: 7rem;
+  scroll-margin-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+}
+/* White labels need the deeper brand orange, including in dark mode. */
+.dark .nmb-feed-filters .bg-emerald-600 { background-color: #c2410c !important; color: #fff !important; }
 .nmb-feed-body[data-tools-open="false"] > .nmb-feed-tools { display: none; }
 .nmb-feed-tools-toggle { display: flex; align-items: center; gap: .5rem; width: 100%; min-height: 44px; padding: .5rem .75rem; border: 1px solid #e7e5e4; border-radius: .75rem; background: #fff; color: #57534e; font-size: var(--text-xs); font-weight: 650; }
 .dark .nmb-feed-tools-toggle { background: #0f172a; border-color: #334155; color: #e7d9ce; }
@@ -177,6 +183,14 @@ main[role="main"] .nmb-post-address {
 .nmb-post-contact > summary { padding: .4rem .6rem; }
 .nmb-post-contact > aside { margin-top: 0; border-radius: .65rem; }
 .nmb-post-footer { margin-top: .5rem; }
+.nmb-comment-composer { display: grid; grid-template-columns: 2rem minmax(0, 1fr); align-items: start; gap: .5rem; }
+.nmb-comment-field { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: end; gap: .5rem; min-width: 0; }
+.nmb-comment-field > textarea { min-width: 0; width: 100%; min-height: 4.5rem; }
+.nmb-comment-submit { display: inline-flex; align-items: center; justify-content: center; width: 44px; min-height: 44px; margin-bottom: .25rem; border-radius: .65rem; background: #c2410c; color: #fff; }
+.nmb-comment-submit:hover:not(:disabled) { background: #9a3412; }
+.nmb-comment-submit:active:not(:disabled) { background: #7c2d12; }
+.nmb-comment-submit:disabled { background: #edf1f5; color: #64748b; cursor: not-allowed; }
+.dark .nmb-comment-submit:disabled { background: #28354a; color: #94a3b8; }
 .nmb-post-engagement { display: flex; align-items: center; gap: .65rem; min-width: 0; font-size: var(--text-xs); line-height: 1.35; color: #526071; }
 .nmb-post-support-total { display: inline-flex; align-items: center; gap: .35rem; }
 .nmb-post-support-total > svg { width: .9rem; height: .9rem; color: #c2410c; flex-shrink: 0; }
@@ -192,7 +206,7 @@ main[role="main"] .nmb-post-action {
   transition: color .15s ease, background-color .15s ease;
 }
 .nmb-post-action > svg { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
-.nmb-post-action > span { min-width: 0; hyphens: manual; }
+.nmb-post-action > span { min-width: 0; hyphens: manual; overflow-wrap: anywhere; }
 main[role="main"] .nmb-post-action[aria-pressed="true"],
 main[role="main"] .nmb-post-action[aria-expanded="true"] { color: #b9380b; }
 .nmb-post-options { margin-top: .5rem; padding: .35rem; background: #f5f7f9; border: 1px solid #e2e7ed; border-radius: .65rem; }
@@ -344,6 +358,7 @@ main[role="main"] .nmb-profile-post p { line-height: 1.45; }
   .nmb-post-actions > button, .nmb-post-secondary-actions > :is(button, a),
   .nmb-post-read-more, .nmb-post-map-link { min-height: 44px; }
   .nmb-post-more { min-height: 44px; }
+  .nmb-post-actions { grid-template-columns: minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1.4fr); }
   main[role="main"] .nmb-post-action { flex-direction: column; gap: .15rem; padding-block: .35rem; min-height: 52px; }
   .nmb-profile { gap: .75rem; }
   .nmb-profile-header { padding: .875rem; }

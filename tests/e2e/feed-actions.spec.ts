@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
+import { expect, test, type Locator, type Page, type WebSocketRoute } from '@playwright/test';
 
 const authorId = '20000000-0000-4000-8000-000000000011';
 const postId = '10000000-0000-4000-8000-000000000011';
@@ -163,6 +163,14 @@ const firstCard = (page: Page) => page.locator(`#post-${postId}`);
 const total = (page: Page) => firstCard(page).locator('.nmb-post-comment-total');
 const commentsButton = (page: Page) => firstCard(page).getByRole('button', { name: /^Comentários \(/ });
 
+async function clickFeedControl(control: Locator) {
+  // Scroll as a reader would: a point merely inside the viewport can still be
+  // covered by the sticky header, mobile navigation or accessibility widget.
+  // Keep a real hit-tested click; never force clicks through those overlays.
+  await control.evaluate(node => node.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+  await control.click();
+}
+
 async function settle(page: Page) {
   await page.locator('.nmb-feed').evaluate(async root => {
     await document.fonts.ready;
@@ -212,12 +220,12 @@ test('adicionar, responder e excluir conversa atualizam total sem recarregar', a
   await commentsButton(page).click();
   await expect(firstCard(page).getByText('Comentário inicial', { exact: true })).toBeVisible();
   await firstCard(page).getByRole('textbox', { name: 'Escreva um comentário' }).fill('Novo comentário de teste');
-  await firstCard(page).getByRole('button', { name: 'Enviar', exact: true }).click();
+  await clickFeedControl(firstCard(page).getByRole('button', { name: 'Enviar', exact: true }));
   await expect(total(page)).toHaveText('4 comentários');
   const root = page.locator(`[data-comment-id="${rootId}"]`);
   await root.getByRole('button', { name: 'Responder', exact: true }).first().click();
   await firstCard(page).getByRole('textbox', { name: 'Escreva um comentário' }).fill('Mais uma resposta');
-  await firstCard(page).getByRole('button', { name: 'Enviar', exact: true }).click();
+  await clickFeedControl(firstCard(page).getByRole('button', { name: 'Enviar', exact: true }));
   await expect(total(page)).toHaveText('5 comentários');
   await root.getByRole('button', { name: 'Excluir', exact: true }).first().click();
   await expect(total(page)).toHaveText('2 comentários');
@@ -238,7 +246,7 @@ test('falhas e exclusão recusada não alteram a contagem nem removem comentári
   await expect(firstCard(page).getByText('Comentário inicial', { exact: true })).toBeVisible();
   state.failInsert = true;
   await firstCard(page).getByRole('textbox', { name: 'Escreva um comentário' }).fill('Não deve ser gravado');
-  await firstCard(page).getByRole('button', { name: 'Enviar', exact: true }).click();
+  await clickFeedControl(firstCard(page).getByRole('button', { name: 'Enviar', exact: true }));
   await expect(page.getByText('Falha simulada ao comentar', { exact: true })).toBeVisible();
   await expect(total(page)).toHaveText('3 comentários');
   state.deleteMode = 'denied';
@@ -329,7 +337,7 @@ test('tema escuro, fonte gigante e opções abertas mantêm contraste e reflow',
   await setup(page, { dark: true, giant: true });
   await page.goto('/');
   await expect(total(page)).toHaveText('3 comentários');
-  await firstCard(page).getByRole('button', { name: 'Mais opções do relato' }).click();
+  await clickFeedControl(firstCard(page).getByRole('button', { name: 'Mais opções do relato' }));
   await settle(page);
   const metrics = await page.evaluate(() => ({
     viewport: innerWidth, document: document.documentElement.scrollWidth,
