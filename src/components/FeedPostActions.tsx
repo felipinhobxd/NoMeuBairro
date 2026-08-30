@@ -43,7 +43,7 @@ export default function FeedPostActions(props: Props) {
     <div className="nmb-post-engagement">
       <span className="nmb-post-support-total"><Heart aria-hidden="true" /><span>{props.supports} {props.supports === 1 ? 'apoio' : 'apoios'}</span></span>
       <span className="nmb-post-comment-total" aria-live="polite" aria-atomic="true">{props.commentsCount} {props.commentsCount === 1 ? 'comentário' : 'comentários'}</span>
-      <button ref={moreButton} type="button" className="nmb-post-more" aria-label="Mais opções do relato" title="Denunciar, abrir, salvar e outras opções" aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => setOptionsOpen(open => !open)}><MoreHorizontal aria-hidden="true" /></button>
+      <button ref={moreButton} type="button" className="nmb-post-more" aria-label="Mais opções do relato" title="Denunciar, abrir e salvar" aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => setOptionsOpen(open => !open)}><MoreHorizontal aria-hidden="true" /></button>
     </div>
 
     <div className="nmb-post-actions" role="group" aria-label="Ações da publicação">
@@ -58,16 +58,17 @@ export default function FeedPostActions(props: Props) {
       </button>
     </div>
 
+    {props.canManageStatus && <div className="nmb-post-status-actions" role="group" aria-label="Atualizar situação do relato">
+      <span>Atualizar situação</span>
+      {statuses.filter(item => item.id !== props.status).map(item => <button type="button" key={item.id} data-status={item.id} onClick={() => props.onStatus(item.id)}><CheckCircle2 aria-hidden="true" />{item.label}</button>)}
+    </div>}
+
     <div id={optionsId} className="nmb-post-options" hidden={!optionsOpen} role="group" aria-label="Outras opções do relato">
       <div className="nmb-post-secondary-actions">
         <button type="button" onClick={props.onReport}><AlertTriangle aria-hidden="true" />Denunciar</button>
         <Link to={`/post/${props.postId}`}><ExternalLink aria-hidden="true" />Abrir</Link>
         <button type="button" onClick={props.onSave} aria-pressed={props.saved}><Bookmark aria-hidden="true" className={cn(props.saved && 'fill-current')} />{props.saved ? 'Salvo' : 'Salvar'}</button>
       </div>
-      {props.canManageStatus && <div className="nmb-post-status-actions" role="group" aria-label="Atualizar situação do relato">
-        <span>Atualizar situação</span>
-        {statuses.filter(item => item.id !== props.status).map(item => <button type="button" key={item.id} data-status={item.id} onClick={() => props.onStatus(item.id)}><CheckCircle2 aria-hidden="true" />{item.label}</button>)}
-      </div>}
     </div>
   </div>;
 }
