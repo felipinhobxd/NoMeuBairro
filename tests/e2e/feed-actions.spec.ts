@@ -13,7 +13,7 @@ const comment = (id: string, content: string, parentId: string | null = null) =>
   created_at: '2026-08-30T12:00:00Z', users: { name: 'Moradora de teste', avatar_url: null },
 });
 
-async function setup(page: Page, options: { authenticated?: boolean; dark?: boolean; giant?: boolean } = {}) {
+async function setup(page: Page, options: { authenticated?: boolean; dark?: boolean; giant?: boolean; postAuthorId?: string } = {}) {
   const state = {
     comments: [comment(rootId, 'Comentário inicial'), comment(replyId, 'Resposta inicial', rootId), comment(otherId, 'Outra conversa')],
     countReads: 0, commentReads: 0, feedReads: 0, feedSelects: [] as string[],
@@ -42,7 +42,7 @@ async function setup(page: Page, options: { authenticated?: boolean; dark?: bool
   }, { id: authorId, authenticated: options.authenticated ?? true, ...options });
 
   const makePost = (id = postId) => ({
-    id, author_id: authorId, title: id === postId ? 'Buraco na rua da comunidade' : 'Iluminação recuperada',
+    id, author_id: options.postAuthorId ?? authorId, title: id === postId ? 'Buraco na rua da comunidade' : 'Iluminação recuperada',
     description: 'Os moradores estão acompanhando o atendimento. Obrigado por contribuir com o bairro.',
     category: id === postId ? 'buraco' : 'iluminacao', status: id === postId ? state.status : 'resolved',
     image_url: id === postId ? '/__fixtures__/feed-street.svg' : null,
@@ -187,6 +187,8 @@ test('cards separados, barra leve e total antes de abrir sem baixar comentários
   expect(state.feedSelects[0]).toContain('comments!comments_post_id_fkey(count)');
   await expect(firstCard(page).getByRole('group', { name: 'Ações da publicação' }).getByRole('button')).toHaveCount(3);
   await expect(firstCard(page).getByRole('button', { name: 'Denunciar', exact: true })).toBeHidden();
+  await expect(firstCard(page).getByRole('group', { name: 'Atualizar situação do relato' })).toBeVisible();
+  await expect(firstCard(page).getByRole('button', { name: 'Mais opções do relato' })).toHaveAttribute('aria-expanded', 'false');
   await settle(page);
   const metrics = await page.evaluate(() => {
     const main = document.querySelector('main')!;
@@ -196,6 +198,7 @@ test('cards separados, barra leve e total antes de abrir sem baixar comentários
     return { main: getComputedStyle(main).backgroundColor, card: getComputedStyle(cards[0]).backgroundColor, shadow: getComputedStyle(cards[0]).boxShadow,
       border: getComputedStyle(cards[0]).borderTopWidth, gap: second.top - first.bottom,
       buttons: [...cards[0].querySelectorAll('.nmb-post-actions > button')].map(button => button.getBoundingClientRect().toJSON()),
+      statusButtons: [...cards[0].querySelectorAll('.nmb-post-status-actions > button')].map(button => ({ height: button.clientHeight, width: button.clientWidth, scroll: button.scrollWidth })),
       viewport: innerWidth, document: document.documentElement.scrollWidth };
   });
   expect(metrics.main).toBe('rgb(233, 237, 242)');
@@ -209,6 +212,11 @@ test('cards separados, barra leve e total antes de abrir sem baixar comentários
     expect(button.y).toBeCloseTo(metrics.buttons[0].y, 0);
     expect(button.height).toBeGreaterThanOrEqual(44);
     expect(button.height).toBeLessThanOrEqual(56);
+  }
+  expect(metrics.statusButtons).toHaveLength(2);
+  for (const button of metrics.statusButtons) {
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    expect(button.scroll).toBeLessThanOrEqual(button.width + 1);
   }
   await info.attach('feed-cards-e-acoes', { body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
 });
@@ -295,6 +303,7 @@ test('feed em cache revalida somente totais antes de exibir a lista', async ({ p
   const { state } = await setup(page, { authenticated: false });
   await page.goto('/');
   await expect(total(page)).toHaveText('3 comentários');
+  await expect(page.getByRole('group', { name: 'Atualizar situação do relato' })).toHaveCount(0);
   state.comments.push(comment('remote', 'Novo comentário no servidor'));
   await page.reload();
   await expect(total(page)).toHaveText('4 comentários');
@@ -302,34 +311,51 @@ test('feed em cache revalida somente totais antes de exibir a lista', async ({ p
   expect(state.commentReads).toBe(0);
 });
 
+test('atualizar situação continua restrito ao autor e à moderação', async ({ page }) => {
+  await setup(page, { postAuthorId: '20000000-0000-4000-8000-000000000099' });
+  await page.goto('/');
+  await expect(total(page)).toHaveText('3 comentários');
+  await expect(page.getByRole('group', { name: 'Atualizar situação do relato' })).toHaveCount(0);
+  await clickFeedControl(firstCard(page).getByRole('button', { name: 'Mais opções do relato' }));
+  await expect(firstCard(page).getByRole('group', { name: 'Outras opções do relato' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Atualizar situação do relato' })).toHaveCount(0);
+});
+
 test('apoio, compartilhamento, salvos, denúncia e situação continuam acessíveis', async ({ page }) => {
   const { state } = await setup(page);
   await page.goto('/');
   await expect(total(page)).toHaveText('3 comentários');
   const card = firstCard(page);
-  await card.getByRole('button', { name: 'Apoiar', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Apoiar', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.locator('.nmb-post-support-total')).toHaveText('3 apoios');
-  await card.getByRole('button', { name: 'Apoiar', exact: true }).click();
-  await expect(card.locator('.nmb-post-support-total')).toHaveText('2 apoios');
-  await card.getByRole('button', { name: 'Compartilhar relato', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-test-shared-url', new RegExp(`/relato/${postId}$`));
-  await card.getByRole('button', { name: 'Mais opções do relato' }).click();
-  await card.getByRole('button', { name: 'Salvar', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Salvo', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await card.getByRole('button', { name: 'Salvo', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Salvar', exact: true })).toHaveAttribute('aria-pressed', 'false');
-  await card.getByRole('button', { name: 'Resolvido', exact: true }).click();
+  const statusActions = card.getByRole('group', { name: 'Atualizar situação do relato' });
+  await expect(statusActions).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Mais opções do relato' })).toHaveAttribute('aria-expanded', 'false');
+  await clickFeedControl(statusActions.getByRole('button', { name: 'Resolvido', exact: true }));
   await expect(card.locator('.nmb-post-header')).toContainText('Resolvido');
   expect(state.status).toBe('resolved');
-  await card.getByRole('button', { name: 'Denunciar', exact: true }).click();
+  await expect(statusActions.getByRole('button', { name: 'Em andamento', exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Mais opções do relato' })).toHaveAttribute('aria-expanded', 'false');
+  await clickFeedControl(card.getByRole('button', { name: 'Apoiar', exact: true }));
+  await expect(card.getByRole('button', { name: 'Apoiar', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.locator('.nmb-post-support-total')).toHaveText('3 apoios');
+  await clickFeedControl(card.getByRole('button', { name: 'Apoiar', exact: true }));
+  await expect(card.locator('.nmb-post-support-total')).toHaveText('2 apoios');
+  await clickFeedControl(card.getByRole('button', { name: 'Compartilhar relato', exact: true }));
+  await expect(page.locator('html')).toHaveAttribute('data-test-shared-url', new RegExp(`/relato/${postId}$`));
+  await clickFeedControl(card.getByRole('button', { name: 'Mais opções do relato' }));
+  await clickFeedControl(card.getByRole('button', { name: 'Salvar', exact: true }));
+  await expect(card.getByRole('button', { name: 'Salvo', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await clickFeedControl(card.getByRole('button', { name: 'Salvo', exact: true }));
+  await expect(card.getByRole('button', { name: 'Salvar', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(statusActions).toBeVisible();
+  await clickFeedControl(card.getByRole('button', { name: 'Denunciar', exact: true }));
   await expect(page.getByRole('dialog', { name: 'Denunciar Conteúdo' })).toBeVisible();
   await page.getByRole('dialog', { name: 'Denunciar Conteúdo' }).getByRole('button', { name: 'Cancelar', exact: true }).click();
   await card.getByRole('button', { name: 'Mais opções do relato' }).focus();
   await page.keyboard.press('Escape');
   await expect(card.getByRole('button', { name: 'Mais opções do relato' })).toHaveAttribute('aria-expanded', 'false');
-  await card.getByRole('button', { name: 'Mais opções do relato' }).click();
-  await card.getByRole('link', { name: 'Abrir', exact: true }).click();
+  await expect(statusActions).toBeVisible();
+  await clickFeedControl(card.getByRole('button', { name: 'Mais opções do relato' }));
+  await clickFeedControl(card.getByRole('link', { name: 'Abrir', exact: true }));
   await expect(page).toHaveURL(new RegExp(`#/post/${postId}$`));
 });
 
@@ -337,6 +363,7 @@ test('tema escuro, fonte gigante e opções abertas mantêm contraste e reflow',
   await setup(page, { dark: true, giant: true });
   await page.goto('/');
   await expect(total(page)).toHaveText('3 comentários');
+  await expect(firstCard(page).getByRole('group', { name: 'Atualizar situação do relato' })).toBeVisible();
   await clickFeedControl(firstCard(page).getByRole('button', { name: 'Mais opções do relato' }));
   await settle(page);
   const metrics = await page.evaluate(() => ({

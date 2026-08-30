@@ -218,8 +218,9 @@ main[role="main"] .nmb-post-action[aria-expanded="true"] { color: #b9380b; }
 }
 .nmb-post-secondary-actions svg, .nmb-post-status-actions svg { width: 1rem; height: 1rem; flex-shrink: 0; }
 .nmb-post-secondary-actions > [aria-pressed="true"] { color: #b9380b; }
-.nmb-post-status-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; padding-top: .35rem; border-top: 1px solid #e2e7ed; }
-.nmb-post-status-actions > span { width: 100%; padding: .25rem .5rem; color: #526071; font-size: var(--text-xs); }
+.nmb-post-status-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; margin-top: .25rem; padding-top: .35rem; border-top: 1px solid #e2e7ed; }
+.nmb-post-status-actions > span { margin-right: auto; padding: .25rem .5rem; color: #526071; font-size: var(--text-xs); }
+.nmb-post-status-actions > button { flex: 0 1 auto; max-width: 100%; overflow-wrap: anywhere; }
 .nmb-post-status-actions > [data-status="in_progress"] { color: #1d4ed8; }
 .nmb-post-status-actions > [data-status="resolved"] { color: #047857; }
 @media (hover: hover) {
@@ -358,6 +359,8 @@ main[role="main"] .nmb-profile-post p { line-height: 1.45; }
   .nmb-post-actions > button, .nmb-post-secondary-actions > :is(button, a),
   .nmb-post-read-more, .nmb-post-map-link { min-height: 44px; }
   .nmb-post-more { min-height: 44px; }
+  .nmb-post-status-actions > span { width: 100%; padding-bottom: 0; }
+  .nmb-post-status-actions > button { flex: 1 1 auto; }
   .nmb-post-actions { grid-template-columns: minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1.4fr); }
   main[role="main"] .nmb-post-action { flex-direction: column; gap: .15rem; padding-block: .35rem; min-height: 52px; }
   .nmb-profile { gap: .75rem; }
