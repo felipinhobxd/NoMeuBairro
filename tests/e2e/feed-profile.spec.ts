@@ -222,8 +222,16 @@ test('feed e perfil não têm violações graves de acessibilidade', async ({ pa
     await expect(page.locator(selector)).toBeVisible();
     if (url.includes('perfil')) await expect(page.locator('.nmb-profile-activity-item')).toHaveCount(4);
     else await expect(page.locator('.nmb-post-card')).toHaveCount(4);
+    // Mede as cores finais, não a opacidade intermediária do fade de entrada.
+    // Animações contínuas de seleção não devem bloquear a auditoria.
+    await page.locator(selector).evaluate(async root => {
+      await document.fonts.ready;
+      const entranceAnimations = root.getAnimations({ subtree: true })
+        .filter(animation => animation.effect?.getComputedTiming().iterations !== Infinity);
+      await Promise.all(entranceAnimations.map(animation => animation.finished.catch(() => undefined)));
+    });
     const results = await new AxeBuilder({ page }).include(selector).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-    violations.push(...results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => ({ page: url, id: v.id, help: v.help, targets: v.nodes.map(n => n.target) })));
+    violations.push(...results.violations.filter(v => v.impact === 'serious' || v.impact === 'critical').map(v => ({ page: url, id: v.id, help: v.help, targets: v.nodes.map(n => ({ target: n.target, reason: n.failureSummary })) })));
   }
   expect(violations).toEqual([]);
 });
