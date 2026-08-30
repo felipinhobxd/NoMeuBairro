@@ -6,9 +6,9 @@ import {
   useNeighborhood, neighborhoodMatches, neighborhoodSearchText, normalizeNeighborhoodText,
 } from '../contexts/NeighborhoodContext';
 import {
-  Plus, Filter, ChevronDown, Heart, MessageSquare,
+  Plus, Filter, ChevronDown, MessageSquare,
   MapPin, ShieldAlert, AlertTriangle, Lightbulb, Zap,
-  Trash2, Bus, Shield, HelpCircle, Droplets, CornerDownRight, Send, X, Search, UserCheck, Sparkles, RefreshCw, ExternalLink, Share2, Bell, CheckCircle2, CalendarDays, Briefcase, Bookmark, LocateFixed,
+  Trash2, Bus, Shield, HelpCircle, Droplets, CornerDownRight, X, Search, UserCheck, Sparkles, RefreshCw, Bell, CheckCircle2, CalendarDays, Briefcase, LocateFixed,
 } from 'lucide-react';
 import {
   EmptyState, Card, Modal, Input, Textarea, Select, Button,
@@ -17,6 +17,9 @@ import {
 } from '../components/UI';
 import MapPicker from '../components/MapPicker';
 import ExpandablePostText from '../components/ExpandablePostText';
+import FeedPostActions from '../components/FeedPostActions';
+import FeedCommentComposer from '../components/FeedCommentComposer';
+import { useFeedCommentCounts } from '../hooks/useFeedCommentCounts';
 import { cn } from '../utils/cn';
 import { supabase } from '../utils/supabase';
 import { postShareUrl, shareContent } from '../utils/share';
@@ -57,7 +60,7 @@ function CommentItem({ comment, replies, allComments, onReply, replyingTo, onDel
 }) {
   const isAuthor = currentUser?.id === comment.authorId;
   return (
-    <div className={cn('group', comment.parentId && 'ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-3')}>
+    <div data-comment-id={comment.id} className={cn('group', comment.parentId && 'ml-8 border-l-2 border-slate-100 dark:border-slate-800 pl-3')}>
       <div className="flex items-start gap-2.5">
         <Link to={`/perfil/${comment.authorId}`} className="shrink-0 mt-0.5">
           <div className="w-7 h-7 rounded-lg overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-[11px] font-bold text-emerald-700 dark:text-emerald-400 ring-1 ring-transparent hover:ring-emerald-500/30 transition-all">
@@ -83,7 +86,7 @@ export default function Feed() {
   const { user, isAuthenticated, canModerate } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, reportContent, fetchData, loading } = useData();
+  const { posts, addPost, supportPost, addComment, deleteComment, deletePost, updatePostStatus, isMyPost, commentsByPost, loadComments, reportContent, fetchData, loading } = useData();
   const { currentNeighborhood, isNeighborhoodSelected, setNeighborhoodByCep } = useNeighborhood();
   const { toast } = useToast();
   const { isSaved: isPostSaved, toggleSaved: toggleSavedPost } = useSavedItems('post');
@@ -106,6 +109,7 @@ export default function Feed() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [supported, setSupported] = useState<Set<string>>(() => { try { return new Set<string>(JSON.parse(localStorage.getItem('anb-supported') || '[]')); } catch { return new Set<string>(); } });
   const [expandedPosts, setExpandedPosts] = useState<Set<string>>(new Set());
+  const [loadingComments, setLoadingComments] = useState<Set<string>>(new Set());
   const [commentTexts, setCommentTexts] = useState<Record<string, string>>({});
   const [replyingTo, setReplyingTo] = useState<Record<string, string | null>>({});
   const [heartsAnimating, setHeartsAnimating] = useState<Set<string>>(new Set());
@@ -280,7 +284,7 @@ export default function Feed() {
   const visiblePosts = useMemo(() => {
     const next = [...filtered];
     if (sortMode === 'supported') return next.sort((a, b) => b.supports - a.supports || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (sortMode === 'discussed') return next.sort((a, b) => ((commentsByPost[b.id]?.length ?? b.commentsCount) - (commentsByPost[a.id]?.length ?? a.commentsCount)) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    if (sortMode === 'discussed') return next.sort((a, b) => b.commentsCount - a.commentsCount || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     if (sortMode === 'nearest' && userLocation) {
       return next.sort((a, b) => {
         const da = a.latitude != null && a.longitude != null ? calculateDistance(userLocation.lat, userLocation.lng, Number(a.latitude), Number(a.longitude)) : Number.POSITIVE_INFINITY;
@@ -289,9 +293,10 @@ export default function Feed() {
       });
     }
     return next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [filtered, sortMode, userLocation, commentsByPost]);
+  }, [filtered, sortMode, userLocation]);
 
   const renderedPosts = useMemo(() => visiblePosts.slice(0, renderLimit), [visiblePosts, renderLimit]);
+  useFeedCommentCounts(renderedPosts.map(post => post.id));
   const remainingPosts = Math.max(0, visiblePosts.length - renderedPosts.length);
 
   useEffect(() => {
@@ -378,7 +383,17 @@ export default function Feed() {
     }
   };
   const handleSupport = useCallback(async (id: string) => { if (!isAuthenticated || !user) { toast('Entre ou crie uma conta para apoiar um relato.', 'info'); navigate('/login'); return; } const isSupported = supported.has(id); const result = await supportPost(id); if (!result.ok) { toast(result.error || 'Não foi possível atualizar o apoio.', 'error'); return; } const next = new Set(supported); if (isSupported) next.delete(id); else { next.add(id); setHeartsAnimating(prev => { const n = new Set(prev); n.add(id); return n; }); setTimeout(() => setHeartsAnimating(prev => { const n = new Set(prev); n.delete(id); return n; }), 500); } setSupported(next); try { localStorage.setItem('anb-supported', JSON.stringify([...next])); } catch {} }, [supported, supportPost, isAuthenticated, user, toast, navigate]);
-  const toggleComments = useCallback((postId: string) => { setExpandedPosts(prev => { const n = new Set(prev); n.has(postId) ? n.delete(postId) : n.add(postId); return n; }); }, []);
+  const toggleComments = useCallback((postId: string) => {
+    if (!expandedPosts.has(postId)) {
+      setLoadingComments(prev => new Set(prev).add(postId));
+      // Explicit handler: opening comments must not depend on button text or
+      // a document-wide click interceptor. Reopening checks for newer replies.
+      void loadComments(postId, true).finally(() => setLoadingComments(prev => {
+        const next = new Set(prev); next.delete(postId); return next;
+      }));
+    }
+    setExpandedPosts(prev => { const next = new Set(prev); next.has(postId) ? next.delete(postId) : next.add(postId); return next; });
+  }, [expandedPosts, loadComments]);
   const handleSubmitComment = useCallback(async (postId: string) => { const text = (commentTexts[postId] ?? '').trim(); if (!text || !user) return; const result = await addComment(postId, text, replyingTo[postId] ?? undefined); if (!result.ok) { toast(result.error || 'Não foi possível adicionar o comentário.', 'error'); return; } setCommentTexts(prev => ({ ...prev, [postId]: '' })); setReplyingTo(prev => ({ ...prev, [postId]: null })); toast('Comentário adicionado!'); }, [commentTexts, replyingTo, user, addComment, toast]);
   const handleReplyClick = useCallback((postId: string, comment: Comment) => { setReplyingTo(prev => ({ ...prev, [postId]: prev[postId] === comment.id ? null : comment.id })); }, []);
   const handleDeletePost = useCallback(async (postId: string) => { const result = await deletePost(postId); if (!result.ok) { toast(result.error || 'Não foi possível excluir o relato.', 'error'); return; } setConfirmDeleteId(null); toast('Relato excluído.', 'info'); }, [deletePost, toast]);
@@ -450,7 +465,7 @@ export default function Feed() {
       <div className="nmb-feed-results">
       {visiblePosts.length === 0 ? <EmptyState icon={MessageSquare} title={searchQuery ? 'Nenhum resultado encontrado' : 'Nenhum relato por enquanto'} description={searchQuery ? `Nenhum relato corresponde a "${searchQuery}".` : isNeighborhoodSelected ? `Nenhum relato identificado exatamente em ${displayNeighborhood}.` : 'Seja o primeiro a registrar um relato em Curitiba!'} action={searchQuery ? { label: 'Limpar busca', onClick: () => setSearchQuery('') } : { label: 'Criar relato', onClick: openCreate }} /> : <>
         {searchQuery && <p className="text-xs text-slate-400 -mt-2">{visiblePosts.length} resultado{filtered.length !== 1 ? 's' : ''} para "{searchQuery}"</p>}
-        <div className="nmb-feed-list space-y-3 stagger">
+        <div className="nmb-feed-list stagger">
           {renderedPosts.map(post => {
             const isAnon = post.authorId === 'anonymous';
             const isExpanded = expandedPosts.has(post.id);
@@ -499,9 +514,16 @@ export default function Feed() {
                   {post.officialAgency && <p className="mt-1 text-[11px] text-emerald-800/80 dark:text-emerald-300/80">{post.officialAgency}</p>}
                 </div>
               )}
-              <div className="nmb-post-actions flex items-center gap-2 border-t border-slate-100 dark:border-slate-800"><button onClick={() => handleSupport(post.id)} className={cn('flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95', supported.has(post.id) ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400')} aria-label="Apoiar"><Heart className={cn('w-4 h-4', supported.has(post.id) && 'fill-current', heartsAnimating.has(post.id) && 'animate-heart-pop')} /><span>{post.supports > 0 ? post.supports : ''} Apoio{post.supports !== 1 ? 's' : ''}</span></button><button onClick={() => toggleComments(post.id)} className={cn('flex items-center justify-center gap-2 flex-1 py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95', isExpanded ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-50 text-slate-500 dark:bg-slate-800/50 dark:text-slate-400')} aria-expanded={isExpanded}><MessageSquare className="w-4 h-4" /><span>{postComments.length > 0 ? postComments.length : ''} Comentário{postComments.length !== 1 ? 's' : ''}</span></button></div>
-              <div className="nmb-post-secondary-actions"><button onClick={() => setShowReport({ postId: post.id })} className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-red-500 active:bg-red-50 dark:active:bg-red-500/10 transition-all"><AlertTriangle className="w-3.5 h-3.5" />Denunciar</button><Link to={`/post/${post.id}`} className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all"><ExternalLink className="w-3.5 h-3.5" />Abrir</Link><button type="button" onClick={() => void handleSharePost(post)} className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all"><Share2 className="w-3.5 h-3.5" />Compartilhar</button><button type="button" onClick={() => void toggleSavedPost(post.id)} className={cn('flex items-center justify-center gap-1.5 py-2 px-2.5 sm:px-3 rounded-lg text-[11px] font-bold transition-all', isPostSaved(post.id) ? 'text-orange-700 bg-orange-50 dark:text-orange-300 dark:bg-orange-500/10' : 'text-slate-400 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-500/10')} aria-pressed={isPostSaved(post.id)}><Bookmark className={cn('w-3.5 h-3.5', isPostSaved(post.id) && 'fill-current')} />{isPostSaved(post.id) ? 'Salvo' : 'Salvar'}</button>{canManageStatus && <div className="nmb-post-status-actions flex items-center gap-1.5 ml-auto overflow-x-auto no-scrollbar pb-1">{post.status !== 'pending' && <button onClick={() => handleStatusChange(post.id, 'pending')} className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 active:scale-95 transition-all">Aberto</button>}{post.status !== 'in_progress' && <button onClick={() => handleStatusChange(post.id, 'in_progress')} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 ring-1 ring-blue-200 dark:ring-blue-500/20 transition-all">Em andamento</button>}{post.status !== 'resolved' && <button onClick={() => handleStatusChange(post.id, 'resolved')} className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 ring-1 ring-blue-200 dark:ring-emerald-500/20 transition-all">Resolvido</button>}</div>}</div>
-              {isExpanded && <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3 animate-fade-in">{rootComments.length === 0 ? <p className="text-xs text-slate-400 text-center py-4">Nenhum comentário ainda. Seja o primeiro!</p> : <div className="space-y-3">{rootComments.map((rc: Comment) => { const replies = postComments.filter((c: Comment) => c.parentId === rc.id); return <CommentItem key={rc.id} comment={rc} replies={replies} allComments={postComments} onReply={(c) => handleReplyClick(post.id, c)} replyingTo={curReply} onDelete={handleDeleteComment} onReport={(id) => setShowReport({ commentId: id })} currentUser={user} isPostOwner={user?.id === post.authorId} />; })}</div>}{curReply && replyTarget && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-400 animate-slide-down"><CornerDownRight className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Respondendo a <strong>{replyTarget.authorName}</strong></span><button onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: null }))} className="ml-auto p-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors" aria-label="Cancelar resposta"><X className="w-3.5 h-3.5" /></button></div>}{isAuthenticated ? <div className="flex items-start gap-2"><div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-xs font-bold text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">{user?.name.charAt(0).toUpperCase()}</div><div className="flex-1 relative"><textarea value={commentTexts[post.id] ?? ''} onChange={e => setCommentTexts(prev => ({ ...prev, [post.id]: e.target.value }))} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitComment(post.id); } }} placeholder={curReply ? `Responder a ${replyTarget?.authorName ?? ''}...` : 'Escreva um comentário...'} rows={2} className="w-full px-3 py-2 pr-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors resize-none" /><button onClick={() => handleSubmitComment(post.id)} disabled={!(commentTexts[post.id] ?? '').trim()} className={cn('absolute right-2 bottom-2 p-1.5 rounded-lg transition-all', (commentTexts[post.id] ?? '').trim() ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm' : 'text-slate-300 dark:text-slate-600')} aria-label="Enviar"><Send className="w-4 h-4" /></button></div></div> : <button onClick={() => navigate('/login')} className="w-full py-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:text-emerald-400 transition-colors">Entre na sua conta para comentar</button>}</div>}
+              <FeedPostActions
+                postId={post.id} supports={post.supports} commentsCount={post.commentsCount}
+                supported={supported.has(post.id)} heartAnimating={heartsAnimating.has(post.id)}
+                commentsExpanded={isExpanded} saved={isPostSaved(post.id)}
+                status={post.status} canManageStatus={canManageStatus}
+                onSupport={() => void handleSupport(post.id)} onComments={() => toggleComments(post.id)}
+                onShare={() => void handleSharePost(post)} onReport={() => setShowReport({ postId: post.id })}
+                onSave={() => void toggleSavedPost(post.id)} onStatus={status => void handleStatusChange(post.id, status)}
+              />
+              {isExpanded && <div id={`post-comments-${post.id}`} className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3 animate-fade-in">{loadingComments.has(post.id) ? <p className="text-xs text-center py-3" role="status">Carregando comentários...</p> : rootComments.length === 0 ? <p className="text-xs text-slate-400 text-center py-4">{post.commentsCount > 0 ? 'Não foi possível exibir a conversa. Feche e abra os comentários para tentar novamente.' : 'Nenhum comentário ainda. Seja o primeiro!'}</p> : <div className="space-y-3">{rootComments.map((rc: Comment) => { const replies = postComments.filter((c: Comment) => c.parentId === rc.id); return <CommentItem key={rc.id} comment={rc} replies={replies} allComments={postComments} onReply={(c) => handleReplyClick(post.id, c)} replyingTo={curReply} onDelete={handleDeleteComment} onReport={(id) => setShowReport({ commentId: id })} currentUser={user} isPostOwner={user?.id === post.authorId} />; })}</div>}{curReply && replyTarget && <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-400 animate-slide-down"><CornerDownRight className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Respondendo a <strong>{replyTarget.authorName}</strong></span><button onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: null }))} className="ml-auto p-0.5 rounded hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors" aria-label="Cancelar resposta"><X className="w-3.5 h-3.5" /></button></div>}{isAuthenticated ? <FeedCommentComposer authorName={user?.name ?? ''} value={commentTexts[post.id] ?? ''} replyToName={curReply ? replyTarget?.authorName ?? '' : undefined} onChange={value => setCommentTexts(prev => ({ ...prev, [post.id]: value }))} onSubmit={() => void handleSubmitComment(post.id)} /> : <button onClick={() => navigate('/login')} className="w-full py-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-400 hover:text-emerald-600 hover:border-emerald-300 dark:hover:text-emerald-400 transition-colors">Entre na sua conta para comentar</button>}</div>}
             </Card>;
           })}
         </div>

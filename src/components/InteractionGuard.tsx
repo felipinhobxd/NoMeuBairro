@@ -13,7 +13,7 @@ function setAttendanceVisual(button: HTMLButtonElement, active: boolean) {
 
 export default function InteractionGuard() {
   const { isAuthenticated } = useAuth();
-  const { attendingEventIds, loadComments } = useData();
+  const { attendingEventIds } = useData();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -44,13 +44,6 @@ export default function InteractionGuard() {
         return;
       }
 
-      // Os textos dos comentários só são transferidos quando a conversa é aberta.
-      if (button.textContent?.includes('Comentário')) {
-        const card = button.closest('[id^="post-"]');
-        const postId = card?.id.replace(/^post-/, '');
-        if (postId && button.getAttribute('aria-expanded') !== 'true') void loadComments(postId);
-      }
-
       if (button.textContent?.includes('Vou comparecer') && !isAuthenticated) {
         event.preventDefault();
         event.stopPropagation();
@@ -68,7 +61,7 @@ export default function InteractionGuard() {
       document.removeEventListener('click', onClickCapture, true);
       observer.disconnect();
     };
-  }, [isAuthenticated, attendingEventIds, loadComments, navigate, location.pathname]);
+  }, [isAuthenticated, attendingEventIds, navigate, location.pathname]);
 
   return null;
 }

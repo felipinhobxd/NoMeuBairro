@@ -27,6 +27,7 @@ const posts = [...photos.map((photo, index) => ({
   is_anonymous: false,
   created_at: '2026-08-29T12:00:00.000Z',
   comments_count: 0,
+  comments: [{ count: 0 }],
   post_supports: [{ count: 2 }],
   users: { name: userName, avatar_url: null },
 })), {
@@ -38,6 +39,7 @@ const posts = [...photos.map((photo, index) => ({
   location: 'Rua de teste, Curitiba', neighborhood: 'Centro', locality: null,
   latitude: -25.43, longitude: -49.27, is_anonymous: false,
   created_at: '2026-08-28T12:00:00.000Z', comments_count: 0,
+  comments: [{ count: 0 }],
   post_supports: [{ count: 0 }], users: { name: userName, avatar_url: null },
 }];
 
@@ -148,7 +150,7 @@ test('filtros, atendimento oficial, comentários e localização continuam dispo
   const card = page.locator('.nmb-post-card');
   await card.locator('.nmb-post-contact > summary').click();
   await expect(card.getByRole('link', { name: /Ligar para Central 156/ })).toBeVisible();
-  await card.getByRole('button', { name: 'Comentários' }).click();
+  await card.getByRole('button', { name: /^Comentar — / }).click();
   await expect(card.getByRole('button', { name: 'Entre na sua conta para comentar' })).toBeVisible();
   await card.getByRole('button', { name: 'Ver mapa', exact: true }).click();
   await expect(page).toHaveURL(/#\/mapa$/);

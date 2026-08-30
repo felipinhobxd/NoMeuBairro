@@ -4,6 +4,32 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+test('feed usa totais agregados e carrega o conteúdo da conversa somente ao abrir', async () => {
+  const [feed, data, actions, sync] = await Promise.all([
+    read('src/pages/Feed.tsx'), read('src/contexts/DataContext.tsx'),
+    read('src/components/FeedPostActions.tsx'), read('src/hooks/useFeedCommentCounts.ts'),
+  ]);
+  assert.match(data, /comments!comments_post_id_fkey\(count\)/);
+  assert.match(data, /POSTS_CACHE_KEY = 'nmb-query-cache:posts:v3'/);
+  assert.match(feed, /loadComments\(postId, true\)/);
+  assert.match(feed, /commentsCount=\{post\.commentsCount\}/);
+  assert.doesNotMatch(feed, /commentsByPost\[.*\?\.length/);
+  assert.match(actions, /aria-live="polite"/);
+  assert.match(actions, /Ações da publicação/);
+  assert.match(sync, /event: 'UPDATE', schema: 'public', table: 'posts'/);
+  assert.match(sync, /document\.visibilityState === 'hidden'/);
+  assert.match(sync, /supabase\.removeChannel/);
+});
+
+test('exclusão só atualiza a interface após confirmação do banco e considera cascata', async () => {
+  const data = await read('src/contexts/DataContext.tsx');
+  assert.match(data, /delete\(\)\.eq\('id', commentId\)\.select\('id,post_id'\)/);
+  assert.match(data, /if \(!deleted\?\.length\) return \{ ok: false/);
+  assert.match(data, /commentThreadIds/);
+  assert.match(data, /await refreshCommentCounts\(\[postId\]\)/);
+  assert.doesNotMatch(data, /commentsCount: Math\.max\(0, post\.commentsCount - 1\)/);
+});
+
 test('a primeira visita exige escolha de fonte antes do restante do aplicativo', async () => {
   const source = await read('src/contexts/FontSizeContext.tsx');
   assert.match(source, /stored \?\? 'medium'/);

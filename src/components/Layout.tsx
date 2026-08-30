@@ -429,7 +429,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      <main className="flex-1 pb-24 lg:pb-0 overflow-x-clip" id="main-content" role="main">
+      <main className="flex-1 pb-24 lg:pb-0 overflow-x-clip" id="main-content" role="main" data-feed-view={location.pathname === '/' || undefined}>
         <div className="nmb-page-shell max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
         <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
