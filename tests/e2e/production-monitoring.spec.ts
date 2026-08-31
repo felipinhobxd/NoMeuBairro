@@ -152,13 +152,27 @@ test('painel distingue falha de leitura, testa entrega e resolve sem falsa saúd
   await expect(page.getByRole('heading', { name: 'Sem incidentes abertos' })).toBeVisible();
   await page.getByRole('button', { name: 'Enviar teste de alerta', exact: true }).click();
   await expect(page.getByText('Teste · não é incidente', { exact: true })).toBeVisible();
-  const serious = (await new AxeBuilder({ page }).analyze()).violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
-  expect(serious.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) }))).toEqual([]);
+  // Audit the feature and its notices; existing navigation and third-party widgets
+  // are outside this monitoring-specific accessibility regression test.
+  const checkMonitoringAccessibility = async () => {
+    const audit = await new AxeBuilder({ page })
+      .include('[data-testid="production-monitoring-panel"]')
+      .include('[data-testid="toast-notifications"]')
+      .analyze();
+    const serious = audit.violations.filter(v => v.impact === 'serious' || v.impact === 'critical');
+    expect(serious.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) }))).toEqual([]);
+  };
+  await checkMonitoringAccessibility();
+  const dismiss = page.getByTestId('toast-notifications').getByRole('button', { name: 'Fechar notificação', exact: true });
+  await expect(dismiss).toHaveCount(1);
+  await dismiss.click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   await page.getByRole('button', { name: 'Marcar resolvido', exact: true }).click();
   await expect(page.getByText('Teste · não é incidente', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Histórico recente de resoluções (1)', { exact: true })).toBeVisible();
   expect(state.resolved).toBe(true);
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await checkMonitoringAccessibility();
 });
 
 test('conta sem permissão não acessa nem consulta detalhes de monitoramento', async ({ page }) => {

@@ -98,7 +98,7 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
   const resolved = (payload?.alerts || []).filter(alert => alert.status === 'resolved');
 
   return (
-    <div className="space-y-4">
+    <section aria-label="Monitoramento de produção" data-testid="production-monitoring-panel" className="space-y-4">
       <Card className={'!p-4 sm:!p-5 ' + (!known ? '!border-amber-300' : attention ? '!border-red-300' : '!border-emerald-300 dark:!border-emerald-500/30')}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           {known && !attention ? <CheckCircle2 className="h-7 w-7 shrink-0 text-emerald-600" /> : <AlertTriangle className="h-7 w-7 shrink-0 text-amber-600" />}
@@ -163,6 +163,6 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
           </div>
         </Card>)}
       </section>
-    </div>
+    </section>
   );
 }
