@@ -36,7 +36,7 @@ export async function inspectProduction({ fetcher = globalThis.fetch } = {}) {
       try {
         const page = await request(fetcher, `${SITE}/`);
         if (!page.ok || !/id=["']root["']/.test(page.data)) throw new Error('invalid_page');
-        asset = page.data.match(/<script\b[^>]*\bsrc=["'](\/assets\/index-[A-Za-z0-9_-]+\.js)["'][^>]*>/)?.[1];
+        asset = page.data.match(/<script\b[^>]*\bsrc=["'](?:\.)?(\/assets\/index-[A-Za-z0-9_-]+\.js)["'][^>]*>/)?.[1];
         if (!asset) throw new Error('missing_entrypoint');
       } catch { reasons.add('site-unavailable'); return; }
       try {
