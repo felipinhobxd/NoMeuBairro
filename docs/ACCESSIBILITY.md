@@ -25,6 +25,9 @@ tradutor, alterar eventos de clique ou mudar consentimento, avatares e serviços
 - O acesso tem área de 44 × 44 px, foco contrastante e expansão também pelo teclado.
 - Legendas têm nome e estado pressionado sincronizados com o ícone oficial;
   configurações têm nome acessível. Nomes fornecidos pelo próprio widget prevalecem.
+- No painel “Configurações”, fechar, tema escuro, opacidade e redefinir recebem
+  nomes acessíveis. Os inputs preservam estado e teclado nativos, e os eventos do
+  fornecedor não são substituídos. Inputs também recebem foco visível.
 - A correção observa somente a inserção dos dois hosts e seus elementos internos.
   Não consulta a API, não lê dados de usuários e não observa toda a árvore do feed.
   Reinicialização e remontagem não duplicam estilos/observadores.
@@ -35,6 +38,9 @@ documentados são `vlibras-access-wrapper`, `vlibras-button`, `vlibras-popup` e
 `vlibras-app-root`; as correções dos controles se limitam aos ícones oficiais
 `subtitle`, `subtitle-off` e `settings`. Não adicione rótulos genéricos a todos os
 botões nem altere o código/iframe de tradução para fazer uma auditoria passar.
+O painel interno é identificado por `data-slot="dialog-title"`/`dialog-content`,
+seu título “Configurações” e os textos visíveis dos campos. Rótulos nativos,
+`aria-labelledby`, `aria-label` e nomes fornecidos pelo widget são respeitados.
 
 ## Verificação
 

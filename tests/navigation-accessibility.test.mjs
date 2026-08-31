@@ -32,3 +32,13 @@ test('adaptação do VLibras é local, restrita ao widget e sem novos serviços'
   assert.match(adapter, /'aria-pressed'/);
   assert.match(adapter, /currentLabel && currentLabel !== previousLabel/);
 });
+
+test('configurações do VLibras recebem nomes sem substituir estado ou rótulos nativos', () => {
+  assert.match(adapter, /title\.textContent\?\.trim\(\) !== 'Configurações'/);
+  assert.match(adapter, /caption === 'Tema escuro'/);
+  assert.match(adapter, /caption === 'Opacidade'/);
+  assert.match(adapter, /Fechar configurações do VLibras/);
+  assert.match(adapter, /Redefinir configurações do VLibras/);
+  assert.match(adapter, /element\.labels\?\.length/);
+  assert.doesNotMatch(adapter, /\.checked\s*=|\.value\s*=|\.onchange\s*=/);
+});

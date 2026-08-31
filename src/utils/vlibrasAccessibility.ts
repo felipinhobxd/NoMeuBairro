@@ -39,6 +39,37 @@ function enhanceAccess(scope: ShadowRoot | HTMLElement) {
   `);
 }
 
+function labelIfUnnamed(element: Element | null, label: string) {
+  if (!element || element.getAttribute('aria-label')?.trim()
+    || element.getAttribute('aria-labelledby')?.trim()
+    || element.getAttribute('title')?.trim()) return;
+  if (element instanceof HTMLInputElement && element.labels?.length) return;
+  if (element.tagName === 'BUTTON' && element.textContent?.trim()) return;
+  setAttribute(element, 'aria-label', label);
+  for (const icon of element.querySelectorAll('i')) setAttribute(icon, 'aria-hidden', 'true');
+}
+
+function enhanceSettings(scope: ShadowRoot | HTMLElement) {
+  // Scope these labels to the official settings dialog and its visible captions.
+  // Native checkbox/range state and the provider's event handlers stay untouched.
+  for (const title of scope.querySelectorAll('[data-slot="dialog-title"]')) {
+    if (title.textContent?.trim() !== 'Configurações') continue;
+    const dialog = title.closest('[data-slot="dialog-content"]');
+    if (!dialog) continue;
+    labelIfUnnamed(dialog.querySelector('[data-slot="dialog-close"]'), 'Fechar configurações do VLibras');
+    for (const input of dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"], input[type="range"]')) {
+      const caption = input.parentElement?.querySelector('p')?.textContent?.trim();
+      if (input.type === 'checkbox' && caption === 'Tema escuro') labelIfUnnamed(input, 'Tema escuro do VLibras');
+      if (input.type === 'range' && caption === 'Opacidade') labelIfUnnamed(input, 'Opacidade do VLibras');
+    }
+    for (const icon of dialog.querySelectorAll<HTMLElement>('button > i[style]')) {
+      if (/\/rotate-left\.webp(?:["')]|$)/.test(icon.style.getPropertyValue('--icon'))) {
+        labelIfUnnamed(icon.parentElement, 'Redefinir configurações do VLibras');
+      }
+    }
+  }
+}
+
 function enhanceControls(scope: ShadowRoot | HTMLElement) {
   // The current official widget omits names on the subtitles/settings buttons.
   // Only enhance those known icons, and respect names supplied by future versions.
@@ -61,9 +92,10 @@ function enhanceControls(scope: ShadowRoot | HTMLElement) {
       setAttribute(button, 'title', name === 'subtitle' ? 'Desativar legendas' : 'Ativar legendas');
     }
   }
+  enhanceSettings(scope);
   const prefix = scope instanceof ShadowRoot ? ':host' : '#vlibras-app-root';
   addStyle(scope, controlsStyleId, `
-    ${prefix} button:focus-visible { outline:3px solid #111827; outline-offset:2px; box-shadow:0 0 0 5px #fff; }
+    ${prefix} button:focus-visible, ${prefix} input:focus-visible { outline:3px solid #111827; outline-offset:2px; box-shadow:0 0 0 5px #fff; }
   `);
 }
 

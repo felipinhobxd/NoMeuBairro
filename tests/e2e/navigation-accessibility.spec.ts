@@ -27,7 +27,33 @@ window.VLibras = { Widget: function () {
         var wasEnabled = !icon.style.getPropertyValue('--icon').includes('subtitle-off');
         icon.style.setProperty('--icon', 'url(https://vlibras.gov.br/app/assets/icons/' + (wasEnabled ? 'subtitle-off' : 'subtitle') + '.webp)');
       };
-      root.querySelector('[data-control="settings"]').onclick = function () { this.dataset.opened = 'true'; };
+      root.querySelector('[data-control="settings"]').onclick = function () {
+        this.dataset.opened = 'true';
+        if (root.querySelector('[data-slot="dialog-content"]')) return;
+        var panel = document.createElement('div');
+        panel.dataset.slot = 'dialog-content';
+        panel.innerHTML = '<div data-slot="dialog-header"><h3 data-slot="dialog-title">Configurações</h3><button type="button" data-slot="dialog-close"><i style="--icon:url(https://vlibras.gov.br/app/assets/icons/x.webp)"></i></button></div><div><p>Tema escuro</p><input type="checkbox"></div><div><p>Opacidade</p><input type="range" min="0" max="100" step="5" value="100"></div>';
+        var toggle = panel.querySelector('input[type="checkbox"]');
+        var opacity = panel.querySelector('input[type="range"]');
+        var header = panel.querySelector('[data-slot="dialog-header"]');
+        var update = function () {
+          app.dataset.theme = toggle.checked ? 'dark' : 'light';
+          app.dataset.opacity = opacity.value;
+          var reset = header.querySelector('[data-control="reset"]');
+          if (toggle.checked || opacity.value !== '100') {
+            if (!reset) {
+              reset = document.createElement('button'); reset.type = 'button'; reset.dataset.control = 'reset';
+              reset.innerHTML = '<i style="--icon:url(https://vlibras.gov.br/app/assets/icons/rotate-left.webp)"></i>';
+              reset.onclick = function () { toggle.checked = false; opacity.value = '100'; update(); };
+              header.appendChild(reset);
+            }
+          } else if (reset) reset.remove();
+        };
+        toggle.onchange = update;
+        opacity.oninput = update;
+        panel.querySelector('[data-slot="dialog-close"]').onclick = function () { panel.remove(); };
+        root.appendChild(panel);
+      };
       document.body.appendChild(app);
     }
     app.hidden = false;
@@ -198,9 +224,25 @@ test('VLibras mantém teclado e handlers, com imagens decorativas e controles no
   const settings = app.getByRole('button', { name: 'Configurações do VLibras', exact: true });
   await settings.press('Enter');
   await expect(settings).toHaveAttribute('data-opened', 'true');
+  const preferences = app.locator('[data-slot="dialog-content"]');
+  const theme = preferences.getByRole('checkbox', { name: 'Tema escuro do VLibras', exact: true });
+  const opacity = preferences.getByRole('slider', { name: 'Opacidade do VLibras', exact: true });
+  await theme.press('Space');
+  await expect(theme).toBeChecked();
+  await expect(theme).toHaveCSS('outline-width', '3px');
+  await expect(app).toHaveAttribute('data-theme', 'dark');
+  await opacity.press('ArrowLeft');
+  await expect(opacity).toHaveValue('95');
+  await expect(app).toHaveAttribute('data-opacity', '95');
+  await preferences.getByRole('button', { name: 'Redefinir configurações do VLibras', exact: true }).press('Enter');
+  await expect(theme).not.toBeChecked();
+  await expect(opacity).toHaveValue('100');
+  await expect(preferences.getByRole('button', { name: 'Redefinir configurações do VLibras', exact: true })).toHaveCount(0);
   await expect(app.getByRole('button', { name: 'Ajuda oficial', exact: true })).toBeVisible();
   const audit = await new AxeBuilder({ page }).include('#vlibras-app-root').analyze();
   expect(audit.violations.map(({ id }) => id)).toEqual([]);
+  await preferences.getByRole('button', { name: 'Fechar configurações do VLibras', exact: true }).press('Enter');
+  await expect(preferences).toHaveCount(0);
   await app.getByRole('button', { name: 'Fechar', exact: true }).press('Enter');
   await expect(button).toBeVisible();
   await button.press('Space');
