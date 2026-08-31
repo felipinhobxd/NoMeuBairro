@@ -148,7 +148,7 @@ test('painel distingue falha de leitura, testa entrega e resolve sem falsa saúd
   await expect(page.getByRole('heading', { name: 'Estado do monitoramento não confirmado' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Sem incidentes abertos' })).toHaveCount(0);
   state.failMonitor = false;
-  await page.getByRole('button', { name: 'Atualizar painel', exact: true }).click();
+  await page.getByRole('button', { name: 'Atualizar monitoramento', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Sem incidentes abertos' })).toBeVisible();
   await page.getByRole('button', { name: 'Enviar teste de alerta', exact: true }).click();
   await expect(page.getByText('Teste · não é incidente', { exact: true })).toBeVisible();

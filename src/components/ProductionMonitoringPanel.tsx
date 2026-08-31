@@ -90,7 +90,7 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
     finally { if (mounted.current) setTesting(false); }
   };
 
-  if (loading && !payload) return <Card><p className="flex items-center justify-center gap-3 py-8 text-sm font-semibold text-slate-500"><RefreshCw className="h-5 w-5 animate-spin" /> Carregando monitoramento...</p></Card>;
+  if (loading && !payload) return <Card><p className="flex items-center justify-center gap-3 py-8 text-sm font-semibold text-slate-500 dark:text-slate-400"><RefreshCw className="h-5 w-5 animate-spin" /> Carregando monitoramento...</p></Card>;
   const summary = payload?.summary;
   const known = Boolean(payload && !error);
   const attention = (summary?.openAlerts || 0) > 0;
@@ -105,9 +105,9 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-black text-slate-900 dark:text-white">{!known ? 'Estado do monitoramento não confirmado' : attention ? 'Incidentes aguardando verificação' : 'Sem incidentes abertos'}</h2>
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{error || 'O painel atualiza a cada minuto enquanto esta aba estiver visível. Ausência de eventos não garante ausência de falhas.'}</p>
-            <p className="mt-2 text-xs text-slate-500">Último evento real: {formatDate(summary?.latestEventAt)} · Atualizado: {formatDate(payload?.generatedAt)}</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Último evento real: {formatDate(summary?.latestEventAt)} · Atualizado: {formatDate(payload?.generatedAt)}</p>
           </div>
-          <Button type="button" variant="secondary" size="sm" onClick={() => void load(true)}><RefreshCw className="h-4 w-4" /> Atualizar painel</Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void load(true)}><RefreshCw className="h-4 w-4" /> Atualizar monitoramento</Button>
         </div>
       </Card>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
@@ -116,17 +116,17 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
           ['Páginas lentas · hoje', summary?.slowPagesToday], ['APIs lentas · hoje', summary?.slowApisToday], ['Erros do app · hoje', summary?.clientErrorsToday],
         ] as const).map(([label, value]) => <Card key={label} className="!p-3 sm:!p-4"><p className="text-xs font-bold text-slate-500 dark:text-slate-400">{label}</p><p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">{value ?? '—'}</p></Card>)}
       </div>
-      <p className="text-xs text-slate-500">Amostras agrupadas e limitadas; não são contagens de pessoas. “Hoje” usa o horário de Brasília. Testes não entram nos indicadores reais.</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">Amostras agrupadas e limitadas; não são contagens de pessoas. “Hoje” usa o horário de Brasília. Testes não entram nos indicadores reais.</p>
       <Card className="!p-4">
         <h3 className="font-bold text-slate-900 dark:text-white">Alertas e privacidade</h3>
         <p className="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300">O GitHub verifica a produção a cada 15 minutos e após o build da versão principal. Cria um aviso atribuído ao responsável quando o estado muda e encerra o aviso após a recuperação. A agenda pode sofrer atrasos; notificações por e-mail dependem das preferências do GitHub.</p>
-        <p className="mt-2 text-xs leading-relaxed text-slate-500">A coleta usa códigos fixos, página genérica, arquivo do aplicativo, versão, tipo de tela, duração e código HTTP. Não envia conteúdo digitado, fotos, senhas, tokens, IP ou identificação do usuário. O aviso público contém somente o estado do serviço.</p>
+        <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">A coleta usa códigos fixos, página genérica, arquivo do aplicativo, versão, tipo de tela, duração e código HTTP. Não envia conteúdo digitado, fotos, senhas, tokens, IP ou identificação do usuário. O aviso público contém somente o estado do serviço.</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button type="button" variant="secondary" size="sm" disabled={testing} onClick={() => void sendTest()}>{testing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Enviar teste de alerta</Button>
           <a href={workflowUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold text-orange-700 underline underline-offset-4 dark:text-orange-300">Ver execuções no GitHub</a>
           <a href="/api/health" target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg px-2 text-sm font-semibold text-slate-600 underline underline-offset-4 dark:text-slate-300">Verificar conexão</a>
         </div>
-        <p className="mt-2 text-xs text-slate-500">O teste cria um aviso claramente identificado, sem simular uma queda. Depois de confirmar a entrega no GitHub, marque o teste como resolvido abaixo.</p>
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">O teste cria um aviso claramente identificado, sem simular uma queda. Depois de confirmar a entrega no GitHub, marque o teste como resolvido abaixo.</p>
       </Card>
       <section aria-labelledby="production-alerts-title" className="space-y-3">
         <h2 id="production-alerts-title" className="flex items-center gap-2 text-base font-black text-slate-900 dark:text-white"><AlertTriangle className="h-5 w-5" /> Incidentes e testes abertos</h2>
@@ -137,11 +137,11 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
                 <span className={'rounded-full px-2 py-1 ' + (alert.is_test ? 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200' : 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200')}>{alert.is_test ? 'Teste · não é incidente' : alert.severity === 'critical' ? 'Crítico' : alert.severity === 'error' ? 'Erro' : 'Aviso'}</span>
-                <span className="text-slate-600 dark:text-slate-300">{typeLabels[alert.event_type]}</span><span className="text-slate-500">{alert.occurrences} ocorrência(s)</span>
+                <span className="text-slate-600 dark:text-slate-300">{typeLabels[alert.event_type]}</span><span className="text-slate-500 dark:text-slate-400">{alert.occurrences} ocorrência(s)</span>
               </div>
               <p className="mt-2 break-words text-sm font-semibold text-slate-900 dark:text-white">{alert.message}</p>
-              <p className="mt-2 break-all font-mono text-xs text-slate-500">{alert.code} · {alert.path} · {alert.target}{alert.status_code ? ' · HTTP ' + alert.status_code : ''}</p>
-              <p className="mt-2 text-xs text-slate-500">Primeiro: {formatDate(alert.first_triggered_at)} · Último: {formatDate(alert.last_triggered_at)}</p>
+              <p className="mt-2 break-all font-mono text-xs text-slate-500 dark:text-slate-400">{alert.code} · {alert.path} · {alert.target}{alert.status_code ? ' · HTTP ' + alert.status_code : ''}</p>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Primeiro: {formatDate(alert.first_triggered_at)} · Último: {formatDate(alert.last_triggered_at)}</p>
             </div>
             <Button type="button" size="sm" variant="secondary" disabled={resolvingId !== null} onClick={() => void resolveAlert(alert)}>{resolvingId === alert.id ? <RefreshCw className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Marcar resolvido</Button>
           </div>
@@ -155,10 +155,10 @@ export default function ProductionMonitoringPanel({ refreshToken = 0 }: { refres
           <div className="flex items-start gap-3">
             {event.event_type.startsWith('api_') ? <Server className="h-5 w-5 shrink-0 text-blue-600" /> : event.event_type === 'page_slow' ? <Clock3 className="h-5 w-5 shrink-0 text-amber-600" /> : <Activity className="h-5 w-5 shrink-0 text-orange-600" />}
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">{event.is_test ? 'Teste de entrega' : typeLabels[event.event_type]} <span className="font-normal text-slate-500">· {event.samples} amostra(s){event.device_class ? ' · ' + event.device_class : ''}</span></p>
+              <p className="text-sm font-bold text-slate-900 dark:text-white">{event.is_test ? 'Teste de entrega' : typeLabels[event.event_type]} <span className="font-normal text-slate-500 dark:text-slate-400">· {event.samples} amostra(s){event.device_class ? ' · ' + event.device_class : ''}</span></p>
               <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{event.message}</p>
-              <p className="mt-2 break-all font-mono text-xs text-slate-500">{event.code} · {event.path} · {event.target}{event.status_code ? ' · HTTP ' + event.status_code : ''}{event.release ? ' · ' + event.release : ''}</p>
-              <p className="mt-2 text-xs text-slate-500">{event.avg_duration_ms != null ? 'Média ' + duration(event.avg_duration_ms) + ' · Máx. ' + duration(event.max_duration_ms || 0) + ' · ' : ''}{formatDate(event.last_seen_at)}</p>
+              <p className="mt-2 break-all font-mono text-xs text-slate-500 dark:text-slate-400">{event.code} · {event.path} · {event.target}{event.status_code ? ' · HTTP ' + event.status_code : ''}{event.release ? ' · ' + event.release : ''}</p>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{event.avg_duration_ms != null ? 'Média ' + duration(event.avg_duration_ms) + ' · Máx. ' + duration(event.max_duration_ms || 0) + ' · ' : ''}{formatDate(event.last_seen_at)}</p>
             </div>
           </div>
         </Card>)}
