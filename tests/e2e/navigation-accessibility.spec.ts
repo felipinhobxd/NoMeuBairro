@@ -158,7 +158,7 @@ test('menu Mais transfere o foco à escolha de fonte sem prender a interação',
   await page.getByRole('button', { name: 'Mais opções', exact: true }).click();
   await page.getByRole('dialog', { name: 'Mais opções', exact: true }).getByRole('button', { name: 'Fonte: Média', exact: true }).press('Enter');
   await expect(page.getByRole('dialog', { name: 'Mais opções', exact: true })).toHaveCount(0);
-  const picker = page.getByRole('dialog', { name: 'Como você prefere ler o site?' });
+  const picker = page.getByRole('dialog', { name: 'Alterar tamanho da fonte', exact: true });
   await expect(picker).toBeVisible();
   await expect(picker.getByRole('heading')).toBeFocused();
   await picker.getByRole('radio', { name: /Gigante/ }).click();
