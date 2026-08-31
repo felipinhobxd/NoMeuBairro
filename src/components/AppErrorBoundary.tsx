@@ -1,6 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, Home, RefreshCw } from 'lucide-react';
-import { supabase } from '../utils/supabase';
+import { reportRenderFailure } from '../utils/productionMonitoring';
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean };
@@ -22,13 +22,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Erro de renderização capturado pelo NoMeuBairro:', error, info);
-    void Promise.resolve(supabase.rpc('log_client_error', {
-      p_message: error.message || 'Erro de renderização',
-      p_stack: error.stack || null,
-      p_component_stack: info.componentStack || null,
-      p_path: canonicalPath(),
-      p_user_agent: navigator.userAgent,
-    })).catch(() => {});
+    reportRenderFailure(error, canonicalPath());
   }
 
   private reload = () => {

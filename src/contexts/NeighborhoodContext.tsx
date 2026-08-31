@@ -1,3 +1,4 @@
+import { monitoredFetch } from '../utils/productionMonitoring';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
 interface Neighborhood {
@@ -199,7 +200,7 @@ export function NeighborhoodProvider({ children }: { children: ReactNode }) {
     if (cleanCep.length !== 8) return false;
 
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+      const response = await monitoredFetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
       const data = await response.json();
       if (data.erro) return false;
       if (normalizeNeighborhoodText(data.localidade) !== 'curitiba') {

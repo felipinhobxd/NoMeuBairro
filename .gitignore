@@ -7,3 +7,4 @@ dist/
 *.local
 playwright-report/
 test-results/
+supabase/.temp/

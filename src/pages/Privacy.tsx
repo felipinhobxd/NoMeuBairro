@@ -19,8 +19,8 @@ const retentionRows = [
     period: 'Pelo período necessário para segurança, prevenção de abuso e auditoria das decisões. O acesso é restrito a quem possui permissão de moderação.',
   },
   {
-    data: 'Registros de erros',
-    period: 'Até 90 dias. A rotina de manutenção remove automaticamente registros técnicos mais antigos.',
+    data: 'Monitoramento técnico',
+    period: 'Amostras agregadas de erros e lentidão por até 45 dias; incidentes resolvidos por até 180 dias. Registros de erro do sistema anterior permanecem por até 90 dias. A manutenção remove automaticamente os registros vencidos.',
   },
   {
     data: 'Métricas agregadas',
@@ -47,7 +47,7 @@ const sections = [
   {
     icon: ShieldCheck,
     title: 'Segurança, moderação e erros',
-    text: 'Denúncias e decisões de moderação são mantidas para proteger a comunidade. Quando ocorre uma falha técnica no navegador, podemos registrar a página, mensagem do erro, informações técnicas do navegador e, se houver sessão iniciada, a referência da conta. Esses registros ficam restritos à administração e são mantidos por até 90 dias.',
+    text: 'Denúncias e decisões de moderação são mantidas para proteger a comunidade. O monitoramento técnico registra códigos fixos de erro, páginas genéricas sem identificadores, versão/arquivo do aplicativo, tipo de tela, duração e código HTTP. A coleta não envia texto digitado, fotos, senhas, tokens, IP ou referência da conta. Detalhes ficam restritos à administração; avisos públicos no GitHub informam somente o estado do serviço. Registros históricos da coleta anterior podem conter a referência da conta até expirarem.',
   },
   {
     icon: Database,
@@ -67,7 +67,7 @@ export default function Privacy() {
       <div>
         <div className="inline-flex items-center gap-2 text-emerald-700 dark:text-emerald-400 text-xs font-black uppercase tracking-widest mb-2"><ShieldCheck className="w-4 h-4" /> Transparência</div>
         <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">Política de Privacidade</h1>
-        <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">Esta página explica, em linguagem simples, quais informações o No Meu Bairro usa e por quê. Última atualização: 19 de agosto de 2026.</p>
+        <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-600 dark:text-slate-300">Esta página explica, em linguagem simples, quais informações o No Meu Bairro usa e por quê. Última atualização: 31 de agosto de 2026.</p>
       </div>
 
       <Card className="!p-5 sm:!p-6 bg-emerald-50/50 dark:bg-emerald-500/5 !border-emerald-100 dark:!border-emerald-500/15">

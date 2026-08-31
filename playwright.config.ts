@@ -60,6 +60,7 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: 'http://127.0.0.1:4173/supabase-mock',
       VITE_SUPABASE_PUBLISHABLE_KEY: 'e2e-public-test-key',
+      VITE_MONITORING_TEST: '1',
     },
   },
 });

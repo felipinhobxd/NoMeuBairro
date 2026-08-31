@@ -1,3 +1,5 @@
+import { startRequestLog } from '../server/structuredLog.js';
+
 const categoryLabels = {
   buraco: 'Buraco e pavimentação',
   iluminacao: 'Iluminação pública',
@@ -31,6 +33,7 @@ function requestOrigin(req) {
 }
 
 export default async function handler(req, res) {
+  startRequestLog(req, res, '/api/share-post');
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).end();

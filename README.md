@@ -108,9 +108,18 @@ O painel inclui:
 - identificação de quem moderou e quando;
 - opção de **manter** ou **excluir** o conteúdo denunciado;
 - **Uso:** analytics agregados por área do site;
-- **Erros:** monitoramento de erros importantes do frontend.
+- **Produção:** erros reais, lentidão de páginas/APIs, incidentes e teste do canal de alertas;
+- **Histórico JS:** registros da coleta anterior, preservados até sua expiração.
 
 As permissões críticas não dependem apenas da interface: funções e políticas do banco validam o acesso administrativo.
+
+### Monitoramento de produção
+
+O navegador coleta erros e medições lentas somente no domínio de produção. O servidor registra status/duração das APIs; `/api/health` verifica banco e coletor com respostas pequenas. A Action [Production monitor](https://github.com/felipinhobxd/NoMeuBairro/actions/workflows/production-monitor.yml) verifica página, JavaScript principal e saúde do serviço a cada 15 minutos e após o build da `main`.
+
+Incidentes geram uma única issue atribuída a `felipinhobxd`, atualizada quando o estado muda e encerrada após a recuperação. O painel **Admin → Produção → Enviar teste de alerta** permite verificar a entrega sem derrubar o site. E-mail depende das configurações de notificações do GitHub; agendas podem atrasar e são desativadas pelo GitHub após 60 dias sem atividade em repositórios públicos.
+
+Consulte [operação, limites, privacidade e recuperação do monitoramento](docs/MONITORING.md).
 
 ---
 
