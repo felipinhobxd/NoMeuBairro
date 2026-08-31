@@ -5,7 +5,7 @@ import { inspectProduction, runProductionMonitor } from '../scripts/monitor-prod
 const repository = 'felipinhobxd/NoMeuBairro';
 const okSnapshot = { schemaVersion: 2, openIncidents: 0, criticalIncidents: 0, testSequence: 0 };
 function fixture() {
-  const state = { issues: [], writes: [], checks: 0, homeFailures: 0, brokenAsset: false, badHealth: false, monitoring: { ...okSnapshot }, durationMs: 100, failGitHub: false };
+  const state = { issues: [], writes: [], checks: 0, homeFailures: 0, entrySrc: './assets/index-abcdefgh.js', assetChecks: 0, brokenAsset: false, badHealth: false, monitoring: { ...okSnapshot }, durationMs: 100, failGitHub: false };
   const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
   const fetcher = async (url, init = {}) => {
     const target = new URL(url);
@@ -14,9 +14,13 @@ function fixture() {
       if (target.pathname === '/') {
         state.checks++;
         if (state.homeFailures-- > 0) return new Response('private server error', { status: 500 });
-        return new Response('<html><div id="root"></div><script type="module" src="/assets/index-abcdefgh.js"></script></html>');
+        return new Response(`<html><div id="root"></div><script type="module" src="${state.entrySrc}"></script></html>`);
       }
-      if (target.pathname.startsWith('/assets/')) return new Response(null, { status: state.brokenAsset ? 404 : 200, headers: { 'content-type': 'application/javascript' } });
+      if (target.pathname.startsWith('/assets/')) {
+        state.assetChecks++;
+        assert.equal(init.method, 'HEAD');
+        return new Response(null, { status: state.brokenAsset ? 404 : 200, headers: { 'content-type': 'application/javascript' } });
+      }
       if (target.pathname === '/api/health') return state.badHealth ? new Response('<html>wrong route</html>') : json({
         service: 'NoMeuBairro', schemaVersion: 2, status: state.monitoring.openIncidents || state.durationMs >= 3000 ? 'degraded' : 'ok',
         checks: { database: 'ok', telemetry: 'ok' }, durationMs: state.durationMs, monitoring: state.monitoring,
@@ -125,4 +129,23 @@ test('latência persistente alerta e erros de permissão não são ocultados', a
   state.failGitHub = true;
   await assert.rejects(run, /^Error: github_403$/);
   await assert.rejects(() => runProductionMonitor({ repository: 'other/repo', token: 'fake' }), /monitor_configuration_missing/);
+});
+
+test('caminhos de script relativos do build Vite e absolutos usam o mesmo asset', async () => {
+  for (const entrySrc of ['./assets/index-abcdefgh.js', '/assets/index-abcdefgh.js']) {
+    const { state, run } = fixture();
+    state.entrySrc = entrySrc;
+    assert.equal((await run()).status, 'ok');
+    assert.equal(state.assetChecks, 1, 'a verificação deve testar o JavaScript real');
+    assert.equal(state.issues.length, 0, 'a base relativa não pode gerar falso incidente');
+  }
+});
+
+test('script de origem externa não é aceito nem seguido pelo verificador', async () => {
+  for (const entrySrc of ['https://other.example/assets/index-abcdefgh.js', '//other.example/assets/index-abcdefgh.js']) {
+    const { state, fetcher } = fixture();
+    state.entrySrc = entrySrc;
+    assert.deepEqual((await inspectProduction({ fetcher })).reasons, ['site-unavailable']);
+    assert.equal(state.assetChecks, 0);
+  }
 });
