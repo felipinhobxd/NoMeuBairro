@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Card, EmptyState, useToast } from '../components/UI';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
+import ProductionMonitoringPanel from '../components/ProductionMonitoringPanel';
 
 type ModerationItem = {
   report_id: string;
@@ -63,7 +64,7 @@ type AccountDeletionRequest = {
   reviewed_by?: string | null;
 };
 
-type AdminTab = 'pending' | 'history' | 'accounts' | 'usage' | 'errors';
+type AdminTab = 'pending' | 'history' | 'accounts' | 'usage' | 'production' | 'errors';
 
 const typeMeta: Record<string, { label: string; icon: typeof MessageSquare }> = {
   post: { label: 'Post do feed', icon: MessageSquare },
@@ -100,6 +101,7 @@ export default function Admin() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('pending');
+  const [monitoringRefreshToken, setMonitoringRefreshToken] = useState(0);
   const [items, setItems] = useState<ModerationItem[]>([]);
   const [historyItems, setHistoryItems] = useState<ModerationHistoryItem[]>([]);
   const [usageItems, setUsageItems] = useState<UsageRow[]>([]);
@@ -339,6 +341,7 @@ export default function Admin() {
     if (activeTab === 'history') void loadHistory();
     else if (activeTab === 'accounts') void loadAccountRequests();
     else if (activeTab === 'usage') void loadUsage();
+    else if (activeTab === 'production') setMonitoringRefreshToken(value => value + 1);
     else if (activeTab === 'errors') void loadErrors();
     else void loadQueue();
   };
@@ -359,7 +362,8 @@ export default function Admin() {
     { id: 'history', label: 'Histórico', icon: HistoryIcon, count: historyItems.length },
     { id: 'accounts', label: 'Contas', icon: UserX, count: pendingAccountRequests.length },
     { id: 'usage', label: 'Uso', icon: BarChart3 },
-    { id: 'errors', label: 'Erros', icon: Bug, count: recentErrorCount },
+    { id: 'production', label: 'Produção', icon: Activity },
+    { id: 'errors', label: 'Histórico JS', icon: Bug, count: recentErrorCount },
   ];
 
   return (
@@ -484,6 +488,8 @@ export default function Admin() {
           {!usageLoading && !usageError && usageByPath.length === 0 ? <EmptyState icon={BarChart3} title="Métricas ainda vazias" description="Os números começarão a aparecer conforme o novo monitoramento receber acessos." /> : <Card className="!p-5"><div className="space-y-4">{usageByPath.map(row => <div key={row.path}><div className="flex items-center justify-between gap-3 mb-1.5"><div className="min-w-0"><p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{routeLabels[row.path] || row.path}</p><p className="text-[10px] text-slate-400 font-mono">{row.path}</p></div><span className="text-sm font-black text-slate-900 dark:text-white">{row.views}</span></div><div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(3, (row.views / maxPathViews) * 100)}%` }} /></div></div>)}</div></Card>}
         </>
       )}
+
+      {activeTab === 'production' && <ProductionMonitoringPanel refreshToken={monitoringRefreshToken} />}
 
       {activeTab === 'errors' && (
         <>

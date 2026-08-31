@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
@@ -188,7 +188,6 @@ export default function ProductExperience() {
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isStandalone, setIsStandalone] = useState(() => isStandaloneMode());
   const [cookieChoiceMade, setCookieChoiceMade] = useState(() => hasCookieConsentChoice());
-  const errorFingerprints = useRef(new Map<string, number>());
 
   const activeTourSteps = useMemo(() => {
     const source = isMobileTour ? mobileTourSteps : desktopTourSteps;
@@ -504,38 +503,6 @@ export default function ProductExperience() {
     void Promise.resolve(supabase.rpc('track_page_view', { p_path: path })).then(({ error }) => {
       if (error) console.warn('Analytics agregado indisponível:', error.message);
     }).catch(() => {});
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const send = (message: string, stack?: string | null) => {
-      const cleanMessage = String(message || 'Erro desconhecido').slice(0, 1000);
-      const fingerprint = `${canonicalRoute(location.pathname)}|${cleanMessage}`;
-      const now = Date.now();
-      const last = errorFingerprints.current.get(fingerprint) || 0;
-      if (now - last < 30_000) return;
-      errorFingerprints.current.set(fingerprint, now);
-      void Promise.resolve(supabase.rpc('log_client_error', {
-        p_message: cleanMessage,
-        p_stack: stack || null,
-        p_component_stack: null,
-        p_path: canonicalRoute(location.pathname),
-        p_user_agent: navigator.userAgent,
-      })).catch(() => {});
-    };
-
-    const onError = (event: ErrorEvent) => send(event.message || 'Erro de JavaScript', event.error instanceof Error ? event.error.stack : null);
-    const onRejection = (event: PromiseRejectionEvent) => {
-      const reason = event.reason;
-      if (reason instanceof Error) send(reason.message, reason.stack);
-      else send(`Promise rejeitada: ${String(reason)}`);
-    };
-
-    window.addEventListener('error', onError);
-    window.addEventListener('unhandledrejection', onRejection);
-    return () => {
-      window.removeEventListener('error', onError);
-      window.removeEventListener('unhandledrejection', onRejection);
-    };
   }, [location.pathname]);
 
   const targetStepNumber = currentStep?.kind === 'target'

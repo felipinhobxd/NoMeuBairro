@@ -4,6 +4,9 @@ import "./index.css";
 import "./ux-polish.css";
 import "./feed-profile.css";
 import App from "./App";
+import { reportProductionEvent, startProductionMonitoring } from "./utils/productionMonitoring";
+
+startProductionMonitoring();
 
 // O botão "Ver mapa" do Feed já navega para /mapa. Antes da navegação,
 // guardamos qual card originou o clique para o mapa abrir exatamente naquele ponto.
@@ -35,6 +38,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
       .then((registration) => registration.update())
       .catch((error) => {
         console.warn('Não foi possível registrar o modo aplicativo:', error);
+        void reportProductionEvent({ eventType: 'resource_error', code: 'resource.service_worker', target: 'service-worker' });
       });
   });
 }

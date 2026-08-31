@@ -17,6 +17,7 @@
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^1.12.0",
     "@supabase/supabase-js": "^2.105.4",
+    "@vercel/functions": "3.9.5",
     "clsx": "2.1.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.14.0",
@@ -24,7 +25,8 @@
     "react-dom": "19.2.3",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.14.2",
-    "tailwind-merge": "3.4.0"
+    "tailwind-merge": "3.4.0",
+    "web-vitals": "6.2.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

@@ -1,3 +1,4 @@
+import { monitoredFetch } from '../utils/productionMonitoring';
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ShieldAlert, Eye, Lock, AlertCircle, Send, CheckCircle2, Info, ArrowRight } from 'lucide-react';
@@ -42,7 +43,7 @@ export default function Denuncias() {
     if (clean.length !== 8) return;
 
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const res = await monitoredFetch(`https://viacep.com.br/ws/${clean}/json/`);
       const data = await res.json();
       if (!data.erro) {
         const addressParts = [
@@ -65,7 +66,7 @@ export default function Denuncias() {
       const query = cep.length === 8
         ? `${cep}, Curitiba, PR, Brasil`
         : `${address}, Curitiba, PR, Brasil`;
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+      const response = await monitoredFetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
       const data = await response.json();
       if (Array.isArray(data) && data.length > 0) {
         const lat = Number(data[0].lat);

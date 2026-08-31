@@ -1,4 +1,7 @@
+import { startRequestLog } from '../server/structuredLog.js';
+
 export default async function handler(req, res) {
+  startRequestLog(req, res, '/api/post-image');
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return res.status(405).end();
