@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect, useMemo } from 'react';
+import { type ReactNode, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { fontSizeLabels, useFontSize } from '../contexts/FontSizeContext';
@@ -342,6 +342,10 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const mobileDialogRef = useRef<HTMLDialogElement>(null);
+  const mobileMoreTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuCloseRef = useRef<HTMLButtonElement>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
 
   const isActive = (path: string) => path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
   const desktopNavItems = useMemo(() => (
@@ -351,6 +355,61 @@ export default function Layout({ children }: LayoutProps) {
   const mobileMoreActive = ['/estatisticas', '/denuncias', '/perfil', '/salvos', '/admin'].some(path => isActive(path));
 
   useEffect(() => { setMobileMoreOpen(false); }, [location.pathname]);
+
+  useEffect(() => {
+    const dialog = mobileDialogRef.current;
+    if (!mobileMoreOpen || !dialog) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // Native modality keeps the page (including third-party widgets) out of
+    // the tab order. The existing overlay and key handling also work on older browsers.
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+    mobileMenuCloseRef.current?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileMoreOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const buttons = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+        .filter(button => button.tabIndex >= 0 && button.getClientRects().length > 0);
+      const first = buttons[0];
+      const last = buttons[buttons.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    // A modal hidden by the desktop breakpoint must not leave the page inert.
+    const desktop = window.matchMedia('(min-width: 1024px)');
+    const closeOnDesktop = () => { if (desktop.matches) setMobileMoreOpen(false); };
+    if (desktop.addEventListener) desktop.addEventListener('change', closeOnDesktop);
+    else desktop.addListener(closeOnDesktop);
+    closeOnDesktop();
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (desktop.removeEventListener) desktop.removeEventListener('change', closeOnDesktop);
+      else desktop.removeListener(closeOnDesktop);
+      if (dialog.open && typeof dialog.close === 'function') dialog.close();
+      document.body.style.overflow = previousOverflow;
+      // Do not steal focus from a search/font dialog opened by this menu.
+      if (document.activeElement === document.body || dialog.contains(document.activeElement)) {
+        const trigger = mobileMoreTriggerRef.current;
+        if (trigger?.getClientRects().length) trigger.focus({ preventScroll: true });
+      }
+    };
+  }, [mobileMoreOpen]);
 
   const triggerHeaderAction = (ariaLabel: string) => {
     const button = Array.from(document.querySelectorAll<HTMLButtonElement>('header button')).find(
@@ -373,7 +432,11 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-clip bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      <a href="#main-content" className="skip-link">Pular para o conteúdo</a>
+      <a href="#main-content" className="skip-link" onClick={(event) => {
+        event.preventDefault();
+        mainContentRef.current?.focus({ preventScroll: true });
+        mainContentRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      }}>Pular para o conteúdo</a>
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300" role="banner">
         <div className="max-w-[1680px] mx-auto px-2.5 sm:px-4 lg:px-5">
           <div className="nmb-header-row flex items-center justify-between h-16 gap-2 sm:gap-3">
@@ -383,9 +446,9 @@ export default function Layout({ children }: LayoutProps) {
                 <div className="flex flex-col items-start hidden lg:flex"><span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span></div>
               </button>
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden lg:block" />
-              <button onClick={clearSelection} className="nmb-neighborhood-filter flex items-center gap-1.5 sm:gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all min-w-0" title="Escolher bairro para filtrar">
+              <button type="button" onClick={clearSelection} className="nmb-neighborhood-filter flex items-center gap-1.5 sm:gap-2 group hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 rounded-xl transition-all min-w-0" title="Escolher bairro para filtrar" aria-label={`Filtro de bairro: ${displayNeighborhood}. Escolher bairro`}>
                 <div className="flex flex-col items-start">
-                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 leading-tight tracking-widest uppercase">Filtro</span>
+                  <span className="text-[9px] font-semibold text-orange-800 dark:text-orange-300 leading-tight tracking-widest uppercase">Filtro</span>
                   <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[34vw] sm:max-w-[150px] xl:max-w-none">{displayNeighborhood}</span>
                 </div>
                 <MapPin className="w-3.5 h-3.5 text-slate-400 group-hover:text-emerald-500 transition-colors" />
@@ -396,7 +459,7 @@ export default function Layout({ children }: LayoutProps) {
               {desktopNavItems.map((item) => {
                 const Icon = item.icon; const active = isActive(item.path);
                 return (
-                  <button key={item.path} onClick={() => navigate(item.path)} className={cn('flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0', active ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-label={item.label} aria-current={active ? 'page' : undefined}>
+                  <button key={item.path} type="button" onClick={() => navigate(item.path)} className="flex items-center gap-1.5 px-2 lg:px-3 py-2 rounded-xl text-[13px] font-medium transition-all duration-200 shrink-0" aria-label={item.label} title={item.label} aria-current={active ? 'page' : undefined}>
                     <Icon className="w-4 h-4" /><span className="hidden xl:inline">{item.label}</span>
                   </button>
                 );
@@ -418,18 +481,18 @@ export default function Layout({ children }: LayoutProps) {
               {isAuthenticated && <button onClick={() => navigate('/salvos')} className={cn('p-2.5 rounded-xl transition-all duration-200', isActive('/salvos') ? 'bg-orange-50 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800')} aria-label="Itens salvos" title="Itens salvos"><Bookmark className="w-[18px] h-[18px]" /></button>}
               {isAuthenticated && user ? (
                 <div className="flex items-center gap-1.5 lg:gap-2">
-                  <button onClick={() => navigate('/perfil')} className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-sm font-bold hover:bg-emerald-200 dark:hover:bg-emerald-500/25 transition-colors" aria-label={`Perfil de ${user.name}`}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}</button>
+                  <button onClick={() => navigate('/perfil')} className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl overflow-hidden bg-orange-100 dark:bg-orange-500/15 flex items-center justify-center text-orange-800 dark:text-orange-300 text-sm font-bold hover:bg-orange-200 dark:hover:bg-orange-500/25 transition-colors" aria-label={`Perfil de ${user.name}`}>{user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" /> : user.name.charAt(0).toUpperCase()}</button>
                   <button onClick={logout} className="hidden lg:flex p-2 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-500/10 transition-all duration-200" aria-label="Sair" title="Sair"><LogOut className="w-[18px] h-[18px]" /></button>
                 </div>
               ) : (
-                <button onClick={() => navigate('/login')} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold transition-all duration-200 shadow-sm shadow-emerald-600/20 active:scale-[0.98]"><UserCircle className="w-4 h-4" /><span className="hidden sm:inline">Entrar</span></button>
+                <button type="button" aria-label="Entrar" onClick={() => navigate('/login')} className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[13px] font-semibold transition-all duration-200 shadow-sm shadow-emerald-600/20 active:scale-[0.98]"><UserCircle className="w-4 h-4" /><span className="hidden sm:inline">Entrar</span></button>
               )}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 pb-24 lg:pb-0 overflow-x-clip" id="main-content" role="main" data-feed-view={location.pathname === '/' || undefined}>
+      <main ref={mainContentRef} tabIndex={-1} className="flex-1 pb-24 lg:pb-0 overflow-x-clip" id="main-content" role="main" data-feed-view={location.pathname === '/' || undefined}>
         <div className="nmb-page-shell max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</div>
         <footer className="mt-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
@@ -447,12 +510,11 @@ export default function Layout({ children }: LayoutProps) {
       </main>
 
       {mobileMoreOpen && (
-        <div className="lg:hidden fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Mais opções">
-          <button
-            type="button"
+        <dialog ref={mobileDialogRef} id="mobile-more-dialog" className="nmb-mobile-menu lg:hidden fixed inset-0 z-[70]" aria-modal="true" aria-label="Mais opções" onCancel={(event) => { event.preventDefault(); setMobileMoreOpen(false); }}>
+          <div
             className="absolute inset-0 w-full h-full bg-slate-950/55 backdrop-blur-[2px]"
             onClick={() => setMobileMoreOpen(false)}
-            aria-label="Fechar menu"
+            aria-hidden="true"
           />
           <section className="absolute bottom-0 left-0 right-0 max-h-[82dvh] overflow-y-auto rounded-t-3xl bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 shadow-2xl safe-area-bottom animate-slide-up">
             <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-4 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -467,7 +529,7 @@ export default function Layout({ children }: LayoutProps) {
                     <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{isAdmin ? 'Administrador' : displayNeighborhood}</p>
                   </div>
                 </div>
-                <button type="button" onClick={() => setMobileMoreOpen(false)} className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar menu"><X className="w-5 h-5" /></button>
+                <button ref={mobileMenuCloseRef} type="button" onClick={() => setMobileMoreOpen(false)} className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Fechar menu"><X className="w-5 h-5" /></button>
               </div>
             </div>
 
@@ -486,6 +548,7 @@ export default function Layout({ children }: LayoutProps) {
                     <button
                       key={item.path}
                       type="button"
+                      aria-current={active ? 'page' : undefined}
                       onClick={() => { navigate(item.path); setMobileMoreOpen(false); }}
                       className={cn(
                         'min-h-[58px] rounded-2xl border px-3 flex items-center gap-3 text-left font-bold transition-colors',
@@ -514,7 +577,7 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
           </section>
-        </div>
+        </dialog>
       )}
 
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 safe-area-bottom shadow-[0_-8px_30px_rgb(0,0,0,0.04)] transition-colors duration-300" role="navigation" aria-label="Navegação mobile">
@@ -528,7 +591,7 @@ export default function Layout({ children }: LayoutProps) {
               </button>
             );
           })}
-          <button type="button" onClick={() => setMobileMoreOpen(true)} className={cn('min-w-0 flex flex-col items-center justify-center gap-0.5 py-1 px-0.5 rounded-2xl transition-all duration-200 active:scale-95', mobileMoreActive ? 'text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-500')} aria-expanded={mobileMoreOpen} aria-label="Mais opções">
+          <button ref={mobileMoreTriggerRef} type="button" onClick={() => setMobileMoreOpen(true)} className={cn('min-w-0 flex flex-col items-center justify-center gap-0.5 py-1 px-0.5 rounded-2xl transition-all duration-200 active:scale-95', mobileMoreActive ? 'text-orange-700 dark:text-orange-300' : 'text-slate-400 dark:text-slate-500')} aria-expanded={mobileMoreOpen} aria-controls={mobileMoreOpen ? 'mobile-more-dialog' : undefined} aria-haspopup="dialog" aria-label="Mais opções">
             <div className={cn('w-9 h-8 rounded-xl flex items-center justify-center transition-all duration-200 relative', mobileMoreActive && 'bg-orange-50 dark:bg-orange-500/10 shadow-sm')}>
               <MoreHorizontal className="w-5 h-5" />
               {isAdmin && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white dark:ring-slate-900" />}

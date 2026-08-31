@@ -5,8 +5,11 @@ import "./ux-polish.css";
 import "./feed-profile.css";
 import App from "./App";
 import { reportProductionEvent, startProductionMonitoring } from "./utils/productionMonitoring";
+import { startVLibrasAccessibility } from "./utils/vlibrasAccessibility";
 
 startProductionMonitoring();
+const stopVLibrasAccessibility = startVLibrasAccessibility();
+if (import.meta.hot) import.meta.hot.dispose(stopVLibrasAccessibility);
 
 // O botão "Ver mapa" do Feed já navega para /mapa. Antes da navegação,
 // guardamos qual card originou o clique para o mapa abrir exatamente naquele ponto.
