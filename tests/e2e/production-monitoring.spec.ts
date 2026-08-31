@@ -172,6 +172,10 @@ test('painel distingue falha de leitura, testa entrega e resolve sem falsa saúd
   await expect(page.getByText('Histórico recente de resoluções (1)', { exact: true })).toBeVisible();
   expect(state.resolved).toBe(true);
   await page.evaluate(() => document.documentElement.classList.add('dark'));
+  // Audit the final theme, not a midway gray from the shell's color transition.
+  await page.locator('#main-content').locator('..').evaluate(async shell => {
+    await Promise.all(shell.getAnimations().map(animation => animation.finished.catch(() => undefined)));
+  });
   await checkMonitoringAccessibility();
 });
 
