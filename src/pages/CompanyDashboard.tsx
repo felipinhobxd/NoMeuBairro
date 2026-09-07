@@ -102,6 +102,19 @@ export default function CompanyDashboard() {
 
   useEffect(() => { void load(); }, [user?.id]);
 
+  useEffect(() => {
+    if (loading) return;
+    let focusedJobId: string | null = null;
+    try { focusedJobId = sessionStorage.getItem('anb-company-focus-job'); } catch {}
+    if (!focusedJobId) return;
+
+    const ownsJob = jobs.some((job) => job.id === focusedJobId);
+    const hasVisibleApplicant = applications.some((application) => application.job_id === focusedJobId);
+    if (ownsJob && hasVisibleApplicant) setSelectedJobId(focusedJobId);
+
+    try { sessionStorage.removeItem('anb-company-focus-job'); } catch {}
+  }, [loading, jobs, applications]);
+
   const activeJobs = useMemo(() => jobs.filter((job) => job.is_active).length, [jobs]);
   const applicationCountByJob = useMemo(() => {
     const counts: Record<string, number> = {};
