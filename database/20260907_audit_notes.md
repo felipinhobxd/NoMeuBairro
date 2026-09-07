@@ -22,28 +22,36 @@ Este arquivo registra somente constatações técnicas e não contém segredos.
 - `user_resumes` e `job_applications` tinham grants SQL muito mais amplos do que o frontend necessita, incluindo privilégios como `TRUNCATE`, `REFERENCES` e `TRIGGER`.
 - `private.legacy_post_images` tinha grants de leitura de browser e pode armazenar payloads base64.
 - Várias funções de trigger `SECURITY DEFINER` estavam executáveis diretamente por roles de browser.
-- `supabase_realtime` publicava 9 tabelas, mas o frontend atual assina apenas `posts` e `notifications`.
+- `supabase_realtime` publicava 9 tabelas, embora o frontend atual use Realtime apenas para `posts` e `notifications`.
 - O script histórico de Web Push ainda apontava para o projeto Supabase antigo.
 
-## Decisões de hardening preparadas
+## Hardening aplicado
 
 - Grants mínimos por tabela/coluna, mantendo RLS como autorização por linha.
-- `app_roles` somente leitura para authenticated e sem escrita pelo cliente.
-- `get_push_server_config()` somente `service_role`.
-- Funções de trigger deixam de ser RPCs de browser.
-- Contatos de empresa passam a ser privados por padrão e sincronizados à projeção pública somente por flags explícitas.
-- Currículos e candidaturas ficam sem acesso anônimo e sem privilégios DDL-like.
-- Novas imagens base64 ficam proibidas em `posts`; compatibilidade antiga permanece isolada.
-- Realtime mantém apenas `posts` e `notifications`.
+- `app_roles` somente leitura para `authenticated` e sem escrita pelo cliente.
+- `get_push_server_config()` restrito ao fluxo server-side/service role.
+- Funções de trigger deixaram de ser RPCs de browser.
+- Contatos de empresa passaram a ser privados por padrão e só entram na projeção pública por flags explícitas.
+- Currículos e candidaturas ficaram sem acesso anônimo e sem privilégios SQL desnecessários.
+- Novas imagens base64 em `posts` foram bloqueadas; compatibilidade antiga permaneceu isolada.
+- Realtime foi reduzido a `posts` e `notifications`, que são as tabelas assinadas pelo frontend atual.
+- Rate limits server-side foram adicionados para relatos, comentários, denúncias, eventos, vagas, geocoding, uploads, Push e analytics.
+- Storage recebeu quotas e validações de tamanho/MIME/ownership.
+- As migrations aplicadas ao novo projeto estão versionadas em `supabase/migrations/` até `20260907190250`.
 
-## Pendências que exigem a conexão Supabase/Vercel ativa para concluir
+## Estado após aplicação
 
-- Aplicar o hardening no banco e gravar a versão real em `supabase/migrations/`.
-- Validar grants e policies como `anon`/`authenticated` após a migration.
-- Configurar VAPID/dispatch no Vault e implantar `send-push` + `anonymous-post-control`.
-- Adicionar quota de quantidade de objetos no Storage e validar uploads.
-- Rodar novamente Security Advisor e Performance Advisor.
-- Conferir/configurar as variáveis Vite no Vercel e fazer redeploy.
-- Executar testes finais de signup/login/perfil/relato/comentário/apoio/notificações/empregos/currículo/Storage/Realtime/logout.
+- Grants, RLS e funções sensíveis foram validados no novo Supabase.
+- `send-push` e `anonymous-post-control` ficaram ativas no novo projeto.
+- VAPID/private dispatch/rate-limit secrets permanecem fora do repositório e no armazenamento server-side apropriado.
+- Security Advisor e Performance Advisor foram revisados após as migrations finais.
+- Auth passou a ter usuários confirmados durante a validação real do fluxo.
+- Testes transacionais de publicação, moderação, limites e Push foram executados com rollback/limpeza.
+- O banco e o Storage permaneceram pequenos, sem sinal de crescimento anormal.
+
+## Pendências externas que não mudam o estado aplicado do banco
+
+- A conexão Vercel disponível ao ChatGPT ainda não permite auditar deployments/envs diretamente; isso é uma limitação de acesso da integração, não uma migration pendente.
+- A entrega Push ainda precisa ser exercitada em um navegador/dispositivo real quando houver uma subscription registrada.
 
 O Supabase antigo não foi alterado.
