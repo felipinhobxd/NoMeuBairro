@@ -1,6 +1,6 @@
 # 🏘️ No Meu Bairro
 
-Plataforma comunitária criada para aproximar moradores de Curitiba, dar visibilidade a problemas locais e concentrar, em um só lugar, relatos, eventos, oportunidades de emprego, dados do bairro e canais de denúncia.
+Plataforma comunitária criada para aproximar moradores de Curitiba, dar visibilidade a problemas locais e reunir, em um só lugar, relatos, eventos, oportunidades de emprego, dados do bairro, notificações e canais de denúncia.
 
 <p align="center">
   <a href="https://nomeubairro.vercel.app/">
@@ -14,15 +14,17 @@ Plataforma comunitária criada para aproximar moradores de Curitiba, dar visibil
   <img src="https://img.shields.io/badge/BACKEND-SUPABASE-1C1C1C?style=for-the-badge&logo=supabase&logoColor=3ECF8E" alt="Backend Supabase" />
 </p>
 
-> O projeto continua em evolução, mas já possui fluxo completo de uso, moderação, acessibilidade, experiência responsiva e versão publicada.
+> O projeto está em evolução, mas já possui versão publicada, autenticação, moderação, experiência responsiva, acessibilidade, PWA, monitoramento de produção e backend protegido por políticas do Supabase.
 
 ---
 
 ## ✨ O que é o projeto
 
-O **No Meu Bairro** funciona como uma central comunitária para Curitiba. A ideia é facilitar a comunicação entre moradores e tornar informações locais mais fáceis de encontrar e visualizar.
+O **No Meu Bairro** funciona como uma central comunitária para Curitiba. A proposta é facilitar a comunicação entre moradores, empresas e comunidade local, além de tornar relatos, eventos, oportunidades e informações do bairro mais fáceis de encontrar e acompanhar.
 
-A plataforma foi pensada para funcionar bem tanto no computador quanto no celular, com navegação adaptativa, onboarding interativo, modo claro/escuro e suporte à instalação como aplicativo.
+A aplicação é uma SPA em React + TypeScript, hospedada na Vercel e integrada ao Supabase para autenticação, banco de dados, Storage, Realtime, RPCs, migrations e Edge Functions.
+
+A interface foi pensada para computador e celular, com navegação adaptativa, onboarding interativo, modo claro/escuro, tamanhos de fonte configuráveis e instalação como PWA.
 
 ---
 
@@ -33,59 +35,64 @@ A plataforma foi pensada para funcionar bem tanto no computador quanto no celula
 - Publicação de relatos com título, descrição, imagem, categoria e localização.
 - Status de acompanhamento como **Pendente**, **Em andamento** e **Resolvido**.
 - Apoios, comentários e respostas em múltiplos níveis.
+- Contadores agregados de apoio e comentários no próprio card.
 - Botão rápido `+` para criar um novo relato.
 - Filtro por bairro e localidades de Curitiba.
-- Denúncia de conteúdo inadequado diretamente nos itens da comunidade.
+- Denúncia de conteúdo inadequado.
+- Itens salvos e páginas compartilháveis de relatos.
 
 ### 🗺️ Mapa comunitário
 
 - Visualização conjunta de **relatos, eventos e oportunidades de emprego**.
-- Marcadores e agrupamentos numéricos conforme o nível de zoom.
-- **Mapa de calor permanente**, calculado pela densidade dos pontos exibidos.
-- Heatmap baseado em distribuição Gaussiana, com escala geográfica adaptada ao zoom.
-- Agrupamento por distância real no mapa, evitando divisões artificiais por células visuais.
-- Zoom animado e atualização dos agrupamentos ao navegar pelo mapa.
-- Localizações aproximadas recebem peso menor que coordenadas exatas no cálculo de densidade.
-- Acesso direto do Mural ao ponto correspondente no mapa.
+- Marcadores e agrupamentos conforme o nível de zoom.
+- Mapa de calor calculado a partir da densidade dos pontos exibidos.
+- Agrupamento por distância geográfica.
+- Atualização dos agrupamentos durante a navegação pelo mapa.
+- Tratamento diferenciado entre localizações exatas e aproximadas.
+- Acesso direto de cards para o ponto correspondente no mapa.
 
 ### 📊 Dados da comunidade
 
 - Indicadores e estatísticas agregadas no banco.
-- Visão dos assuntos e categorias mais frequentes.
-- Dados calculados além do que está carregado visualmente no Feed.
+- Visão dos assuntos, bairros e categorias mais frequentes.
+- Agregações independentes do subconjunto de cards carregado visualmente no Feed.
 
-### 💼 Empregos
+### 💼 Empregos e empresas
 
 - Publicação e busca de vagas.
 - Perfis públicos de empresas.
+- Área própria para empresas gerenciarem informações e vagas.
 - Currículo privado do candidato.
-- Candidaturas e acompanhamento de interações.
+- Fluxo de interesse/candidatura em vagas.
+- Área da empresa para acompanhar interessados nas próprias vagas.
 - Localização das oportunidades e integração com o mapa.
+
+Dados privados de empresas e candidatos são protegidos no banco; contatos empresariais só podem ser publicados quando houver opt-in explícito.
 
 ### 🗓️ Mural
 
 - Eventos, campanhas, reuniões, feiras, esportes e outras atividades comunitárias.
-- Endereço informado no próprio card.
+- Endereço e localização vinculados ao item.
 - Registro de presença/interesse.
 - Integração com o mapa através de **Ver no mapa**.
-- Possibilidade de denunciar conteúdo do Mural.
+- Denúncia de conteúdo do Mural.
 
 ### 🚨 Denúncias sérias
 
-A área de **Denúncias** é um canal separado para situações sensíveis ou graves, como violência, abuso, assédio, exploração, fraude e outros casos que exigem atenção especial.
+A área de **Denúncias** é separada dos relatos do Feed e atende situações sensíveis ou graves, como violência, abuso, assédio, exploração, fraude e outros casos que exigem maior cuidado de privacidade.
 
-Ela não funciona como uma simples lista de reclamações do Feed e foi desenhada com maior cuidado de privacidade.
-
-### 👤 Perfis e notificações
+### 👤 Perfis, salvos e notificações
 
 - Perfil público de moradores.
 - Área de atividade da própria conta.
 - Histórico de relatos, comentários, apoios, eventos e outras interações.
-- Notificações para atividades importantes da plataforma.
+- Itens salvos.
+- Notificações in-app.
+- Infraestrutura de Web Push através de Supabase Edge Function quando houver subscription registrada no navegador.
 
 ### 🔎 Busca global
 
-A busca global permite encontrar rapidamente:
+A busca global permite encontrar:
 
 - relatos;
 - bairros;
@@ -98,7 +105,7 @@ No computador também pode ser aberta com **Ctrl/Cmd + K**.
 
 ## 🛡️ Administração e moderação
 
-Contas com permissão de administrador possuem uma área exclusiva, protegida pelas regras do Supabase.
+Contas com as permissões apropriadas possuem uma área administrativa protegida pelas regras do Supabase.
 
 O painel inclui:
 
@@ -106,35 +113,43 @@ O painel inclui:
 - **Histórico:** registro das decisões anteriores;
 - filtros por ação, tipo de conteúdo, moderador e período;
 - identificação de quem moderou e quando;
-- opção de **manter** ou **excluir** o conteúdo denunciado;
+- opção de **manter** ou **excluir** conteúdo denunciado;
 - **Uso:** analytics agregados por área do site;
 - **Produção:** erros reais, lentidão de páginas/APIs, incidentes e teste do canal de alertas;
 - **Histórico JS:** registros da coleta anterior, preservados até sua expiração.
 
-As permissões críticas não dependem apenas da interface: funções e políticas do banco validam o acesso administrativo.
+As permissões críticas não dependem apenas da interface: funções, grants e políticas RLS do banco validam o acesso.
 
 ### Monitoramento de produção
 
-O navegador coleta erros e medições lentas somente no domínio de produção. O servidor registra status/duração das APIs; `/api/health` verifica banco e coletor com respostas pequenas. A Action [Production monitor](https://github.com/felipinhobxd/NoMeuBairro/actions/workflows/production-monitor.yml) verifica página, JavaScript principal e saúde do serviço a cada 15 minutos e após o build da `main`.
+O navegador registra erros e medições lentas somente no domínio oficial de produção. O servidor também mede as APIs, e `/api/health` verifica de forma reduzida a disponibilidade do banco e do coletor.
 
-Incidentes geram uma única issue atribuída a `felipinhobxd`, atualizada quando o estado muda e encerrada após a recuperação. O painel **Admin → Produção → Enviar teste de alerta** permite verificar a entrega sem derrubar o site. E-mail depende das configurações de notificações do GitHub; agendas podem atrasar e são desativadas pelo GitHub após 60 dias sem atividade em repositórios públicos.
+A workflow **Production monitor** executa a cada 15 minutos e depois de builds bem-sucedidos da `main`. Incidentes podem gerar uma issue de acompanhamento no GitHub e são encerrados após a recuperação.
 
-Consulte [operação, limites, privacidade e recuperação do monitoramento](docs/MONITORING.md).
+Consulte [docs/MONITORING.md](docs/MONITORING.md) para detalhes de operação, privacidade, limites e recuperação.
 
 ---
 
 ## 🔐 Segurança e prevenção de abuso
 
-O projeto possui proteções adicionais no banco e no frontend, incluindo:
+O estado atual do projeto inclui:
 
-- Row Level Security (RLS) no Supabase;
+- Row Level Security (RLS) nas tabelas públicas;
+- grants de browser reduzidos ao necessário;
 - funções/RPCs com permissões controladas;
-- limitação contra flood de posts, comentários e denúncias;
-- bloqueio de denúncias pendentes duplicadas pelo mesmo usuário;
-- moderação com trilha de histórico;
-- armazenamento privado quando necessário;
-- páginas públicas de **Privacidade** e **Termos de uso**;
-- hCaptcha em fluxos compatíveis com autenticação/proteção contra abuso.
+- dados privados de currículos, candidaturas, Push e áreas internas protegidos;
+- contatos empresariais privados por padrão, com opt-in para publicação;
+- limites server-side para fluxos de escrita e endpoints sujeitos a abuso;
+- quotas e validações para uploads no Supabase Storage;
+- bloqueio de novos relatos com imagens `data:image/...` armazenadas diretamente no banco;
+- limitação contra flood e duplicação em fluxos sensíveis;
+- moderação com histórico;
+- Realtime restrito às tabelas que possuem consumidores atuais (`posts` e `notifications`);
+- secrets de servidor fora do frontend e do repositório;
+- hCaptcha no fluxo de autenticação compatível;
+- páginas públicas de **Privacidade** e **Termos de uso**.
+
+Nunca coloque uma `service_role`, secret key, chave SMTP, chave privada VAPID ou outro segredo em variáveis `VITE_*`: tudo que começa com `VITE_` pode ser incorporado ao bundle do navegador.
 
 ---
 
@@ -142,19 +157,20 @@ O projeto possui proteções adicionais no banco e no frontend, incluindo:
 
 O No Meu Bairro inclui recursos voltados à acessibilidade e facilidade de uso:
 
-- **VLibras oficial**, com tradução de conteúdo para Libras;
+- **VLibras oficial**;
 - modo claro e modo escuro;
 - navegação por teclado e estados de foco visíveis;
 - áreas de toque maiores em telas pequenas;
 - escolha de fonte pequena, média, grande ou gigante antes do primeiro acesso;
-- textos e controles adaptados a diferentes tamanhos de tela;
-- tour interativo que ensina a usar a própria interface.
+- reflow para diferentes tamanhos de tela e fonte;
+- tour interativo da interface;
+- testes automatizados de acessibilidade com Playwright + axe-core.
 
 ---
 
 ## 🧭 Onboarding adaptativo
 
-O guia inicial não é apenas uma sequência de textos: ele destaca os controles reais do site e pede para a pessoa clicar ou tocar neles.
+O guia inicial destaca controles reais do site em vez de funcionar apenas como uma sequência de textos.
 
 ### Desktop
 
@@ -162,7 +178,7 @@ O tour utiliza a navegação superior e apresenta Feed, publicação, Mapa, Dado
 
 ### Celular e tablet
 
-A experiência acompanha a interface mobile real:
+A experiência acompanha a interface mobile:
 
 - Feed;
 - botão `+` para publicar;
@@ -173,7 +189,7 @@ A experiência acompanha a interface mobile real:
 - Dados;
 - Denúncias;
 - Perfil;
-- Admin, somente para administradores.
+- Admin, somente quando autorizado.
 
 O guia pode ser aberto novamente pelo link **Como funciona**.
 
@@ -181,50 +197,49 @@ O guia pode ser aberto novamente pelo link **Como funciona**.
 
 ## 📱 Experiência responsiva e PWA
 
-A navegação muda de acordo com o espaço disponível.
+A navegação muda conforme o espaço disponível.
 
 ### Celular e tablet
 
-A barra inferior mantém apenas os atalhos mais usados:
+A barra inferior mantém os atalhos principais:
 
 **Feed · Mapa · Empregos · Mural · Mais**
 
-O menu **Mais** concentra as opções secundárias para evitar botões espremidos, incluindo Dados, Denúncias, Perfil, Admin, busca, instalação, tema e sair da conta.
+O menu **Mais** concentra opções secundárias como Dados, Denúncias, Perfil, Admin, busca, instalação, tema e sair da conta.
 
 ### Desktop
 
-A navegação completa fica disponível no cabeçalho, com adaptação automática para notebooks menores.
+A navegação completa fica no cabeçalho e se adapta a notebooks menores.
 
 ### Instalação como aplicativo
 
-O projeto possui suporte a **PWA**:
+O projeto possui suporte a PWA com:
 
 - manifest próprio;
 - service worker;
-- ícones para instalação;
+- ícones de instalação;
 - atalho **Instalar aplicativo**;
-- instruções específicas quando o navegador não oferece instalação automática.
-- ícone próprio para recorte `maskable` no Android;
-- atalhos de instalação para **Novo relato** e **Mapa**;
-- cache de imagens limitado a 48 itens, com reutilização por no máximo 7 dias.
+- instruções específicas quando o navegador não oferece instalação automática;
+- ícone `maskable`;
+- atalhos para **Novo relato** e **Mapa**;
+- política própria de atualização e cache.
 
 ---
 
 ## ⚡ Performance
 
-Algumas decisões adotadas para manter o projeto fluido:
+Entre as otimizações atuais estão:
 
 - rotas carregadas com `React.lazy` e `Suspense`;
-- recuperação automática em falhas de chunks após novos deploys;
+- recuperação automática de falhas de chunks após deploys;
 - consultas direcionadas ao Supabase;
-- agregações feitas no banco quando apropriado;
-- notificações com atualização em tempo real;
-- imagens armazenadas no Supabase Storage em vez de dentro do banco;
-- mapa de calor renderizado em canvas com resolução adaptativa;
-- cache de kernels Gaussianos e buffers reutilizados no heatmap;
-- agrupamento espacial otimizado de marcadores;
+- agregações no banco quando apropriado;
+- atualização Realtime apenas onde é utilizada;
+- imagens no Supabase Storage, com versões leves para feed/mapa quando aplicável;
+- renderização e agrupamento espacial otimizados no mapa;
 - interface adaptativa para celular, tablet, notebook e desktop;
-- PWA com estratégia de atualização voltada a evitar versões antigas presas em cache.
+- verificação de tamanho dos bundles no CI;
+- PWA com atualização voltada a evitar versões antigas presas em cache.
 
 ---
 
@@ -239,16 +254,17 @@ Algumas decisões adotadas para manter o projeto fluido:
 ![React Router](https://img.shields.io/badge/React_Router-CA4245?style=for-the-badge&logo=react-router&logoColor=white)
 ![Leaflet](https://img.shields.io/badge/Leaflet-199903?style=for-the-badge&logo=leaflet&logoColor=white)
 
-Principais tecnologias atuais:
+Versões principais definidas em `package.json`:
 
 - React 19
-- TypeScript
+- TypeScript 5.9
 - Vite 7
 - Tailwind CSS 4
-- React Router
+- React Router DOM 7
 - Leaflet + React Leaflet
-- Lucide Icons
-- PWA instalável com manifest e service worker
+- Supabase JS 2
+- Lucide React
+- Playwright + axe-core para testes de navegador/acessibilidade
 
 ### Backend e infraestrutura
 
@@ -261,8 +277,44 @@ Principais tecnologias atuais:
 - Row Level Security
 - Supabase Realtime
 - Supabase Storage
-- RPCs, triggers e migrations
-- Vercel
+- RPCs e triggers
+- migrations SQL versionadas
+- Supabase Edge Functions
+- Vercel Functions em `api/`
+- Vercel para hosting e deploy
+- GitHub Actions para CI e monitoramento
+
+---
+
+## 🗂️ Estrutura relevante do projeto
+
+```text
+NoMeuBairro/
+├── .github/workflows/        # CI e monitoramento de produção
+├── api/                      # Vercel Functions (health, imagem e compartilhamento)
+├── database/                 # SQL/documentação histórica e verificações de banco
+├── docs/                     # documentação operacional adicional
+├── public/                   # manifest, service worker, ícones e assets públicos
+├── scripts/                  # verificações de bundle e monitor de produção
+├── server/                   # utilitários compartilhados pelas funções server-side
+├── src/
+│   ├── components/           # componentes e layout
+│   ├── config/               # configurações da aplicação
+│   ├── contexts/             # Auth, dados, tema, fonte e contexto de bairro
+│   ├── hooks/                # hooks reutilizáveis
+│   ├── pages/                # Feed, Mapa, Empregos, Mural, Admin, perfis etc.
+│   ├── types/                # tipos TypeScript
+│   └── utils/                # Supabase, monitoramento e utilitários
+├── supabase/
+│   ├── functions/            # Edge Functions: anonymous-post-control e send-push
+│   ├── migrations/           # migrations aplicadas/versionadas
+│   └── tests/                # verificações relacionadas ao banco
+├── tests/                    # testes de contrato e testes E2E
+├── package.json
+├── playwright.config.ts
+├── vercel.json               # rewrite da página compartilhável de relatos
+└── vite.config.ts
+```
 
 ---
 
@@ -270,9 +322,9 @@ Principais tecnologias atuais:
 
 ### Pré-requisitos
 
-- Node.js instalado;
+- **Node.js 22** recomendado, igual ao usado no GitHub Actions;
 - npm;
-- projeto Supabase configurado.
+- acesso a um projeto Supabase compatível com o schema/migrations da aplicação.
 
 ### 1. Clone o repositório
 
@@ -283,30 +335,50 @@ cd NoMeuBairro
 
 ### 2. Instale as dependências
 
+Para reproduzir exatamente o `package-lock.json` usado no CI:
+
 ```bash
-npm install
+npm ci
 ```
 
-### 3. Configure as variáveis de ambiente
+Durante desenvolvimento, `npm install` também pode ser usado quando houver necessidade de alterar dependências.
 
-Crie um arquivo `.env.local` na raiz:
+### 3. Configure o ambiente
+
+Crie `.env.local` na raiz:
 
 ```env
-VITE_SUPABASE_URL=sua_url_do_supabase
-VITE_SUPABASE_PUBLISHABLE_KEY=sua_chave_publicavel_do_supabase
+VITE_SUPABASE_URL=https://seu-projeto.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sua_chave_publicavel
 ```
 
-`VITE_SUPABASE_ANON_KEY` continua aceito apenas como compatibilidade com configurações antigas. Em projetos novos, prefira `VITE_SUPABASE_PUBLISHABLE_KEY`.
+Variáveis utilizadas pela aplicação:
 
-> Nunca envie chaves privadas, secret keys ou `service_role` para o frontend ou para o GitHub.
+| Variável | Obrigatória | Uso |
+| --- | --- | --- |
+| `VITE_SUPABASE_URL` | Sim | URL pública do projeto Supabase |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Sim* | chave pública/publishable usada pelo browser e pelas funções públicas |
+| `VITE_SUPABASE_ANON_KEY` | Não | fallback legado para ambientes antigos; não é necessária quando a publishable key está definida |
 
-### 4. Inicie o ambiente de desenvolvimento
+\* O código aceita `VITE_SUPABASE_ANON_KEY` no lugar da publishable key por compatibilidade, mas novos ambientes devem preferir `VITE_SUPABASE_PUBLISHABLE_KEY`.
+
+`.env`, `.env.local` e `.env.*.local` estão ignorados pelo Git.
+
+Não é necessário configurar manualmente no `.env.local`:
+
+- `VERCEL`, `VERCEL_ENV` e `VERCEL_GIT_COMMIT_SHA`: são fornecidas pela Vercel quando aplicável;
+- `GITHUB_TOKEN`, `GITHUB_REPOSITORY` e `GITHUB_RUN_ID`: são fornecidas pelo GitHub Actions nos workflows;
+- `VITE_MONITORING_TEST`: é reservado ao ambiente de teste local do Playwright e não deve apontar para o Supabase real.
+
+> Nunca coloque `service_role`, secret keys, SMTP passwords ou outros secrets no frontend ou no repositório.
+
+### 4. Inicie o desenvolvimento
 
 ```bash
 npm run dev
 ```
 
-### 5. Gere uma build de produção
+### 5. Gere a build de produção
 
 ```bash
 npm run build
@@ -318,46 +390,99 @@ npm run build
 npm run preview
 ```
 
-### 7. Execute as verificações
+---
+
+## ✅ Validação e testes
+
+Scripts existentes no projeto:
 
 ```bash
-npm run check
+npm run typecheck   # TypeScript sem emitir arquivos
+npm test            # testes de contrato em tests/*.test.mjs
+npm run build       # build Vite de produção
+npm run check:bundle
+npm run check       # typecheck + testes de contrato + build + bundle check
 ```
 
-Os testes reais de navegador cobrem desktop, celular, primeira visita, navegação, acessibilidade e instalação PWA:
+Os testes reais de navegador usam Playwright:
 
 ```bash
-npx playwright install chromium
+npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
----
+A configuração atual cobre desktop, notebooks, mobile, reflow e acessibilidade.
 
-## 🗄️ Banco de dados
-
-O projeto de produção utiliza mais do que um schema inicial. A estrutura inclui migrations, policies, triggers, funções/RPCs e regras específicas de moderação e segurança.
-
-Ao criar outro ambiente, utilize as migrations versionadas do projeto e configure corretamente Auth, Storage e RLS no Supabase.
+> O projeto **não possui atualmente um script de lint separado** em `package.json`. A validação automatizada atual é formada por TypeScript, testes de contrato, build, bundle check e Playwright. Não adicione um comando `npm run lint` à documentação enquanto esse script não existir no projeto.
 
 ---
 
-## 🌐 Deploy
+## 🗄️ Supabase
 
-A versão pública é hospedada na Vercel:
+O Supabase é parte central da arquitetura. O projeto usa Auth, PostgreSQL, RLS, Storage, Realtime, RPCs/triggers e Edge Functions.
+
+As alterações de schema e segurança ficam versionadas em `supabase/migrations/`. Ao criar ou migrar outro ambiente, aplique as migrations na ordem correta e configure também Auth, Storage e os secrets server-side necessários às Edge Functions.
+
+As Edge Functions versionadas atualmente são:
+
+- `anonymous-post-control`: controle server-side de fluxos anônimos/geocodificação/upload e limites associados;
+- `send-push`: envio controlado de Web Push.
+
+O frontend não precisa e não deve receber `service_role`.
+
+### Auth
+
+Os fluxos de signup, reenvio de confirmação e recuperação estão configurados para usar como origem canônica:
+
+```text
+https://nomeubairro.vercel.app/
+```
+
+Essa decisão evita que URLs de preview da Vercel se tornem destino acidental de links de autenticação. Se o domínio oficial mudar, atualize a configuração correspondente no código e no Supabase Auth.
+
+---
+
+## ▲ Vercel
+
+A versão pública está hospedada em:
 
 **https://nomeubairro.vercel.app/**
 
-O fluxo de CI executa uma verificação de build no GitHub Actions e o projeto é publicado pela integração com a Vercel.
+A integração com a Vercel é responsável por:
 
-O CI também executa os fluxos de navegador em Chromium para desktop e celular. Relatórios do Playwright são anexados automaticamente quando essa etapa falha.
+- build/deploy da aplicação;
+- Vercel Functions em `api/`;
+- página compartilhável `/relato/:postId`, reescrita por `vercel.json` para `api/share-post.js`;
+- variáveis de ambiente de produção/preview definidas no projeto da Vercel.
+
+As funções serverless versionadas atualmente são:
+
+- `api/health.js`;
+- `api/post-image.js`;
+- `api/share-post.js`.
+
+---
+
+## 🔄 CI/CD
+
+O workflow **Build check** roda em pushes e PRs para `main` com Node 22 e executa:
+
+1. `npm ci`;
+2. `npm run check`;
+3. instalação do Chromium;
+4. `npm run test:e2e`.
+
+O Playwright testa múltiplas larguras de desktop/notebook/mobile e acessibilidade. O relatório é publicado como artifact do GitHub Actions.
+
+O workflow **Production monitor** roda periodicamente e depois de builds bem-sucedidos da `main` para verificar a versão publicada.
 
 ---
 
 ## 🔒 Relato de segurança e privacidade
 
-Falhas de segurança, exposição de dados ou situações confidenciais não devem ser publicadas em issues abertas. Utilize o [canal privado de segurança do projeto](https://github.com/felipinhobxd/NoMeuBairro/security/advisories/new) e consulte o arquivo [SECURITY.md](SECURITY.md).
+Falhas de segurança, exposição de dados ou situações confidenciais não devem ser publicadas em issues abertas. Utilize o [canal privado de segurança do projeto](https://github.com/felipinhobxd/NoMeuBairro/security/advisories/new) e consulte [SECURITY.md](SECURITY.md).
 
-Para baixar os próprios dados ou solicitar a exclusão da conta, utilize os controles disponíveis no Perfil do site.
+Para baixar os próprios dados ou solicitar exclusão da conta, utilize os controles disponíveis no Perfil do site.
 
 ---
 
