@@ -1,18 +1,23 @@
--- NoMeuBairro — production hardening audit notes (NEW Supabase only).
+-- NoMeuBairro — production hardening audit pointer (NEW Supabase only).
 -- Target project ref: gowuvofidacpdavdkpar
 --
 -- IMPORTANT: this file is intentionally non-executable.
--- The exact SQL that was applied to production is versioned in:
+-- The exact SQL applied to the new production Supabase is versioned in:
 --
 --   supabase/migrations/20260907165256_production_hardening_20260907.sql
 --   supabase/migrations/20260907165744_production_abuse_controls_20260907_v2.sql
+--   supabase/migrations/20260907180750_fix_curitiba_locality_trigger_permissions_20260907.sql
+--   supabase/migrations/20260907182311_fix_job_location_precision_contract_20260907.sql
+--   supabase/migrations/20260907183856_restore_moderation_report_update_permission_20260907.sql
+--   supabase/migrations/20260907185945_production_abuse_limits_events_jobs_push_analytics_20260907.sql
+--   supabase/migrations/20260907190250_narrow_moderation_report_update_columns_20260907.sql
 --
--- Those two migrations are the source of truth. Keep this database/ file only as
--- a historical pointer so an older partial hardening draft is never copied into
--- the Supabase SQL Editor by mistake.
+-- Keep this database/ file only as a historical pointer so older partial drafts
+-- are never copied into the Supabase SQL Editor by mistake.
 --
 -- Post-application verification queries live in:
 --   database/20260907_new_supabase_security_hardening.final-verify.sql
+--   database/20260907_new_supabase_security_hardening.verify.sql
 --
 -- No passwords, service-role keys, JWT secrets, VAPID private keys, dispatch
 -- tokens or Vault values are stored in the repository.
