@@ -1,0 +1,1 @@
+The 2026-09-07 hardening was applied and verified against the NEW Supabase project gowuvofidacpdavdkpar. The exact production SQL is versioned under supabase/migrations/ through migration 20260907190250. Verification queries remain in database/ for audit/reference only. No old Supabase environment was modified, and no secrets are stored in these files.

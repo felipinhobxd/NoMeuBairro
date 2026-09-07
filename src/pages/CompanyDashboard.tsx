@@ -18,7 +18,7 @@ const modelOptions: Array<[WorkModel, string]> = [
 const applicantStatusLabels: Record<JobApplicationStatus, string> = {
   interested: 'Interessado', viewed: 'Visualizado', contacted: 'Contatado', withdrawn: 'Retirado',
 };
-const COMPANY_SELECT = 'id,company_name,description,email,phone,whatsapp,website,address,neighborhood';
+const COMPANY_SELECT = 'id,company_name,description,email,phone,whatsapp,website,address,neighborhood,public_email_enabled,public_phone_enabled,public_whatsapp_enabled,public_address_enabled';
 const COMPANY_JOB_SELECT = 'id,company_id,title,description,requirements,benefits,salary_min,salary_max,employment_type,work_model,location,neighborhood,locality,latitude,longitude,location_precision,contact_email,contact_whatsapp,contact_email_enabled,contact_whatsapp_enabled,expires_at,is_active,created_at';
 const COMPANY_APPLICATION_SELECT = 'id,job_id,user_id,status,created_at,updated_at';
 const APPLICANT_RESUME_SELECT = 'user_id,email,phone,neighborhood,objective,experience,education,skills,users:user_id(name,avatar_url)';
@@ -136,6 +136,10 @@ export default function CompanyDashboard() {
       website: company.website || null,
       address: company.address || null,
       neighborhood: canonicalNeighborhoodName(company.neighborhood) || company.neighborhood || null,
+      public_email_enabled: Boolean(company.public_email_enabled),
+      public_phone_enabled: Boolean(company.public_phone_enabled),
+      public_whatsapp_enabled: Boolean(company.public_whatsapp_enabled),
+      public_address_enabled: Boolean(company.public_address_enabled),
     }).eq('id', user.id);
     setMessage(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Perfil da empresa salvo.' });
     setSaving(false);
@@ -299,6 +303,18 @@ export default function CompanyDashboard() {
       {([['company_name','Nome da empresa'],['email','E-mail'],['phone','Telefone'],['whatsapp','WhatsApp'],['website','Site'],['address','Endereço']] as const).map(([key, label]) => <input key={key} value={company[key] || ''} onChange={(event) => setCompany({ ...company, [key]: event.target.value })} placeholder={label} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />)}
       <select value={canonicalNeighborhoodName(company.neighborhood) || ''} onChange={(event) => setCompany({ ...company, neighborhood: event.target.value })} className="px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white"><option value="">Bairro da empresa</option>{curitibaNeighborhoods.map((item) => <option key={item.name} value={item.name}>{item.name}{item.kind === 'locality' ? ` (${item.parentNeighborhood})` : ''}</option>)}</select>
       <textarea value={company.description || ''} onChange={(event) => setCompany({ ...company, description: event.target.value })} placeholder="Descrição da empresa" rows={4} className="sm:col-span-2 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400" />
+      <div className="sm:col-span-2 rounded-xl border border-amber-200 dark:border-amber-500/20 bg-amber-50/60 dark:bg-amber-500/5 p-4">
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Privacidade do perfil público</p>
+        <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Contatos e endereço ficam privados por padrão. Ative somente o que você quer publicar para qualquer visitante.</p>
+        <div className="mt-3 grid sm:grid-cols-2 gap-2 text-sm text-slate-700 dark:text-slate-200">
+          {([
+            ['public_email_enabled', 'Publicar e-mail'],
+            ['public_phone_enabled', 'Publicar telefone'],
+            ['public_whatsapp_enabled', 'Publicar WhatsApp'],
+            ['public_address_enabled', 'Publicar endereço'],
+          ] as const).map(([key, label]) => <label key={key} className="flex items-center gap-2 rounded-lg bg-white/70 dark:bg-slate-800/70 px-3 py-2"><input type="checkbox" checked={Boolean(company[key])} onChange={(event) => setCompany({ ...company, [key]: event.target.checked })} />{label}</label>)}
+        </div>
+      </div>
     </div><button onClick={saveProfile} disabled={saving} className="mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white font-semibold inline-flex gap-2 items-center"><Save className="w-4 h-4" />Salvar perfil</button></Card>
 
     {showForm && <div className="fixed inset-0 z-[120] bg-black/60 p-4 overflow-y-auto"><div className="max-w-3xl mx-auto my-8 bg-white dark:bg-slate-900 rounded-2xl p-6"><div className="flex justify-between items-center mb-5"><div><h2 className="text-xl font-bold text-slate-900 dark:text-white">{editingId ? 'Editar oportunidade' : 'Publicar oportunidade'}</h2><p className="text-sm text-slate-500">Use endereço, GPS ou marque o ponto. O bairro será validado pela coordenada antes de salvar.</p></div><button onClick={() => setShowForm(false)} className="p-2 rounded-lg text-slate-500"><X /></button></div>

@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 // VAPID public keys are designed to be distributed to browsers. Only the
 // matching private key remains encrypted in Supabase Vault.
-const VAPID_PUBLIC_KEY = 'BMLCZQX5oPc_pvsgjPOVPXUIXVvG4zRYEwccZCsKNouMlVOXOFOBNMuBjciEkLIcy4UxDyAE_dLOZTWEgV7r9I0';
+const VAPID_PUBLIC_KEY = 'BDVyd0MK5Hz1PfvmC2tsLRoeriFOpgg1_Hby109rAPj6xEz1FVzX4CE9ILalvPkwHJrDgpQ7Cu6e2yNvYlC4lvo';
 
 export type PushState = {
   supported: boolean;

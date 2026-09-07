@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
-import { MIN_NEW_PASSWORD_LENGTH, minimumPasswordMessage } from '../config/authSecurity';
+import { AUTH_EMAIL_REDIRECT_TO, MIN_NEW_PASSWORD_LENGTH, minimumPasswordMessage } from '../config/authSecurity';
 import HCaptcha from '@hcaptcha/react-hcaptcha';
 import { Building2, Eye, EyeOff, KeyRound, MapPin, MailCheck, ArrowLeft } from 'lucide-react';
 
@@ -132,7 +132,11 @@ export default function Login() {
     setError('');
     setSuccess('');
     setResending(true);
-    const { error: e } = await supabase.auth.resend({ type: 'signup', email: normalizedEmail });
+    const { error: e } = await supabase.auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: { emailRedirectTo: AUTH_EMAIL_REDIRECT_TO },
+    });
     if (e) setError(friendlyAuthError(e.message));
     else setSuccess('Novo e-mail de confirmação enviado. Verifique sua caixa de entrada e o spam.');
     setResending(false);
@@ -154,7 +158,7 @@ export default function Login() {
     try {
       // Do not put a HashRouter route in redirectTo. Supabase needs the recovery
       // payload first; RecoveryRedirect routes to #/login only after a real session exists.
-      const redirectTo = `${window.location.origin}${window.location.pathname}?recovery=1`;
+      const redirectTo = `${AUTH_EMAIL_REDIRECT_TO}?recovery=1`;
       const { error: e } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
         redirectTo,
         captchaToken,
@@ -243,6 +247,7 @@ export default function Login() {
           options: {
             data: { name: name.trim(), account_type: companyMode ? 'company' : 'resident' },
             captchaToken,
+            emailRedirectTo: AUTH_EMAIL_REDIRECT_TO,
           },
         });
         if (e) {

@@ -10,6 +10,10 @@ const statuses: { id: PostStatus; label: string }[] = [
   { id: 'resolved', label: 'Resolvido' },
 ];
 
+function compactCount(value: number) {
+  return value > 99 ? '99+' : String(Math.max(0, value));
+}
+
 type Props = {
   postId: string;
   supports: number;
@@ -40,18 +44,27 @@ export default function FeedPostActions(props: Props) {
       moreButton.current?.focus();
     }
   }}>
-    <div className="nmb-post-engagement">
-      <span className="nmb-post-support-total"><Heart aria-hidden="true" /><span>{props.supports} {props.supports === 1 ? 'apoio' : 'apoios'}</span></span>
-      <span className="nmb-post-comment-total" aria-live="polite" aria-atomic="true">{props.commentsCount} {props.commentsCount === 1 ? 'comentário' : 'comentários'}</span>
+    <div className="nmb-post-engagement justify-end">
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {props.supports} {props.supports === 1 ? 'apoio' : 'apoios'} · {props.commentsCount} {props.commentsCount === 1 ? 'comentário' : 'comentários'}
+      </span>
       <button ref={moreButton} type="button" className="nmb-post-more" aria-label="Mais opções do relato" title="Denunciar, abrir e salvar" aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => setOptionsOpen(open => !open)}><MoreHorizontal aria-hidden="true" /></button>
     </div>
 
     <div className="nmb-post-actions" role="group" aria-label="Ações da publicação">
-      <button type="button" onClick={props.onSupport} aria-label="Apoiar" aria-pressed={props.supported} className="nmb-post-action">
-        <Heart aria-hidden="true" className={cn(props.supported && 'fill-current', props.heartAnimating && 'animate-heart-pop')} /><span>{props.supported ? 'Apoiado' : 'Apoiar'}</span>
+      <button type="button" onClick={props.onSupport} aria-label={`Apoiar — ${props.supports} ${props.supports === 1 ? 'apoio' : 'apoios'}`} aria-pressed={props.supported} className="nmb-post-action">
+        <span className="relative inline-flex shrink-0 items-center justify-center">
+          <Heart aria-hidden="true" className={cn('h-[1.1rem] w-[1.1rem]', props.supported && 'fill-current', props.heartAnimating && 'animate-heart-pop')} />
+          <span aria-hidden="true" className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-bold leading-none text-white shadow-sm dark:bg-orange-400 dark:text-slate-950">{compactCount(props.supports)}</span>
+        </span>
+        <span>{props.supported ? 'Apoiado' : 'Apoiar'}</span>
       </button>
       <button type="button" onClick={props.onComments} aria-label={`Comentar — ${props.commentsCount} ${props.commentsCount === 1 ? 'comentário' : 'comentários'}`} aria-expanded={props.commentsExpanded} aria-controls={props.commentsExpanded ? `post-comments-${props.postId}` : undefined} className="nmb-post-action">
-        <MessageSquare aria-hidden="true" /><span>Comen&shy;tar</span>
+        <span className="relative inline-flex shrink-0 items-center justify-center">
+          <MessageSquare aria-hidden="true" className="h-[1.1rem] w-[1.1rem]" />
+          <span aria-hidden="true" className="absolute -right-3 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-600 px-1 text-[10px] font-bold leading-none text-white shadow-sm dark:bg-orange-400 dark:text-slate-950">{compactCount(props.commentsCount)}</span>
+        </span>
+        <span>Comen&shy;tar</span>
       </button>
       <button type="button" onClick={props.onShare} aria-label="Compartilhar relato" className="nmb-post-action">
         <Share2 aria-hidden="true" /><span>Compar&shy;tilhar</span>

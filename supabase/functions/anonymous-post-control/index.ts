@@ -77,6 +77,26 @@ async function callerUserId(req: Request) {
   return data.user.id;
 }
 
+function requestFingerprint(req: Request, userId: string | null) {
+  if (userId) return `user:${userId}`;
+  const forwarded = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+  const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || forwarded || 'unknown';
+  const userAgent = (req.headers.get('user-agent') || 'unknown').slice(0, 200);
+  return `ip:${ip}|ua:${userAgent}`;
+}
+
+async function consumeRateLimit(action: 'resolve_location' | 'create' | 'upload', fingerprint: string) {
+  const { data, error } = await admin.rpc('consume_anonymous_post_rate_limit', {
+    p_action: action,
+    p_client_hash: fingerprint,
+  });
+  if (error) {
+    console.error('Anonymous rate-limit check failed', { action, message: error.message });
+    return false;
+  }
+  return data === true;
+}
+
 function validUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -111,7 +131,9 @@ async function officialNeighborhoodAt(latitude: number, longitude: number) {
       f: 'json', geometry: `${longitude},${latitude}`, geometryType: 'esriGeometryPoint',
       inSR: '4326', spatialRel: 'esriSpatialRelIntersects', outFields: 'nome', returnGeometry: 'false',
     });
-    const response = await fetch(`https://geocuritiba.ippuc.org.br/server/rest/services/GeoCuritiba/Publico_GeoCuritiba_MapaCadastral/MapServer/2/query?${params.toString()}`);
+    const response = await fetch(`https://geocuritiba.ippuc.org.br/server/rest/services/GeoCuritiba/Publico_GeoCuritiba_MapaCadastral/MapServer/2/query?${params.toString()}`, {
+      signal: AbortSignal.timeout(6000),
+    });
     if (!response.ok) return null;
     const json = await response.json();
     return canonicalNeighborhood(json?.features?.[0]?.attributes?.nome);
@@ -127,6 +149,7 @@ async function reversePoint(latitude: number, longitude: number) {
     });
     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
       headers: { 'Accept-Language': 'pt-BR,pt;q=0.9', 'User-Agent': 'NoMeuBairro/1.0' },
+      signal: AbortSignal.timeout(6000),
     });
     if (!response.ok) return null;
     const json = await response.json();
@@ -162,9 +185,7 @@ async function geocodeAddressWithPhoton(query: string) {
   try {
     const photonQuery = normalizeGeocodingAddress(query.replace(/\bCEP\s*:?[\s-]*\d{5}-?\d{3}\b/gi, ''));
     const wantedName = normalize(photonQuery.split(',')[0].replace(/\b\d+[a-z]?\b/gi, ''));
-    const params = new URLSearchParams({
-      q: photonQuery, limit: '5', lat: '-25.50', lon: '-49.30',
-    });
+    const params = new URLSearchParams({ q: photonQuery, limit: '5', lat: '-25.50', lon: '-49.30' });
     const response = await fetch(`https://photon.komoot.io/api/?${params.toString()}`, {
       headers: { 'User-Agent': 'NoMeuBairro/1.0' },
       signal: AbortSignal.timeout(6000),
@@ -195,10 +216,7 @@ async function geocodeAddressWithPhoton(query: string) {
       if (!best || candidate.score > best.score) best = candidate;
     }
     if (best) return { latitude: best.latitude, longitude: best.longitude, displayAddress: best.displayAddress };
-  } catch {
-    // O Nominatim continua sendo a fonte principal; o Photon é apenas a
-    // alternativa para ruas brasileiras que não aparecem na primeira busca.
-  }
+  } catch {}
   return null;
 }
 
@@ -225,14 +243,10 @@ async function geocodeAddress(location: string, fallbackNeighborhood: string | n
       const latitude = Number(first?.lat);
       const longitude = Number(first?.lon);
       if (Number.isFinite(latitude) && Number.isFinite(longitude) && insideCuritiba(latitude, longitude)) {
-        return {
-          latitude, longitude,
-          displayAddress: typeof first?.display_name === 'string' ? first.display_name : null,
-        };
+        return { latitude, longitude, displayAddress: typeof first?.display_name === 'string' ? first.display_name : null };
       }
     }
   } catch {}
-
   return geocodeAddressWithPhoton(cleanedLocation);
 }
 
@@ -271,7 +285,8 @@ async function resolveLocation(input: { location?: unknown; neighborhood?: unkno
   }
 
   return {
-    latitude: null, longitude: null,
+    latitude: null,
+    longitude: null,
     neighborhood: fallbackNeighborhood,
     locality: canonicalLocality(location),
     precision: fallbackNeighborhood ? 'neighborhood' : null,
@@ -292,6 +307,12 @@ function decodeAnonymousImage(value: unknown, label = 'imagem', maxBytes = 3 * 1
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   const extension = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
   return { bytes, mime, extension };
+}
+
+async function removeAnonymousImages(...paths: Array<string | null>) {
+  const uniquePaths = [...new Set(paths.filter((path): path is string => Boolean(path)))];
+  if (uniquePaths.length === 0) return;
+  await admin.storage.from('post-images').remove(uniquePaths).catch(() => {});
 }
 
 async function uploadAnonymousImages(imageValue: unknown, thumbnailValue: unknown) {
@@ -317,22 +338,12 @@ async function uploadAnonymousImages(imageValue: unknown, thumbnailValue: unknow
   const [imageResult, thumbnailResult] = await Promise.all([imageUpload, thumbnailUpload]);
   if (imageResult.error || thumbnailResult.error) {
     await removeAnonymousImages(path, thumbnailPath);
-    throw new Error(imageResult.error
-      ? 'Não foi possível salvar a imagem da denúncia.'
-      : 'Não foi possível salvar a miniatura da denúncia.');
+    throw new Error(imageResult.error ? 'Não foi possível salvar a imagem da denúncia.' : 'Não foi possível salvar a miniatura da denúncia.');
   }
 
   const { data } = admin.storage.from('post-images').getPublicUrl(path);
-  const thumbnailUrl = thumbnailPath
-    ? admin.storage.from('post-images').getPublicUrl(thumbnailPath).data.publicUrl
-    : null;
+  const thumbnailUrl = thumbnailPath ? admin.storage.from('post-images').getPublicUrl(thumbnailPath).data.publicUrl : null;
   return { url: data.publicUrl, path, thumbnailUrl, thumbnailPath };
-}
-
-async function removeAnonymousImages(...paths: Array<string | null>) {
-  const uniquePaths = [...new Set(paths.filter((path): path is string => Boolean(path)))];
-  if (uniquePaths.length === 0) return;
-  await admin.storage.from('post-images').remove(uniquePaths).catch(() => {});
 }
 
 function anonymousImagePath(url: unknown) {
@@ -355,8 +366,12 @@ Deno.serve(async (req: Request) => {
 
   const action = String(body?.action || '');
   const userId = await callerUserId(req);
+  const fingerprint = requestFingerprint(req, userId);
 
   if (action === 'resolve_location') {
+    if (!await consumeRateLimit('resolve_location', fingerprint)) {
+      return reply(429, { ok: false, error: 'Muitas consultas de localização. Tente novamente mais tarde.' });
+    }
     const resolved = await resolveLocation(body || {});
     return reply(200, { ok: true, ...resolved });
   }
@@ -366,6 +381,10 @@ Deno.serve(async (req: Request) => {
   }
 
   if (action === 'create') {
+    if (!await consumeRateLimit('create', fingerprint)) {
+      return reply(429, { ok: false, error: 'Limite de denúncias atingido. Tente novamente mais tarde.' });
+    }
+
     const tipo = String(body?.tipo || '').trim().slice(0, 120);
     const description = String(body?.description || '').trim().slice(0, 10000);
     const location = String(body?.location || '').trim().slice(0, 255) || 'Local Privado';
@@ -405,7 +424,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // A imagem só é enviada depois da verificação de duplicados.
+    const hasImage = typeof body?.imageData === 'string' && body.imageData.length > 0;
+    if (hasImage && !await consumeRateLimit('upload', fingerprint)) {
+      return reply(429, { ok: false, error: 'Limite de uploads anônimos atingido. Tente novamente mais tarde.' });
+    }
+
     let uploaded: { url: string | null; path: string | null; thumbnailUrl: string | null; thumbnailPath: string | null } = {
       url: null, path: null, thumbnailUrl: null, thumbnailPath: null,
     };
