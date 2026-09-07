@@ -53,12 +53,13 @@ async function expectLoginContained(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route(/https:\/\/[^/]*hcaptcha\.com\/.*/, (route) => route.abort());
   await mockSupabase(page);
   await prepareReturningVisitor(page);
 });
 
 test('login, cadastro e acesso empresarial permanecem dentro do card', async ({ page }) => {
-  await page.goto('/#/login');
+  await page.goto('/#/login', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Bem-vindo de volta' })).toBeVisible();
   await expectLoginContained(page);
 
@@ -73,7 +74,7 @@ test('login, cadastro e acesso empresarial permanecem dentro do card', async ({ 
 
 test('login continua sem overflow com fonte gigante', async ({ page }) => {
   await prepareReturningVisitor(page, 'giant');
-  await page.goto('/#/login');
+  await page.goto('/#/login', { waitUntil: 'domcontentloaded' });
 
   await expect(page.locator('html')).toHaveAttribute('data-font-size', 'giant');
   await expectLoginContained(page);
