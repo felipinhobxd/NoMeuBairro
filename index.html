@@ -41,8 +41,9 @@
         root.setAttribute('data-font-size', fontSize);
         if (hasFontSizeChoice) root.setAttribute('data-font-choice', 'done');
 
-        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (theme === 'dark' || (theme === null && prefersDark)) root.classList.add('dark');
+        // New/private sessions intentionally start light. Apply dark before
+        // React only when the user has explicitly saved that preference.
+        if (theme === 'dark') root.classList.add('dark');
       })();
     </script>
   </head>
