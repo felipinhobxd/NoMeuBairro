@@ -33,17 +33,18 @@ begin
   if p_auth is null or char_length(p_auth) not between 8 and 256 then raise exception 'invalid auth key'; end if;
   insert into public.push_subscriptions(user_id, endpoint, p256dh, auth_key, user_agent, updated_at)
   values (v_user_id, p_endpoint, p_p256dh, p_auth, left(p_user_agent, 500), now())
-  on conflict (endpoint) do update set user_id=excluded.user_id, p256dh=excluded.p256dh, auth_key=excluded.auth_key, user_agent=excluded.user_agent, updated_at=now();
+  on conflict (endpoint) do update
+    set p256dh=excluded.p256dh, auth_key=excluded.auth_key, user_agent=excluded.user_agent, updated_at=now()
+    where public.push_subscriptions.user_id=v_user_id;
+  if not found then raise exception 'push endpoint belongs to another account'; end if;
   return true;
 end; $$;
 revoke all on function public.register_push_subscription(text,text,text,text) from public, anon;
 grant execute on function public.register_push_subscription(text,text,text,text) to authenticated;
 
-create or replace function public.get_push_public_key() returns text language sql stable security definer set search_path = 'public','vault' as $$
-  select decrypted_secret from vault.decrypted_secrets where name='nmb_vapid_public_key' limit 1;
-$$;
-revoke all on function public.get_push_public_key() from public;
-grant execute on function public.get_push_public_key() to anon, authenticated;
+-- The browser receives the VAPID public key from the frontend bundle. Keep Vault-backed
+-- server configuration service-role-only so private key material can never be read by clients.
+drop function if exists public.get_push_public_key();
 
 create or replace function public.get_push_server_config() returns jsonb language sql stable security definer set search_path = 'public','vault' as $$
   select jsonb_build_object(
@@ -63,7 +64,7 @@ begin
   if v_token is null or v_token='' then return new; end if;
   begin
     perform net.http_post(
-      url := 'https://cytlgpionviibvojlkgp.supabase.co/functions/v1/send-push',
+      url := 'https://gowuvofidacpdavdkpar.supabase.co/functions/v1/send-push',
       headers := jsonb_build_object('Content-Type','application/json','x-push-dispatch-token',v_token),
       body := jsonb_build_object('notificationId',new.id), timeout_milliseconds := 5000
     );
