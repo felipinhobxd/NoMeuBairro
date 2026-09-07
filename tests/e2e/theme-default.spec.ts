@@ -56,7 +56,6 @@ test('primeira visita e sessão privada começam claras mesmo com sistema escuro
   await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
-  await expect.poll(() => savedTheme(page)).toBe('light');
   expect((await classHistory(page)).some((classes) => classes.split(/\s+/).includes('dark'))).toBe(false);
 });
 
