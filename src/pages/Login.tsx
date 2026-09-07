@@ -86,6 +86,9 @@ export default function Login() {
   const [mode, setMode] = useState<'login' | 'forgot' | 'reset'>(() => getModeFromUrl());
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaKey, setCaptchaKey] = useState(0);
+  const [captchaSize, setCaptchaSize] = useState<'normal' | 'compact'>(() =>
+    window.matchMedia('(max-width: 374px)').matches ? 'compact' : 'normal'
+  );
   const normalizedEmail = email.trim().toLowerCase();
   const [postLoginAction] = useState(() => {
     try { return sessionStorage.getItem(POST_LOGIN_ACTION_KEY) || ''; } catch { return ''; }
@@ -106,6 +109,14 @@ export default function Login() {
     syncMode();
     window.addEventListener('hashchange', syncMode);
     return () => window.removeEventListener('hashchange', syncMode);
+  }, []);
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 374px)');
+    const syncCaptchaSize = () => setCaptchaSize(query.matches ? 'compact' : 'normal');
+    syncCaptchaSize();
+    query.addEventListener('change', syncCaptchaSize);
+    return () => query.removeEventListener('change', syncCaptchaSize);
   }, []);
 
   const resetCaptcha = () => {
@@ -326,7 +337,7 @@ export default function Login() {
             : 'Entre para participar da comunidade.';
 
   const renderPassword = (placeholder: string, autoComplete: string, value: string, onChange: (value: string) => void, minLength = 6) => (
-    <div className="relative">
+    <div className="relative min-w-0">
       <input
         required
         minLength={minLength}
@@ -335,7 +346,7 @@ export default function Login() {
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         autoComplete={autoComplete}
-        className="w-full px-4 py-3 pr-12 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+        className="w-full min-w-0 px-4 py-3 pr-12 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
       />
       <button
         type="button"
@@ -349,18 +360,18 @@ export default function Login() {
   );
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
+    <div className="min-h-[80vh] w-full min-w-0 overflow-x-clip flex items-center justify-center px-4 py-8 sm:py-12">
+      <div className="w-full min-w-0 max-w-md">
+        <div className="text-center mb-6 sm:mb-8 px-1">
           <div className="inline-flex w-16 h-16 rounded-2xl bg-emerald-600 items-center justify-center mb-4">
             {mode !== 'login' ? <KeyRound className="w-8 h-8 text-white" /> : companyMode ? <Building2 className="w-8 h-8 text-white" /> : <MapPin className="w-8 h-8 text-white" />}
           </div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{title}</h1>
-          <p className="text-sm text-slate-500 mt-1">{subtitle}</p>
+          <h1 className="text-xl font-bold text-slate-900 dark:text-white break-words">{title}</h1>
+          <p className="text-sm text-slate-500 mt-1 break-words">{subtitle}</p>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800 p-6 sm:p-8">
-          <form onSubmit={submit} className="space-y-4">
+        <div data-testid="login-card" className="w-full min-w-0 overflow-hidden bg-white dark:bg-slate-900 rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800 p-5 sm:p-8">
+          <form onSubmit={submit} className="min-w-0 space-y-4">
             {mode === 'forgot' && (
               <input
                 required
@@ -369,7 +380,7 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
                 autoComplete="email"
-                className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                className="w-full min-w-0 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
               />
             )}
 
@@ -384,7 +395,7 @@ export default function Login() {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirme a nova senha"
                   autoComplete="new-password"
-                  className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  className="w-full min-w-0 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
                 />
               </>
             )}
@@ -395,7 +406,7 @@ export default function Login() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={companyMode ? 'Nome da empresa' : 'Nome completo'}
-                className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                className="w-full min-w-0 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
               />
             )}
 
@@ -408,17 +419,22 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com"
                   autoComplete="email"
-                  className="w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
+                  className="w-full min-w-0 px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400"
                 />
                 {renderPassword('Senha', register ? 'new-password' : 'current-password', password, setPassword, register ? MIN_NEW_PASSWORD_LENGTH : 6)}
               </>
             )}
 
             {mode !== 'reset' && (
-              <div className="flex justify-center py-1">
+              <div
+                data-testid="login-captcha"
+                data-size={captchaSize}
+                className="flex w-full min-w-0 justify-center overflow-hidden py-1"
+              >
                 <HCaptcha
-                  key={captchaKey}
+                  key={`${captchaKey}-${captchaSize}`}
                   sitekey={HCAPTCHA_SITEKEY}
+                  size={captchaSize}
                   onVerify={setCaptchaToken}
                   onExpire={() => setCaptchaToken('')}
                   onError={() => setCaptchaToken('')}
@@ -426,12 +442,12 @@ export default function Login() {
               </div>
             )}
 
-            {error && <p className="text-sm text-red-500 leading-relaxed">{error}</p>}
-            {success && <p className="text-sm text-emerald-600 leading-relaxed">{success}</p>}
+            {error && <p className="text-sm text-red-500 leading-relaxed break-words">{error}</p>}
+            {success && <p className="text-sm text-emerald-600 leading-relaxed break-words">{success}</p>}
 
             <button
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-emerald-600 text-white font-semibold disabled:opacity-50"
+              className="w-full min-w-0 py-3 px-3 rounded-xl bg-emerald-600 text-white text-center font-semibold leading-snug disabled:opacity-50"
             >
               {loading
                 ? 'Aguarde...'
@@ -447,14 +463,14 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-5 space-y-2">
+          <div className="mt-5 min-w-0 space-y-2">
             {mode !== 'login' ? (
               <button
                 type="button"
                 onClick={() => navigateMode('login')}
-                className="w-full text-sm text-slate-500 hover:text-emerald-600 flex items-center justify-center gap-2"
+                className="w-full min-w-0 text-sm text-slate-500 hover:text-emerald-600 flex flex-wrap items-center justify-center gap-2 text-center leading-snug"
               >
-                <ArrowLeft className="w-4 h-4" /> Voltar para o login
+                <ArrowLeft className="w-4 h-4 shrink-0" /> Voltar para o login
               </button>
             ) : (
               <>
@@ -462,9 +478,9 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => navigateMode('forgot')}
-                    className="w-full text-sm text-emerald-600 font-semibold flex items-center justify-center gap-2"
+                    className="w-full min-w-0 text-sm text-emerald-600 font-semibold flex flex-wrap items-center justify-center gap-2 text-center leading-snug"
                   >
-                    <KeyRound className="w-4 h-4" /> Esqueci minha senha
+                    <KeyRound className="w-4 h-4 shrink-0" /> Esqueci minha senha
                   </button>
                 )}
                 {!register && (
@@ -472,9 +488,9 @@ export default function Login() {
                     type="button"
                     disabled={resending}
                     onClick={resendConfirmation}
-                    className="w-full text-sm text-slate-500 hover:text-emerald-600 flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full min-w-0 text-sm text-slate-500 hover:text-emerald-600 flex flex-wrap items-center justify-center gap-2 text-center leading-snug disabled:opacity-50"
                   >
-                    <MailCheck className="w-4 h-4" />
+                    <MailCheck className="w-4 h-4 shrink-0" />
                     {resending ? 'Enviando...' : 'Reenviar confirmação por e-mail'}
                   </button>
                 )}
@@ -487,7 +503,7 @@ export default function Login() {
                     setPassword('');
                     resetCaptcha();
                   }}
-                  className="w-full text-sm text-emerald-600 font-semibold"
+                  className="w-full min-w-0 text-sm text-emerald-600 font-semibold text-center leading-snug"
                 >
                   {register ? 'Já tenho conta' : 'Criar uma conta'}
                 </button>
@@ -501,9 +517,9 @@ export default function Login() {
                     setPassword('');
                     resetCaptcha();
                   }}
-                  className="w-full text-sm text-slate-500 flex items-center justify-center gap-2"
+                  className="w-full min-w-0 text-sm text-slate-500 flex flex-wrap items-center justify-center gap-2 text-center leading-snug"
                 >
-                  <Building2 className="w-4 h-4" />
+                  <Building2 className="w-4 h-4 shrink-0" />
                   {companyMode ? 'Sou morador' : 'Sou uma empresa'}
                 </button>
               </>
