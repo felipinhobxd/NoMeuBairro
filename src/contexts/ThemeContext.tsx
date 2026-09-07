@@ -16,7 +16,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       const stored = localStorage.getItem('anb-theme');
       if (stored !== null) return stored === 'dark';
     } catch {}
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // New/private sessions start in light mode. Only an explicit saved choice
+    // should enable the dark theme.
+    return false;
   });
 
   useEffect(() => {
