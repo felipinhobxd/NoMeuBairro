@@ -1,0 +1,1 @@
+The 2026-09-07 hardening files in this directory are staged on the audit branch because the authenticated Supabase/Vercel connectors became unavailable during the write phase. Do not treat them as applied until the verification SQL passes against project gowuvofidacpdavdkpar. No old Supabase environment was modified.
