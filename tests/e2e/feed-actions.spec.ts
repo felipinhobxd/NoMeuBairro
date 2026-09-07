@@ -160,8 +160,16 @@ async function setup(page: Page, options: { authenticated?: boolean; dark?: bool
 }
 
 const firstCard = (page: Page) => page.locator(`#post-${postId}`);
-const total = (page: Page) => firstCard(page).locator('.nmb-post-comment-total');
 const commentsButton = (page: Page) => firstCard(page).getByRole('button', { name: /^Comentar — \d+ comentários?$/ });
+const supportButton = (page: Page) => firstCard(page).getByRole('button', { name: /^Apoiar — \d+ apoios?$/ });
+
+async function expectCommentTotal(page: Page, count: number) {
+  await expect(commentsButton(page)).toHaveAttribute('aria-label', `Comentar — ${count} ${count === 1 ? 'comentário' : 'comentários'}`);
+}
+
+async function expectSupportTotal(page: Page, count: number) {
+  await expect(supportButton(page)).toHaveAttribute('aria-label', `Apoiar — ${count} ${count === 1 ? 'apoio' : 'apoios'}`);
+}
 
 async function clickFeedControl(control: Locator) {
   // Scroll as a reader would: a point merely inside the viewport can still be
@@ -181,7 +189,7 @@ async function settle(page: Page) {
 test('cards separados, barra leve e total antes de abrir sem baixar comentários', async ({ page }, info) => {
   const { state } = await setup(page);
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await expect(commentsButton(page)).toHaveAttribute('aria-expanded', 'false');
   expect(state.commentReads).toBe(0);
   expect(state.feedSelects[0]).toContain('comments!comments_post_id_fkey(count)');
@@ -224,26 +232,26 @@ test('cards separados, barra leve e total antes de abrir sem baixar comentários
 test('adicionar, responder e excluir conversa atualizam total sem recarregar', async ({ page }) => {
   const { state } = await setup(page);
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await commentsButton(page).click();
   await expect(firstCard(page).getByText('Comentário inicial', { exact: true })).toBeVisible();
   await firstCard(page).getByRole('textbox', { name: 'Escreva um comentário' }).fill('Novo comentário de teste');
   await clickFeedControl(firstCard(page).getByRole('button', { name: 'Enviar', exact: true }));
-  await expect(total(page)).toHaveText('4 comentários');
+  await expectCommentTotal(page, 4);
   const root = page.locator(`[data-comment-id="${rootId}"]`);
   await root.getByRole('button', { name: 'Responder', exact: true }).first().click();
   await firstCard(page).getByRole('textbox', { name: 'Escreva um comentário' }).fill('Mais uma resposta');
   await clickFeedControl(firstCard(page).getByRole('button', { name: 'Enviar', exact: true }));
-  await expect(total(page)).toHaveText('5 comentários');
+  await expectCommentTotal(page, 5);
   await root.getByRole('button', { name: 'Excluir', exact: true }).first().click();
-  await expect(total(page)).toHaveText('2 comentários');
+  await expectCommentTotal(page, 2);
   await expect(page.locator(`[data-comment-id="${replyId}"]`)).toHaveCount(0);
   await expect(firstCard(page).getByText('Mais uma resposta', { exact: true })).toHaveCount(0);
   await commentsButton(page).click();
-  await expect(total(page)).toHaveText('2 comentários');
+  await expectCommentTotal(page, 2);
   await commentsButton(page).click();
   await expect(firstCard(page).getByText('Novo comentário de teste', { exact: true })).toBeVisible();
-  await expect(total(page)).toHaveText('2 comentários');
+  await expectCommentTotal(page, 2);
   expect(state.feedReads).toBe(1);
 });
 
@@ -256,42 +264,42 @@ test('falhas e exclusão recusada não alteram a contagem nem removem comentári
   await firstCard(page).getByRole('textbox', { name: 'Escreva um comentário' }).fill('Não deve ser gravado');
   await clickFeedControl(firstCard(page).getByRole('button', { name: 'Enviar', exact: true }));
   await expect(page.getByText('Falha simulada ao comentar', { exact: true })).toBeVisible();
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   state.deleteMode = 'denied';
   await page.locator(`[data-comment-id="${otherId}"]`).getByRole('button', { name: 'Excluir', exact: true }).click();
   await expect(page.getByText('Exclusão não permitida', { exact: true })).toBeVisible();
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   state.deleteMode = 'empty';
   await page.locator(`[data-comment-id="${otherId}"]`).getByRole('button', { name: 'Excluir', exact: true }).click();
   await expect(page.getByText('O comentário já foi removido ou você não tem permissão para excluí-lo.', { exact: true })).toBeVisible();
   await expect(firstCard(page).getByText('Outra conversa', { exact: true })).toBeVisible();
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
 });
 
 test('total não é truncado pelos 100 comentários carregados e cascata conta respostas ocultas', async ({ page }) => {
   const { state } = await setup(page);
   state.comments = [comment(rootId, 'Conversa com muitas respostas'), ...Array.from({ length: 124 }, (_, i) => comment(`40000000-0000-4000-8000-${String(i).padStart(12, '0')}`, `Resposta ${i}`, rootId))];
   await page.goto('/');
-  await expect(total(page)).toHaveText('125 comentários');
+  await expectCommentTotal(page, 125);
   await commentsButton(page).click();
   await expect(firstCard(page).locator('[data-comment-id]')).toHaveCount(100);
-  await expect(total(page)).toHaveText('125 comentários');
+  await expectCommentTotal(page, 125);
   await page.locator(`[data-comment-id="${rootId}"]`).getByRole('button', { name: 'Excluir', exact: true }).first().click();
-  await expect(total(page)).toHaveText('0 comentários');
+  await expectCommentTotal(page, 0);
   await expect(firstCard(page).locator('[data-comment-id]')).toHaveCount(0);
 });
 
 test('Realtime atualiza inclusão e exclusão externas com conversa fechada', async ({ page }) => {
   const fixture = await setup(page, { authenticated: false });
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await expect.poll(fixture.subscribed).toBe(true);
   fixture.state.comments.push(comment('remote', 'Comentário de outro morador'));
   fixture.emitCountChange();
-  await expect(total(page)).toHaveText('4 comentários');
+  await expectCommentTotal(page, 4);
   fixture.state.comments = fixture.state.comments.filter(item => item.id !== 'remote');
   fixture.emitCountChange();
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await expect(commentsButton(page)).toHaveAttribute('aria-expanded', 'false');
   expect(fixture.state.commentReads).toBe(0);
   expect(fixture.state.feedReads).toBe(1);
@@ -302,11 +310,11 @@ test('Realtime atualiza inclusão e exclusão externas com conversa fechada', as
 test('feed em cache revalida somente totais antes de exibir a lista', async ({ page }) => {
   const { state } = await setup(page, { authenticated: false });
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await expect(page.getByRole('group', { name: 'Atualizar situação do relato' })).toHaveCount(0);
   state.comments.push(comment('remote', 'Novo comentário no servidor'));
   await page.reload();
-  await expect(total(page)).toHaveText('4 comentários');
+  await expectCommentTotal(page, 4);
   expect(state.feedReads).toBe(1);
   expect(state.commentReads).toBe(0);
 });
@@ -314,7 +322,7 @@ test('feed em cache revalida somente totais antes de exibir a lista', async ({ p
 test('atualizar situação continua restrito ao autor e à moderação', async ({ page }) => {
   await setup(page, { postAuthorId: '20000000-0000-4000-8000-000000000099' });
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await expect(page.getByRole('group', { name: 'Atualizar situação do relato' })).toHaveCount(0);
   await clickFeedControl(firstCard(page).getByRole('button', { name: 'Mais opções do relato' }));
   await expect(firstCard(page).getByRole('group', { name: 'Outras opções do relato' })).toBeVisible();
@@ -324,7 +332,7 @@ test('atualizar situação continua restrito ao autor e à moderação', async (
 test('apoio, compartilhamento, salvos, denúncia e situação continuam acessíveis', async ({ page }) => {
   const { state } = await setup(page);
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   const card = firstCard(page);
   const statusActions = card.getByRole('group', { name: 'Atualizar situação do relato' });
   await expect(statusActions).toBeVisible();
@@ -334,11 +342,11 @@ test('apoio, compartilhamento, salvos, denúncia e situação continuam acessív
   expect(state.status).toBe('resolved');
   await expect(statusActions.getByRole('button', { name: 'Em andamento', exact: true })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Mais opções do relato' })).toHaveAttribute('aria-expanded', 'false');
-  await clickFeedControl(card.getByRole('button', { name: 'Apoiar', exact: true }));
-  await expect(card.getByRole('button', { name: 'Apoiar', exact: true })).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.locator('.nmb-post-support-total')).toHaveText('3 apoios');
-  await clickFeedControl(card.getByRole('button', { name: 'Apoiar', exact: true }));
-  await expect(card.locator('.nmb-post-support-total')).toHaveText('2 apoios');
+  await clickFeedControl(supportButton(page));
+  await expect(supportButton(page)).toHaveAttribute('aria-pressed', 'true');
+  await expectSupportTotal(page, 3);
+  await clickFeedControl(supportButton(page));
+  await expectSupportTotal(page, 2);
   await clickFeedControl(card.getByRole('button', { name: 'Compartilhar relato', exact: true }));
   await expect(page.locator('html')).toHaveAttribute('data-test-shared-url', new RegExp(`/relato/${postId}$`));
   await clickFeedControl(card.getByRole('button', { name: 'Mais opções do relato' }));
@@ -362,7 +370,7 @@ test('apoio, compartilhamento, salvos, denúncia e situação continuam acessív
 test('tema escuro, fonte gigante e opções abertas mantêm contraste e reflow', async ({ page }, info) => {
   await setup(page, { dark: true, giant: true });
   await page.goto('/');
-  await expect(total(page)).toHaveText('3 comentários');
+  await expectCommentTotal(page, 3);
   await expect(firstCard(page).getByRole('group', { name: 'Atualizar situação do relato' })).toBeVisible();
   await clickFeedControl(firstCard(page).getByRole('button', { name: 'Mais opções do relato' }));
   await settle(page);
