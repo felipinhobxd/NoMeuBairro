@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const residentId = '39522955-ce2e-4095-a241-b46a1934975e';
+const residentId = '11111111-2222-4333-8444-555555555555';
 const residentEmail = 'resident@example.test';
-const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzOTUyMjk1NS1jZTJlLTQwOTUtYTI0MS1iNDZhMTkzNDk3NWUiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImV4cCI6NDEwMjQ0NDgwMCwiYXVkIjoiYXV0aGVudGljYXRlZCIsImVtYWlsIjoicmVzaWRlbnRAZXhhbXBsZS50ZXN0In0.test';
+const accessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTExMTExMS0yMjIyLTQzMzMtODQ0NC01NTU1NTU1NTU1NTUiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImV4cCI6NDEwMjQ0NDgwMCwiYXVkIjoiYXV0aGVudGljYXRlZCIsImVtYWlsIjoicmVzaWRlbnRAZXhhbXBsZS50ZXN0In0.test';
 
 function authUser() {
   const now = '2026-09-07T21:00:00.000Z';
