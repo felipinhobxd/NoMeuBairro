@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import type { User, AccountType } from '../types';
 import { supabase } from '../utils/supabase';
 import { disconnectPushOnLogout } from '../utils/pushNotifications';
+import { AUTH_EMAIL_REDIRECT_TO } from '../config/authSecurity';
 
 interface AuthContextType {
   user: User | null;
@@ -152,7 +153,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { name, account_type: 'resident' } },
+      options: {
+        data: { name, account_type: 'resident' },
+        emailRedirectTo: AUTH_EMAIL_REDIRECT_TO,
+      },
     });
 
     if (error) return { ok: false, error: error.message };
