@@ -45,6 +45,9 @@ export default function FeedPostActions(props: Props) {
     }
   }}>
     <div className="nmb-post-engagement justify-end">
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {props.supports} {props.supports === 1 ? 'apoio' : 'apoios'} · {props.commentsCount} {props.commentsCount === 1 ? 'comentário' : 'comentários'}
+      </span>
       <button ref={moreButton} type="button" className="nmb-post-more" aria-label="Mais opções do relato" title="Denunciar, abrir e salvar" aria-expanded={optionsOpen} aria-controls={optionsId} onClick={() => setOptionsOpen(open => !open)}><MoreHorizontal aria-hidden="true" /></button>
     </div>
 
