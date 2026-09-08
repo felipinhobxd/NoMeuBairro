@@ -13,6 +13,7 @@ import DataRouteLoader from './components/DataRouteLoader';
 import ProductExperience from './components/ProductExperience';
 import MuralMapEnhancer from './components/MuralMapEnhancer';
 import DesktopUiPolish from './components/DesktopUiPolish';
+import HeaderLoginPolish from './components/HeaderLoginPolish';
 import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import { PanicButton, CookieConsent } from './components/Safety';
@@ -101,6 +102,7 @@ export default function App() {
                     <BrazilWhatsappMask />
                     <InteractionGuard />
                     <DesktopUiPolish />
+                    <HeaderLoginPolish />
                     <ProductExperience />
                     <MuralMapEnhancer />
                     <Layout>
