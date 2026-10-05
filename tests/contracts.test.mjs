@@ -161,11 +161,13 @@ test('feeds longos têm renderização progressiva e otimização fora da tela',
 });
 
 test('PWA sempre verifica a versão nova do service worker', async () => {
-  const [main, serviceWorker, manifest] = await Promise.all([
+  const [main, serviceWorker, manifest, install] = await Promise.all([
     read('src/main.tsx'),
     read('public/sw.js'),
     read('public/manifest.webmanifest'),
+    read('src/utils/pwaInstall.ts'),
   ]);
+  assert.match(main, /initPwaInstall\(\)/);
   assert.match(main, /updateViaCache: 'none'/);
   assert.match(main, /registration\.update\(\)/);
   assert.match(serviceWorker, /CACHE_VERSION = 'v6'/);
@@ -173,7 +175,14 @@ test('PWA sempre verifica a versão nova do service worker', async () => {
   assert.match(serviceWorker, /IMAGE_CACHE_MAX_AGE_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\('\/api\/post-image'\)/);
   assert.match(serviceWorker, /networkFirst\(request, \{ cacheName: IMAGE_CACHE, image: true \}\)/);
-  assert.match(manifest, /icons\/icon\.svg/);
+  assert.match(install, /beforeinstallprompt/);
+  assert.match(install, /event\.preventDefault\(\)/);
+  assert.match(install, /event\.prompt\(\)/);
+  assert.match(install, /appinstalled/);
+  assert.match(manifest, /icons\/icon-192\.png/);
+  assert.match(manifest, /icons\/icon-512\.png/);
+  assert.match(manifest, /icons\/icon-maskable-512\.png/);
+  assert.match(manifest, /"type": "image\/png"/);
   assert.match(manifest, /"short_name": "Relatar"/);
   assert.match(manifest, /"short_name": "Mapa"/);
 });

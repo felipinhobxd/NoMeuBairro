@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import { COOKIE_CONSENT_EVENT, hasCookieConsentChoice } from '../utils/cookieConsent';
 import { shouldRunSessionTask } from '../utils/sessionQueryCache';
+import { promptPwaInstall, subscribePwaInstall } from '../utils/pwaInstall';
 import {
   desktopTourSteps,
   mobileTourSteps,
@@ -28,11 +29,6 @@ type SearchResult = {
   path: string;
   created_at?: string | null;
   score: number;
-};
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
 type TourRect = {
@@ -183,7 +179,7 @@ export default function ProductExperience() {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [isMobileTour, setIsMobileTour] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches);
   const [tourRect, setTourRect] = useState<TourRect | null>(null);
-  const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [canInstall, setCanInstall] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [isStandalone, setIsStandalone] = useState(() => isStandaloneMode());
@@ -448,49 +444,44 @@ export default function ProductExperience() {
   };
 
   useEffect(() => {
-    const onBeforeInstall = (event: Event) => {
-      const promptEvent = event as BeforeInstallPromptEvent;
-      promptEvent.preventDefault();
-      setInstallEvent(promptEvent);
-      setShowInstallPrompt(true);
-    };
+    return subscribePwaInstall((event) => {
+      setCanInstall(Boolean(event));
+    });
+  }, []);
+
+  useEffect(() => {
     const onInstalled = () => {
-      setInstallEvent(null);
+      setCanInstall(false);
       setShowInstallPrompt(false);
       setShowInstallHelp(false);
       setIsStandalone(true);
     };
-    window.addEventListener('beforeinstallprompt', onBeforeInstall);
     window.addEventListener('appinstalled', onInstalled);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
+    return () => window.removeEventListener('appinstalled', onInstalled);
   }, []);
 
   useEffect(() => {
-    if (showOnboarding || isStandalone) return;
+    if (showOnboarding || isStandalone || !canInstall) return;
     let dismissedAt = 0;
     try { dismissedAt = Number(localStorage.getItem(INSTALL_DISMISS_KEY) || '0'); } catch {}
     if (Date.now() - dismissedAt < INSTALL_DISMISS_MS) return;
-    const timer = window.setTimeout(() => setShowInstallPrompt(true), 9000);
+    const timer = window.setTimeout(() => setShowInstallPrompt(true), 1200);
     return () => window.clearTimeout(timer);
-  }, [showOnboarding, isStandalone]);
+  }, [showOnboarding, isStandalone, canInstall]);
 
   const installApp = async () => {
     if (isStandalone) return;
     setShowInstallPrompt(false);
-    if (!installEvent) {
+
+    const choice = await promptPwaInstall();
+    if (!choice) {
       setShowInstallHelp(true);
       return;
     }
 
-    await installEvent.prompt();
-    const choice = await installEvent.userChoice;
     if (choice.outcome === 'dismissed') {
       try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch {}
     }
-    setInstallEvent(null);
   };
 
   const dismissInstall = () => {
@@ -750,7 +741,7 @@ export default function ProductExperience() {
       {showInstallPrompt && !showOnboarding && !isStandalone && (
         <div className="fixed left-4 right-4 bottom-24 md:left-6 md:right-auto md:bottom-6 z-[150] md:w-[360px] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 animate-scale-in">
           <div className="flex gap-3">
-            <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0"><img src="/logo.png" alt="" className="w-full h-full object-cover" /></div>
+            <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0"><img src="/icons/icon-192.png" alt="" className="w-full h-full object-cover" /></div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-slate-900 dark:text-white">Instalar No Meu Bairro</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Coloque o No Meu Bairro na tela inicial e abra como um aplicativo.</p>

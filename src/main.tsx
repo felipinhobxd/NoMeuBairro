@@ -6,7 +6,9 @@ import "./feed-profile.css";
 import App from "./App";
 import { reportProductionEvent, startProductionMonitoring } from "./utils/productionMonitoring";
 import { startVLibrasAccessibility } from "./utils/vlibrasAccessibility";
+import { initPwaInstall } from "./utils/pwaInstall";
 
+initPwaInstall();
 startProductionMonitoring();
 const stopVLibrasAccessibility = startVLibrasAccessibility();
 if (import.meta.hot) import.meta.hot.dispose(stopVLibrasAccessibility);
