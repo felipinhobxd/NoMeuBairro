@@ -31,7 +31,7 @@ export function initPwaInstall() {
 export function subscribePwaInstall(listener: (event: BeforeInstallPromptEvent | null) => void) {
   listeners.add(listener);
   listener(deferredPrompt);
-  return () => listeners.delete(listener);
+  return () => { listeners.delete(listener); };
 }
 
 export async function promptPwaInstall() {
