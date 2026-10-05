@@ -1,3 +1,4 @@
+// Refresh the service worker when static PWA icon/assets change while keeping the existing cache contract.
 const CACHE_VERSION = 'v6';
 const CACHE_PREFIX = 'nmb-';
 const SHELL_CACHE = `${CACHE_PREFIX}shell-${CACHE_VERSION}`;
@@ -7,7 +8,7 @@ const CURRENT_CACHES = new Set([SHELL_CACHE, STATIC_CACHE, IMAGE_CACHE]);
 const IMAGE_CACHE_MAX_ENTRIES = 48;
 const IMAGE_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const CACHE_TIME_HEADER = 'x-nmb-sw-cache-time';
-const SHELL = ['/', '/logo.png', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png'];
+const SHELL = ['/', '/logo.png', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
