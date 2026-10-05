@@ -452,6 +452,7 @@ export default function ProductExperience() {
       const promptEvent = event as BeforeInstallPromptEvent;
       promptEvent.preventDefault();
       setInstallEvent(promptEvent);
+      setShowInstallPrompt(true);
     };
     const onInstalled = () => {
       setInstallEvent(null);
