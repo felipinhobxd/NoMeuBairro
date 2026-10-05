@@ -176,7 +176,7 @@ test('PWA sempre verifica a versão nova do service worker', async () => {
   assert.match(serviceWorker, /url\.pathname\.startsWith\('\/api\/post-image'\)/);
   assert.match(serviceWorker, /networkFirst\(request, \{ cacheName: IMAGE_CACHE, image: true \}\)/);
   assert.match(install, /beforeinstallprompt/);
-  assert.match(install, /event\.preventDefault\(\)/);
+  assert.match(install, /promptEvent\.preventDefault\(\)/);
   assert.match(install, /event\.prompt\(\)/);
   assert.match(install, /appinstalled/);
   assert.match(manifest, /icons\/icon-192\.png/);
