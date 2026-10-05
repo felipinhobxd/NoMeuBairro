@@ -38,12 +38,42 @@ createRoot(document.getElementById("root")!).render(
 );
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
-      .then((registration) => registration.update())
-      .catch((error) => {
-        console.warn('Não foi possível registrar o modo aplicativo:', error);
-        void reportProductionEvent({ eventType: 'resource_error', code: 'resource.service_worker', target: 'service-worker' });
+  let registrationPromise: Promise<ServiceWorkerRegistration> | null = null;
+  let lastUpdateCheckAt = 0;
+  const updateCheckIntervalMs = 15 * 60 * 1000;
+
+  const ensurePwaServiceWorker = async () => {
+    if (!registrationPromise) {
+      registrationPromise = navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+        .catch((error) => {
+          registrationPromise = null;
+          throw error;
+        });
+    }
+
+    const registration = await registrationPromise;
+    const now = Date.now();
+    if (now - lastUpdateCheckAt >= updateCheckIntervalMs) {
+      lastUpdateCheckAt = now;
+      await registration.update();
+    }
+    return registration;
+  };
+
+  const refreshPwaServiceWorker = () => {
+    void ensurePwaServiceWorker().catch((error) => {
+      console.warn('Não foi possível atualizar o modo aplicativo:', error);
+      void reportProductionEvent({
+        eventType: 'resource_error',
+        code: 'resource.service_worker',
+        target: 'service-worker',
       });
+    });
+  };
+
+  window.addEventListener('load', refreshPwaServiceWorker, { once: true });
+  window.addEventListener('pageshow', refreshPwaServiceWorker);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshPwaServiceWorker();
   });
 }

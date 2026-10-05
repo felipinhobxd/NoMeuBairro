@@ -257,16 +257,36 @@ test('manifesto do PWA expõe ícones válidos e atalhos úteis', async ({ page,
   const manifestResponse = await request.get('/manifest.webmanifest');
   expect(manifestResponse.ok()).toBeTruthy();
   const manifest = await manifestResponse.json();
+  expect(manifest.name).toBe('No Meu Bairro');
+  expect(manifest.short_name).toBe('Meu Bairro');
+  expect(manifest.start_url).toBe('/');
+  expect(manifest.scope).toBe('/');
+  expect(manifest.display).toBe('standalone');
   expect(manifest.shortcuts.map((shortcut: { short_name: string }) => shortcut.short_name)).toEqual(['Relatar', 'Mapa']);
 
-  for (const iconPath of ['/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png']) {
+  const iconSizes: Record<string, number> = {
+    '/icons/icon-192.png': 192,
+    '/icons/icon-512.png': 512,
+    '/icons/icon-maskable-512.png': 512,
+  };
+
+  for (const [iconPath, expectedSize] of Object.entries(iconSizes)) {
+    const iconResponse = await request.get(iconPath);
+    expect(iconResponse.ok()).toBeTruthy();
+    expect(iconResponse.headers()['content-type']).toContain('image/png');
+
     const dimensions = await page.evaluate(async (src) => {
       const image = new Image();
       image.src = src;
       await image.decode();
       return { width: image.naturalWidth, height: image.naturalHeight };
     }, iconPath);
-    expect(dimensions.width).toBeGreaterThanOrEqual(192);
-    expect(dimensions.height).toBe(dimensions.width);
+
+    expect(dimensions).toEqual({ width: expectedSize, height: expectedSize });
+  }
+
+  for (const assetPath of ['/icons/apple-touch-icon.png', '/icons/favicon-32.png', '/sw.js']) {
+    const assetResponse = await request.get(assetPath);
+    expect(assetResponse.ok()).toBeTruthy();
   }
 });
