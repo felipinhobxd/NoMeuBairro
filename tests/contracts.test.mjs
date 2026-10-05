@@ -173,7 +173,7 @@ test('PWA sempre verifica a versão nova do service worker', async () => {
   assert.match(serviceWorker, /IMAGE_CACHE_MAX_AGE_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\('\/api\/post-image'\)/);
   assert.match(serviceWorker, /networkFirst\(request, \{ cacheName: IMAGE_CACHE, image: true \}\)/);
-  assert.match(manifest, /icon-maskable-512\.png/);
+  assert.match(manifest, /icons\/icon\.svg/);
   assert.match(manifest, /"short_name": "Relatar"/);
   assert.match(manifest, /"short_name": "Mapa"/);
 });
