@@ -442,7 +442,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="nmb-header-row flex items-center justify-between h-16 gap-2 sm:gap-3">
             <div className="nmb-header-identity flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1 lg:flex-none">
               <button onClick={() => navigate('/')} className="nmb-header-home flex items-center gap-2.5 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-lg p-1 -m-1" aria-label="Ir para a página inicial">
-                <div className="w-9 h-9 rounded-xl overflow-hidden flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300"><img src="/icons/icon-512.png?v=3" alt="No Meu Bairro" className="w-full h-full object-contain p-0.5" /></div>
+                <span aria-hidden="true" className="w-9 h-9 shrink-0 aspect-square rounded-xl bg-center bg-no-repeat bg-contain shadow-lg shadow-emerald-600/20 group-hover:shadow-emerald-600/40 transition-shadow duration-300" style={{ backgroundImage: "url('/icons/icon-512.png?v=5')" }} />
                 <div className="flex flex-col items-start hidden lg:flex"><span className="text-[14px] font-bold text-slate-900 dark:text-white leading-tight tracking-tight">No Meu Bairro</span></div>
               </button>
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 hidden lg:block" />
@@ -498,7 +498,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
             <div className="grid sm:grid-cols-3 gap-8">
               <div>
-                <div className="flex items-center gap-2.5 mb-3"><div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center"><img src="/icons/icon-512.png?v=3" alt="No Meu Bairro" className="w-full h-full object-contain p-0.5" /></div><div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{displayNeighborhood}</p></div></div>
+                <div className="flex items-center gap-2.5 mb-3"><span aria-hidden="true" className="w-8 h-8 shrink-0 aspect-square rounded-lg bg-center bg-no-repeat bg-contain" style={{ backgroundImage: "url('/icons/icon-512.png?v=5')" }} /><div><p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">No Meu Bairro</p><p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{displayNeighborhood}</p></div></div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs">Plataforma comunitária criada para conectar moradores, resolver problemas e fortalecer os bairros de Curitiba{currentNeighborhood.name ? ` — filtro: ${currentNeighborhood.name}` : ''}.</p>
               </div>
               <div><h4 className="text-xs font-semibold text-slate-900 dark:text-white uppercase tracking-wider mb-3">Navegação</h4><ul className="space-y-2">{navItems.map(item => <li key={item.path}><button onClick={() => navigate(item.path)} className="text-sm text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors">{item.label}</button></li>)}</ul></div>
