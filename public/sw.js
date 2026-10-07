@@ -131,6 +131,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Brand/PWA icons must not remain stuck in an invalid browser cache after an asset fix.
+  if (url.pathname === '/logo.png' || url.pathname.startsWith('/icons/')) {
+    event.respondWith((async () => {
+      try {
+        return await fetch(request, { cache: 'no-store' });
+      } catch {
+        return (await caches.match(request)) || Response.error();
+      }
+    })());
+    return;
+  }
+
   if (request.destination === 'image') {
     event.respondWith(cachedImage(request));
     return;
