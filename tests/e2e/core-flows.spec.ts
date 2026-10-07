@@ -120,8 +120,11 @@ test('logo do cabeçalho ocupa uma caixa real e não pode ser cortado verticalme
       display: style.display,
       width: rect.width,
       height: rect.height,
-      backgroundImage: style.backgroundImage,
-      backgroundSize: style.backgroundSize,
+      tagName: element.tagName,
+      src: (element as HTMLImageElement).src,
+      naturalWidth: (element as HTMLImageElement).naturalWidth,
+      naturalHeight: (element as HTMLImageElement).naturalHeight,
+      objectFit: style.objectFit,
       top: rect.top,
       bottom: rect.bottom,
       headerTop: header?.top ?? null,
@@ -133,8 +136,12 @@ test('logo do cabeçalho ocupa uma caixa real e não pode ser cortado verticalme
   expect(metrics.display).toBe('block');
   expect(Math.abs(metrics.width - metrics.height)).toBeLessThanOrEqual(0.5);
   expect(metrics.width).toBeGreaterThanOrEqual(30);
-  expect(metrics.backgroundImage).toContain('icon-512.png');
-  expect(metrics.backgroundSize).toBe('contain');
+  expect(metrics.tagName).toBe('IMG');
+  expect(metrics.src).toContain('/logo.png');
+  expect(metrics.naturalWidth).toBe(717);
+  expect(metrics.naturalHeight).toBe(702);
+  expect(metrics.objectFit).toBe('contain');
+  expect(Math.abs((metrics.width / metrics.height) - (717 / 702))).toBeLessThan(0.03);
   expect(metrics.top).toBeGreaterThanOrEqual((metrics.headerTop ?? metrics.top) - 1);
   expect(metrics.bottom).toBeLessThanOrEqual((metrics.headerBottom ?? metrics.bottom) + 1);
   expect(metrics.ancestorOverflows).not.toContain('hidden');
@@ -309,29 +316,27 @@ test('manifesto do PWA expõe ícones válidos e atalhos úteis', async ({ page,
   expect(manifest.display).toBe('standalone');
   expect(manifest.shortcuts.map((shortcut: { short_name: string }) => shortcut.short_name)).toEqual(['Relatar', 'Mapa']);
 
-  const iconSizes: Record<string, number> = {
-    '/icons/icon-192.png': 192,
-    '/icons/icon-512.png': 512,
-    '/icons/icon-maskable-512.png': 512,
-  };
+  expect(manifest.icons).toEqual([
+    { src: '/logo.png', sizes: 'any', type: 'image/png', purpose: 'any' },
+    { src: '/logo.png', sizes: 'any', type: 'image/png', purpose: 'maskable' },
+  ]);
 
-  for (const [iconPath, expectedSize] of Object.entries(iconSizes)) {
-    const iconResponse = await request.get(iconPath);
-    expect(iconResponse.ok()).toBeTruthy();
-    expect(iconResponse.headers()['content-type']).toContain('image/png');
+  const logoResponse = await request.get('/logo.png');
+  expect(logoResponse.ok()).toBeTruthy();
+  expect(logoResponse.headers()['content-type']).toContain('image/png');
 
-    const dimensions = await page.evaluate(async (src) => {
-      const image = new Image();
-      image.src = src;
-      await image.decode();
-      return { width: image.naturalWidth, height: image.naturalHeight };
-    }, iconPath);
+  const logoDimensions = await page.evaluate(async () => {
+    const image = new Image();
+    image.src = '/logo.png?v=pwa-validation';
+    await image.decode();
+    return { width: image.naturalWidth, height: image.naturalHeight };
+  });
+  expect(logoDimensions).toEqual({ width: 717, height: 702 });
 
-    expect(dimensions).toEqual({ width: expectedSize, height: expectedSize });
-  }
-
-  for (const assetPath of ['/icons/apple-touch-icon.png', '/icons/favicon-32.png', '/sw.js']) {
-    const assetResponse = await request.get(assetPath);
-    expect(assetResponse.ok()).toBeTruthy();
-  }
+  const swResponse = await request.get('/sw.js');
+  expect(swResponse.ok()).toBeTruthy();
+  const swText = await swResponse.text();
+  expect(swText).toContain("const CACHE_VERSION = 'v7';");
+  expect(swText).toContain("icon: '/logo.png'");
+  expect(swText).toContain("badge: '/logo.png'");
 });

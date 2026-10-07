@@ -25,8 +25,9 @@ export default function DesktopUiPolish() {
         }
 
         header[role="banner"] .nmb-header-logo {
-          width: 38px !important;
+          width: auto !important;
           height: 38px !important;
+          aspect-ratio: auto !important;
         }
 
         header[role="banner"] .nmb-neighborhood-filter {
@@ -100,8 +101,9 @@ export default function DesktopUiPolish() {
         }
 
         header[role="banner"] .nmb-header-logo {
-          width: 34px !important;
+          width: auto !important;
           height: 34px !important;
+          aspect-ratio: auto !important;
         }
 
         header[role="banner"] .nmb-neighborhood-filter {
