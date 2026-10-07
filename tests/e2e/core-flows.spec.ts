@@ -96,6 +96,51 @@ test('navegação principal funciona em desktop e celular', async ({ page }) => 
   await expect(page.getByRole('heading', { name: 'Mapa Comunitário' })).toBeVisible();
 });
 
+
+test('logo do cabeçalho ocupa uma caixa real e não pode ser cortado verticalmente', async ({ page }) => {
+  await prepareReturningVisitor(page);
+  await page.goto('/');
+
+  const logo = page.locator('header[role="banner"] .nmb-header-logo');
+  await expect(logo).toBeVisible();
+
+  const metrics = await logo.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const header = element.closest('header')?.getBoundingClientRect();
+    const ancestorOverflows: string[] = [];
+
+    let current: Element | null = element;
+    for (let level = 0; current && level < 4; level += 1, current = current.parentElement) {
+      const ancestorStyle = getComputedStyle(current);
+      ancestorOverflows.push(ancestorStyle.overflowY);
+    }
+
+    return {
+      display: style.display,
+      width: rect.width,
+      height: rect.height,
+      backgroundImage: style.backgroundImage,
+      backgroundSize: style.backgroundSize,
+      top: rect.top,
+      bottom: rect.bottom,
+      headerTop: header?.top ?? null,
+      headerBottom: header?.bottom ?? null,
+      ancestorOverflows,
+    };
+  });
+
+  expect(metrics.display).toBe('block');
+  expect(Math.abs(metrics.width - metrics.height)).toBeLessThanOrEqual(0.5);
+  expect(metrics.width).toBeGreaterThanOrEqual(30);
+  expect(metrics.backgroundImage).toContain('icon-512.png');
+  expect(metrics.backgroundSize).toBe('contain');
+  expect(metrics.top).toBeGreaterThanOrEqual((metrics.headerTop ?? metrics.top) - 1);
+  expect(metrics.bottom).toBeLessThanOrEqual((metrics.headerBottom ?? metrics.bottom) + 1);
+  expect(metrics.ancestorOverflows).not.toContain('hidden');
+  expect(metrics.ancestorOverflows).not.toContain('clip');
+});
+
 test('feed mostra claramente a categoria escolhida no relato', async ({ page }) => {
   await prepareReturningVisitor(page);
   await page.goto('/');

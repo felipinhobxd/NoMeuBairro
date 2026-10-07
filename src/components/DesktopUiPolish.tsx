@@ -24,7 +24,7 @@ export default function DesktopUiPolish() {
           flex: 0 0 auto;
         }
 
-        header[role="banner"] button[aria-label="Ir para a página inicial"] > div:first-child {
+        header[role="banner"] .nmb-header-logo {
           width: 38px !important;
           height: 38px !important;
         }
@@ -99,7 +99,7 @@ export default function DesktopUiPolish() {
           padding-right: 7px !important;
         }
 
-        header[role="banner"] button[aria-label="Ir para a página inicial"] > div:first-child {
+        header[role="banner"] .nmb-header-logo {
           width: 34px !important;
           height: 34px !important;
         }
