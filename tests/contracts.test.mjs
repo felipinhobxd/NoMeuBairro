@@ -170,7 +170,7 @@ test('PWA sempre verifica a versão nova do service worker', async () => {
   assert.match(main, /initPwaInstall\(\)/);
   assert.match(main, /updateViaCache: 'none'/);
   assert.match(main, /registration\.update\(\)/);
-  assert.match(serviceWorker, /CACHE_VERSION = 'v6'/);
+  assert.match(serviceWorker, /CACHE_VERSION = 'v7'/);
   assert.match(serviceWorker, /IMAGE_CACHE_MAX_ENTRIES = 48/);
   assert.match(serviceWorker, /IMAGE_CACHE_MAX_AGE_MS = 7 \* 24 \* 60 \* 60 \* 1000/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\('\/api\/post-image'\)/);
@@ -179,9 +179,8 @@ test('PWA sempre verifica a versão nova do service worker', async () => {
   assert.match(install, /promptEvent\.preventDefault\(\)/);
   assert.match(install, /event\.prompt\(\)/);
   assert.match(install, /appinstalled/);
-  assert.match(manifest, /icons\/icon-192\.png/);
-  assert.match(manifest, /icons\/icon-512\.png/);
-  assert.match(manifest, /icons\/icon-maskable-512\.png/);
+  assert.match(manifest, /"src": "\/logo\.png"/);
+  assert.match(manifest, /"purpose": "maskable"/);
   assert.match(manifest, /"type": "image\/png"/);
   assert.match(manifest, /"short_name": "Relatar"/);
   assert.match(manifest, /"short_name": "Mapa"/);
