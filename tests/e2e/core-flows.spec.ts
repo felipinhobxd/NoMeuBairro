@@ -320,6 +320,9 @@ test('manifesto do PWA expõe ícones válidos e atalhos úteis', async ({ page,
     { src: '/logo.png', sizes: 'any', type: 'image/png', purpose: 'any' },
     { src: '/logo.png', sizes: 'any', type: 'image/png', purpose: 'maskable' },
   ]);
+  expect(manifest.shortcuts.every((shortcut: { icons?: Array<{ src: string; sizes: string }> }) =>
+    shortcut.icons?.every((icon) => icon.src === '/logo.png' && icon.sizes === 'any')
+  )).toBeTruthy();
 
   const logoResponse = await request.get('/logo.png');
   expect(logoResponse.ok()).toBeTruthy();

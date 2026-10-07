@@ -741,7 +741,7 @@ export default function ProductExperience() {
       {showInstallPrompt && !showOnboarding && !isStandalone && (
         <div className="fixed left-4 right-4 bottom-24 md:left-6 md:right-auto md:bottom-6 z-[150] md:w-[360px] rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 animate-scale-in">
           <div className="flex gap-3">
-            <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0"><img src="/icons/icon-192.png" alt="" className="w-full h-full object-cover" /></div>
+            <div className="shrink-0"><img src="/logo.png?v=8" alt="" width={717} height={702} className="block h-11 w-auto object-contain" /></div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-slate-900 dark:text-white">Instalar No Meu Bairro</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">Coloque o No Meu Bairro na tela inicial e abra como um aplicativo.</p>
